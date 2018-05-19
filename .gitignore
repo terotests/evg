@@ -5,9 +5,6 @@ node_modules/
 # folder files
 data_folder/
 
-# No config files
-*.json
-
 # Image files
 *.jpg
 *.png
