@@ -2,27 +2,44 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 require("mocha");
 const _1 = require("../src/layout/");
+const pdfkit_1 = require("../src/renderers/pdfkit");
 const expect = require("chai").expect;
 describe("Color Code Converter", function () {
     it('does something', () => {
         // your test
         expect(3).to.equal(3);
-        const evg = new _1.EVG(`<View>
-    <View width="30%" height="100"></View>
-    <View background-color="blue" width="40%"  height="200"></View>
-</View>    
+        const evg = new _1.EVG(`
+<View>
+  <View>
+      <View width="30%" height="100" backgroundColor="#ff7733" margin="20" border-radius="20"></View>
+      <View backgroundColor="blue" width="40%"  height="200" margin="20">></View>
+      <View width="10%" height="10%" backgroundColor="#23f" margin="20" border-radius="50%"></View>
+      <View width="10%" height="10%" backgroundColor="#23f" margin="20" border-radius="50%"></View>
+      <View width="10%" height="10%" backgroundColor="#23f" margin="20" border-radius="50%"></View>
+      <View width="10%" height="10%" backgroundColor="#23f" margin="20" border-radius="50%"></View>
+      <View width="10%" height="10%" backgroundColor="#23f" margin="20" border-radius="50%"></View>
+      <View width="10%" height="10%" backgroundColor="#23f" margin="20" border-radius="50%"></View>
+  </View>  
+  <View align="right">
+      <View width="30%" height="100" backgroundColor="#ff7733" margin="20" border-radius="20"></View>
+      <View backgroundColor="blue" width="40%"  height="200" margin="20">></View>
+  </View>   
+</View>
     `);
-        expect(evg.items.length).to.equal(2);
-        expect(evg.items[0].tagName).to.equal('View');
-        expect(evg.items[1].tagName).to.equal('View');
-        expect(evg.items[1].backgroundColor.s_value).to.equal('blue');
-        const container = new _1.EVG('<View width="800px" height="600px"></View>');
-        container.innerWidth.pixels = 800;
-        container.innerHeight.pixels = 600;
-        evg.calculateLayout(container, new _1.UIRenderPosition(0, 0));
-        console.log(evg.calculated);
-        console.log(evg.items[0].calculated);
-        console.log(evg.items[1].calculated);
+        /*
+        expect(evg.items.length).to.equal(2)
+        expect(evg.items[0].tagName).to.equal('View')
+        expect(evg.items[1].tagName).to.equal('View')
+        expect(evg.items[1].backgroundColor.s_value).to.equal('blue')
+        */
+        evg.calculate(600, 800);
+        /*
+            console.log(evg.calculated)
+            console.log(evg.items[0].calculated)
+            console.log(evg.items[1].calculated)
+        */
+        const renderer = new pdfkit_1.Renderer();
+        renderer.render('./out/test1.pdf', evg, 600, 800);
     });
 });
 //# sourceMappingURL=test_evg.js.map

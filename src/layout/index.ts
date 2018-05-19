@@ -16,6 +16,7 @@ export class UICalculated {
   height:number = 0
   render_width:number = 0
   render_height:number = 0
+  width_override:number
   lineBreak:boolean = false
   absolute:boolean = false  
 }
@@ -35,7 +36,7 @@ export class EVG {
   _context?:any
 
   items:EVG[] = [];
-  calculated = new UICalculated();
+  calculated:UICalculated = new UICalculated();
   viewInstance = null;
 
   renderer = null
@@ -675,14 +676,15 @@ export class EVG {
       return;
     }
     try {
-      if(strJSON[0]=="<") {
-        console.log('... parse XML')
-        this.parseXML(strJSON);
-        return;
+      if(typeof(strJSON) == 'string') {
+        const s = strJSON.trim()
+        if(s[0]=="<") {
+          this.parseXML(s);
+          return;
+        }  
+        var jsonDict = JSON.parse(s);
+        this.readParams(jsonDict);      
       }
-  
-      var jsonDict = JSON.parse(strJSON);
-      this.readParams(jsonDict);
     } catch(e) { 
       console.log(e)
     }  
@@ -897,10 +899,19 @@ export class EVG {
 				default : break
 			}
 		}
-	}
+  }
+  
+  calculate(width:number, height:number) {
+    const container = new EVG({})
+    container.innerWidth.pixels = width;
+    container.innerHeight.pixels = height;
+    this.calculateLayout(container, new UIRenderPosition( 0, 0 ) );
+  }
 
 	calculateLayout( parentNode , render_pos  ) { 
-		var newPOS = new UIRenderPosition( render_pos.x,  render_pos.y );
+    var newPOS = new UIRenderPosition( render_pos.x,  render_pos.y );
+    console.log('pos', newPOS)
+    console.log('render_pos.y...', render_pos.y)
 		var render_start_y = render_pos.y;
 		var node = this;
 		this.adjustLayoutParams(parentNode);
@@ -924,6 +935,7 @@ export class EVG {
 				node.calculated.y = node.marginTop.pixels + ( parentNode.innerHeight.pixels - node.bottom.pixels - node.calculated.height);
 				node.calculated.absolute = true;
 			} else {
+        console.log('render_pos.y', render_pos.y)
 				node.calculated.y = render_pos.y + node.marginTop.pixels;
 			}	
 			
@@ -936,10 +948,11 @@ export class EVG {
 	}
 
 	default_layout( node ,  render_pos )  { 
+    console.log('default_layout', render_pos)
 		if(node.lineBreak.b_value) { node.calculated.lineBreak = true; }
 		var elem_h  = node.paddingTop.pixels + node.paddingBottom.pixels;
 		if(node.height.is_set) { elem_h += node.innerHeight.pixels; }
-		var child_render_pos = new UIRenderPosition( node.paddingLeft.pixels, node.paddingTop.pixels);
+		var child_render_pos = new UIRenderPosition( render_pos.x + node.paddingLeft.pixels, render_pos.y + node.paddingTop.pixels);
 		var child_heights = 0.0;
 		var line_height   = 0.0;
 		var row_width     = 0.0;
@@ -962,7 +975,7 @@ export class EVG {
 					line_height   = 0;
 					col_height    = 0;
 					row_width     = 0;
-					child_render_pos.x = current_x;
+          child_render_pos.x = current_x;
 					child_render_pos.y = node.paddingTop.pixels;
 					child_render_pos = childNode.calculateLayout(node,  child_render_pos);
 					childNode.calculated.y = current_y + (node.innerHeight.pixels - col_height - childNode.calculated.height);
@@ -988,14 +1001,14 @@ export class EVG {
 		} else { 
 			for( var ii=0; ii<node.items.length;ii++){
 				var childNode = node.items[ii];
-				child_render_pos.y = current_y;
+        child_render_pos.y = current_y;
+        console.log('render_y', current_y)
 				child_render_pos = childNode.calculateLayout(node, child_render_pos);
 				if( childNode.calculated.absolute) { continue; }
 				row_width     += childNode.calculated.width;
-
-
 				
 				if( childNode.calculated.lineBreak ||  (row_width > node.innerWidth.pixels && (row_width - node.innerWidth.pixels > 0.5))) {
+          console.log('next line...', line_height)
 					if(node.align.is_set && (node.align.s_value == "right" || node.align.s_value  == "center")) {
 						// align right
 						let lastItem = current_row[current_row.length - 1];
@@ -1027,7 +1040,8 @@ export class EVG {
 					line_height   = 0;
 					row_width     = 0;
 					child_render_pos.x = node.paddingLeft.pixels;
-					child_render_pos.y = current_y;
+          child_render_pos.y = current_y;
+          console.log('calculateLayout', child_render_pos )
 					child_render_pos = childNode.calculateLayout(node,  child_render_pos);
 					current_row = []
 					current_row.push(childNode);
