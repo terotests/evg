@@ -2,11 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var DOMParser = require('xmldom').DOMParser;
 class UIRenderPosition {
-    constructor(x, y) {
+    constructor(x, y, renderer) {
         this.x = 0;
         this.y = 0;
         this.x = x;
         this.y = y;
+        this.renderer = renderer;
     }
 }
 exports.UIRenderPosition = UIRenderPosition;
@@ -716,54 +717,62 @@ class EVG {
         var xmlDoc = parser.parseFromString(xmlStr, "text/xml");
         return this.readXMLDoc(xmlDoc.childNodes[0], null);
     }
-    adjustLayoutParams(node) {
-        if (this.width.is_set) {
-            switch (this.width.unit) {
-                case 1:
-                    this.width.pixels = node.innerWidth.pixels * this.width.f_value / 100;
-                    break;
-                case 2:
-                    this.width.pixels = node.fontSize.pixels * this.width.f_value;
-                    break;
-                case 3:
-                    this.width.pixels = this.width.f_value;
-                    break;
-                case 4:
-                    this.width.pixels = node.innerHeight.pixels * this.width.f_value / 100;
-                    break;
-                // fix: for width fill
-                case 5:
-                    this.width.pixels = 0;
-                    break;
-                default: break;
-            }
+    adjustLayoutParams(node, renderer) {
+        const special = renderer.hasCustomSize(node);
+        console.log('special ', special);
+        if (typeof (special) !== 'undefined') {
+            this.width.pixels = special.width;
+            this.height.pixels = special.height;
         }
         else {
-            this.width.pixels = node.innerWidth.pixels;
-        }
-        if (this.height.is_set) {
-            switch (this.height.unit) {
-                case 1:
-                    this.height.pixels = node.innerWidth.pixels * this.height.f_value / 100;
-                    break;
-                case 2:
-                    this.height.pixels = node.fontSize.pixels * this.height.f_value;
-                    break;
-                case 3:
-                    this.height.pixels = this.height.f_value;
-                    break;
-                case 4:
-                    this.height.pixels = node.innerHeight.pixels * this.height.f_value / 100;
-                    break;
-                // fix: for height fill
-                case 5:
-                    this.height.pixels = node.innerHeight.pixels * this.width.f_value / 100;
-                    break;
-                default: break;
+            if (this.width.is_set) {
+                switch (this.width.unit) {
+                    case 1:
+                        this.width.pixels = node.innerWidth.pixels * this.width.f_value / 100;
+                        break;
+                    case 2:
+                        this.width.pixels = node.fontSize.pixels * this.width.f_value;
+                        break;
+                    case 3:
+                        this.width.pixels = this.width.f_value;
+                        break;
+                    case 4:
+                        this.width.pixels = node.innerHeight.pixels * this.width.f_value / 100;
+                        break;
+                    // fix: for width fill
+                    case 5:
+                        this.width.pixels = 0;
+                        break;
+                    default: break;
+                }
             }
-        }
-        else {
-            this.height.pixels = node.innerHeight.pixels;
+            else {
+                this.width.pixels = node.innerWidth.pixels;
+            }
+            if (this.height.is_set) {
+                switch (this.height.unit) {
+                    case 1:
+                        this.height.pixels = node.innerWidth.pixels * this.height.f_value / 100;
+                        break;
+                    case 2:
+                        this.height.pixels = node.fontSize.pixels * this.height.f_value;
+                        break;
+                    case 3:
+                        this.height.pixels = this.height.f_value;
+                        break;
+                    case 4:
+                        this.height.pixels = node.innerHeight.pixels * this.height.f_value / 100;
+                        break;
+                    // fix: for height fill
+                    case 5:
+                        this.height.pixels = node.innerHeight.pixels * this.width.f_value / 100;
+                        break;
+                    default: break;
+                }
+            }
+            else {
+                this.height.pixels = node.innerHeight.pixels;
+            }
         }
         if (this.left.is_set) {
             switch (this.left.unit) {
@@ -1086,20 +1095,20 @@ class EVG {
             }
         }
     }
-    calculate(width, height) {
+    calculate(width, height, renderer) {
         const container = new EVG({});
         container.innerWidth.pixels = width;
         container.innerHeight.pixels = height;
-        this.calculateLayout(container, new UIRenderPosition(0, 0));
+        this.calculateLayout(container, new UIRenderPosition(0, 0, renderer));
     }
     calculateLayout(parentNode, render_pos) {
-        var newPOS = new UIRenderPosition(render_pos.x, render_pos.y);
-        console.log('pos', newPOS);
-        console.log('render_pos.y...', render_pos.y);
+        console.log('calculateLayout', parentNode.tagName, parentNode.text.s_value);
+        var newPOS = new UIRenderPosition(render_pos.x, render_pos.y, render_pos.renderer);
         var render_start_y = render_pos.y;
         var node = this;
-        this.adjustLayoutParams(parentNode);
+        this.adjustLayoutParams(parentNode, render_pos.renderer);
         var elem_h = this.default_layout(node, render_pos);
+        console.log('node', node.tagName, node.calculated);
         node.calculated.render_height = elem_h;
         node.calculated.render_width = node.inline.is_set && node.inline.b_value && node.calculated.width_override ? node.calculated.width_override : node.width.pixels;
         node.calculated.height = elem_h + node.marginTop.pixels + node.marginBottom.pixels;
@@ -1122,7 +1131,6 @@ class EVG {
                 node.calculated.absolute = true;
             }
             else {
-                console.log('render_pos.y', render_pos.y);
                 node.calculated.y = render_pos.y + node.marginTop.pixels;
             }
         }
@@ -1130,10 +1138,10 @@ class EVG {
             newPOS.x += node.calculated.width;
             newPOS.y = render_start_y + elem_h + node.marginTop.pixels + node.marginBottom.pixels;
         }
+        console.log('node after adjustements...', node.tagName, node.calculated);
         return newPOS;
     }
     default_layout(node, render_pos) {
-        console.log('default_layout', render_pos);
         if (node.lineBreak.b_value) {
             node.calculated.lineBreak = true;
         }
@@ -1141,7 +1149,7 @@ class EVG {
         if (node.height.is_set) {
             elem_h += node.innerHeight.pixels;
         }
-        var child_render_pos = new UIRenderPosition(render_pos.x + node.paddingLeft.pixels, render_pos.y + node.paddingTop.pixels);
+        var child_render_pos = new UIRenderPosition(render_pos.x + node.paddingLeft.pixels, render_pos.y + node.paddingTop.pixels, render_pos.renderer);
         var child_heights = 0.0;
         var line_height = 0.0;
         var row_width = 0.0;
@@ -1203,14 +1211,13 @@ class EVG {
             for (var ii = 0; ii < node.items.length; ii++) {
                 var childNode = node.items[ii];
                 child_render_pos.y = current_y;
-                console.log('render_y', current_y);
                 child_render_pos = childNode.calculateLayout(node, child_render_pos);
                 if (childNode.calculated.absolute) {
                     continue;
                 }
                 row_width += childNode.calculated.width;
+                console.log('width of ch ', childNode.tagName, " == ", childNode.calculated.width);
                 if (childNode.calculated.lineBreak || (row_width > node.innerWidth.pixels && (row_width - node.innerWidth.pixels > 0.5))) {
-                    console.log('next line...', line_height);
                     if (node.align.is_set && (node.align.s_value == "right" || node.align.s_value == "center")) {
                         // align right
                         let lastItem = current_row[current_row.length - 1];
@@ -1248,9 +1255,8 @@ class EVG {
                     current_y += line_height;
                     line_height = 0;
                     row_width = 0;
-                    child_render_pos.x = node.paddingLeft.pixels;
+                    child_render_pos.x = render_pos.x + node.paddingLeft.pixels;
                     child_render_pos.y = current_y;
-                    console.log('calculateLayout', child_render_pos);
                     child_render_pos = childNode.calculateLayout(node, child_render_pos);
                     current_row = [];
                     current_row.push(childNode);
@@ -1311,14 +1317,29 @@ class EVG {
         }
         if (!node.height.is_set) {
             elem_h += child_heights;
-            if (node.renderer && node.renderer.customSize) {
-                var size = node.renderer.customSize(node.innerWidth.pixels);
-                if (size) {
-                    elem_h += size.height;
-                    // fix : ??? overried width
-                    node.calculated.width_override = size.width;
-                }
+            console.log('');
+            console.log('at end ', node.tagName);
+            const special = render_pos.renderer.hasCustomSize(node);
+            console.log('... ', special);
+            if (typeof (special) !== 'undefined') {
+                elem_h += special.height;
+                node.calculated.width_override = special.width;
+                node.calculated.width = special.width;
+                node.calculated.render_width = special.width;
+                node.calculated.render_height = special.height;
+                node.width.pixels = special.width;
+                console.log('Applied Special ', node.calculated);
             }
+            /*
+            if(node.renderer && node.renderer.customSize) {
+              var size = node.renderer.customSize( node.innerWidth.pixels )
+              if(size) {
+                elem_h += size.height;
+                // fix : ??? overried width
+                node.calculated.width_override = size.width;
+              }
+            }
+            */
         }
         return elem_h;
     }

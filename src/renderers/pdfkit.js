@@ -5,9 +5,34 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const pdfkit_1 = __importDefault(require("pdfkit"));
 class Renderer {
-    render(filename, item, width, height) {
+    constructor(width, height) {
+        this.doc = new pdfkit_1.default({ size: [width, height] });
+    }
+    hasCustomSize(item) {
+        console.log('Tag ', item.tagName);
+        if (item.tagName == 'Label') {
+            if (item.fontFamily.is_set) {
+                this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+            }
+            else {
+                this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+            }
+            if (item.fontSize.is_set) {
+                this.doc.fontSize(item.fontSize.pixels);
+            }
+            else {
+                this.doc.fontSize(12);
+            }
+            // TODO: render multiline text
+            return {
+                width: this.doc.widthOfString(item.text.s_value),
+                height: item.fontSize.pixels || 12
+            };
+        }
+    }
+    render(filename, item) {
         const fs = require('fs');
-        const doc = new pdfkit_1.default({ size: [width, height] });
+        const doc = this.doc;
         doc.pipe(fs.createWriteStream(filename));
         this.renderItem(item, doc);
         // Write text using the font...
@@ -29,6 +54,10 @@ class Renderer {
                 const r = new View(item);
                 r.render(ctx);
                 break;
+            case 'Label':
+                const label = new Label(item);
+                label.render(ctx);
+                break;
         }
         for (let child of item.items) {
             this.renderItem(child, ctx);
@@ -40,15 +69,11 @@ class View {
     constructor(ui) {
         this.ui = ui;
     }
-    initEngine() {
-        // nothing to init here...
-    }
-    remove() {
-    }
+    initEngine() { }
+    remove() { }
     render(ctx) {
         const ui = this.ui;
         const box = ui.calculated;
-        // console.log('render ', box)
         if (ui.borderRadius.is_set) {
             ctx.roundedRect(box.x, box.y, box.render_width, box.render_height, ui.borderRadius.pixels);
         }
@@ -83,6 +108,33 @@ class View {
             ctx.strokeColor('white', 0).stroke();
         }
         // ctx.closePath()
+    }
+}
+class Label {
+    constructor(ui) {
+        this.ui = ui;
+    }
+    initEngine() { }
+    remove() { }
+    render(ctx) {
+        const ui = this.ui;
+        const box = ui.calculated;
+        if (ui.fontFamily.is_set) {
+            ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+        }
+        else {
+            ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+        }
+        if (ui.fontSize.is_set) {
+            ctx.fontSize(ui.fontSize.pixels);
+        }
+        else {
+            ctx.fontSize(12);
+        }
+        console.log('TEXT', ui.text.s_value);
+        console.log(box);
+        ctx.fillColor('black', 1);
+        ctx.text(ui.text.s_value, box.x, box.y);
     }
 }
 //# sourceMappingURL=pdfkit.js.map

@@ -3,11 +3,38 @@ import PDFDocument from 'pdfkit'
 
 
 export class Renderer {
+
+  doc:PDFDocument 
+
+  constructor( width:number, height:number) {
+    this.doc = new PDFDocument({size:[width, height]})
+  }
+
+  hasCustomSize(item:EVG) : any {
+    console.log('Tag ', item.tagName)
+    if(item.tagName == 'Label') {
+      if(item.fontFamily.is_set) {
+        this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf')
+      } else {
+        this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf')
+      }
+      if(item.fontSize.is_set) {
+        this.doc.fontSize(item.fontSize.pixels)
+      } else {
+        this.doc.fontSize(12)
+      }
+      // TODO: render multiline text
+      return {
+        width : this.doc.widthOfString(item.text.s_value),
+        height : item.fontSize.pixels || 12
+      }
+    }  
+  }
   
-  render( filename:string, item:EVG, width:number, height:number ) : any {
+  render( filename:string, item:EVG ) : any {
 
     const fs = require('fs')
-    const doc = new PDFDocument({size:[width, height]})
+    const doc = this.doc
 
     doc.pipe( fs.createWriteStream(filename) )
 
@@ -33,6 +60,10 @@ export class Renderer {
         const r = new View(item)
         r.render(ctx)
       break;
+      case 'Label' :
+        const label = new Label(item)
+        label.render(ctx)
+      break;      
     }
     for( let child of item.items ) {
       this.renderItem( child, ctx )
@@ -41,33 +72,20 @@ export class Renderer {
 }
 
 class View {
-
-  ui:EVG
-  
+  ui:EVG  
   constructor(ui:EVG) {
     this.ui = ui
   }
-
-	initEngine () {
-    // nothing to init here...
-	}
-
-	remove() {
-
-	}
-
+	initEngine () {}
+	remove() {}
 	render(ctx?:any) {
     const ui = this.ui;
     const box = ui.calculated
-
-    // console.log('render ', box)
-
     if(ui.borderRadius.is_set) {
       ctx.roundedRect(box.x, box.y, box.render_width, box.render_height, ui.borderRadius.pixels)
     } else {
       ctx.rect(box.x, box.y, box.render_width, box.render_height)
     }
-
     if( ui.backgroundColor.is_set) {
       if(ui.opacity.is_set) {
         ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value)
@@ -93,5 +111,32 @@ class View {
       ctx.strokeColor('white', 0).stroke()
     }
     // ctx.closePath()
+	}
+}
+
+class Label {
+  ui:EVG  
+  constructor(ui:EVG) {
+    this.ui = ui
+  }
+	initEngine () {}
+	remove() {}
+	render(ctx?:any) {
+    const ui = this.ui;
+    const box = ui.calculated
+    if(ui.fontFamily.is_set) {
+      ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf')
+    } else {
+      ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf')
+    }
+    if(ui.fontSize.is_set) {
+      ctx.fontSize(ui.fontSize.pixels)
+    } else {
+      ctx.fontSize(12)
+    }   
+    console.log('TEXT', ui.text.s_value)
+    console.log(box)
+    ctx.fillColor('black', 1)
+    ctx.text(ui.text.s_value, box.x, box.y)
 	}
 }
