@@ -167,12 +167,8 @@ export class Renderer {
       // ctx.rotate( - item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })      
       ctx.rotate( - item.rotate.f_value )
     }    
-
-    this.opacity_now = old_opacity
-    
-  }
-  
-  
+    this.opacity_now = old_opacity    
+  }  
 }
 
 class Image {
@@ -186,14 +182,9 @@ class Image {
     const ui = this.ui;
     const box = ui.calculated
     if(ui.imageUrl.is_set) {
-      console.log(ui.imageUrl.s_value)
-      console.log(box)
-      const fs = require('fs')
-
       ctx.fillOpacity(1)
       ctx.opacity(1)          
       ctx.image(ui.imageUrl.s_value,0,0, {width: box.render_width, height: box.render_height})
-
     }   
   }
 }
@@ -209,17 +200,10 @@ class QR_Code {
     const ui = this.ui;
     const box = ui.calculated
     if(ui.text.is_set) {
-
-      console.log('READY TO', ui.text.s_value)
-      // process.exit()
-
       const url = await QRCode.toDataURL(ui.text.s_value)
-      console.log('QRCode rendering ', url)
-      console.log(box)
       ctx.fillOpacity(1)
       ctx.opacity(1)          
-      ctx.image(url, 0, 0, {width: box.render_width, height: box.render_height})
-     
+      ctx.image(url, 0, 0, {width: box.render_width, height: box.render_height})   
     }   
   }
 }
@@ -273,8 +257,6 @@ class Label {
     ctx.text(ui.text.s_value, 0, 0)
   }
 }
-// doc.path('M 0,20 L 100,160 Q 130,200 150,120 C 190,-40 200,200 300,150 L 400,90')
-// .stroke()
 
 class Path {
   ui:EVG  
