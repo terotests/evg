@@ -9,11 +9,19 @@ class Renderer {
     constructor(width, height) {
         this.opacity_now = 1.0;
         this.doc = new pdfkit_1.default({ size: [width, height] });
+        this.height = height;
+        this.width = width;
     }
     hasCustomSize(item) {
         if (item.tagName == 'Label') {
             if (item.fontFamily.is_set) {
-                this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+                const font_file = item.findFont(item.fontFamily.s_value);
+                if (font_file) {
+                    this.doc.font(font_file);
+                }
+                else {
+                    this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+                }
             }
             else {
                 this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
@@ -27,15 +35,15 @@ class Renderer {
             // TODO: render multiline text
             return {
                 width: this.doc.widthOfString(item.text.s_value),
-                height: item.fontSize.pixels || 12
+                height: item.fontSize.f_value || 12
             };
         }
     }
-    render(filename, item) {
+    render(filename, item, headers) {
         const fs = require('fs');
         const doc = this.doc;
         doc.pipe(fs.createWriteStream(filename));
-        this.renderItem(item, doc);
+        this.renderItem(item, doc, headers);
         doc.save();
         doc.end();
     }
@@ -65,7 +73,7 @@ class Renderer {
             ctx.strokeColor('white', 0).stroke();
         }
     }
-    renderItem(item, ctx) {
+    renderItem(item, ctx, headers) {
         const old_opacity = this.opacity_now;
         if (item.opacity.is_set) {
             this.opacity_now = item.opacity.f_value;
@@ -81,6 +89,7 @@ class Renderer {
         }
         this.setColors(item, ctx);
         switch (item.tagName) {
+            case 'div':
             case 'View':
                 const r = new View(item);
                 r.render(ctx);
@@ -98,12 +107,49 @@ class Renderer {
                 im.render(ctx);
                 break;
         }
+        let page_y_pos = item.calculated.y;
+        let page_item_cnt = 0;
+        let top_margin = 0;
+        let bottom_margin = 0;
+        let y_adjust = 0;
+        const render_headers = (item) => {
+            if (headers) {
+                const page_header = headers[0] ? headers[0]() : null;
+                const page_footer = headers[1] ? headers[1]() : null;
+                if (page_header) {
+                    page_header.calculate(this.width, this.height, this);
+                    this.renderItem(page_header, ctx);
+                    top_margin = page_header.calculated.render_height;
+                }
+                if (page_footer) {
+                    page_footer.calculate(this.width, this.height, this);
+                    ctx.translate(0, this.height - page_footer.calculated.render_height);
+                    this.renderItem(page_footer, ctx);
+                    ctx.translate(0, -(this.height - page_footer.calculated.render_height));
+                    bottom_margin = page_footer.calculated.render_height;
+                }
+                if (page_header) {
+                    ctx.translate(0, top_margin);
+                }
+            }
+        };
+        render_headers(item[0]);
+        const total_margin = bottom_margin + top_margin;
+        const vertical_area = this.height - total_margin;
         for (let child of item.items) {
+            if (page_item_cnt > 0 && ((child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)) {
+                ctx.addPage();
+                render_headers(child);
+                page_y_pos += this.height;
+                page_item_cnt = 0;
+                y_adjust = child.calculated.y;
+            }
             const dx = child.calculated.x;
             const dy = child.calculated.y;
-            ctx.translate(dx, dy);
+            ctx.translate(dx, dy - y_adjust);
             this.renderItem(child, ctx);
-            ctx.translate(-dx, -dy);
+            ctx.translate(-dx, -dy + y_adjust);
+            page_item_cnt++;
         }
         if (item.scale.is_set && item.scale.f_value > 0.01) {
             ctx.scale(1 / item.scale.f_value);
@@ -164,7 +210,13 @@ class Label {
         const ui = this.ui;
         const box = ui.calculated;
         if (ui.fontFamily.is_set) {
-            ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+            const font_file = ui.findFont(ui.fontFamily.s_value);
+            if (font_file) {
+                ctx.font(font_file);
+            }
+            else {
+                ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+            }
         }
         else {
             ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');

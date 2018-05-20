@@ -1,37 +1,114 @@
 
 
 import 'mocha';
-import {EVG, UIRenderPosition,register_component} from '../src/layout/'
+import {EVG, UIRenderPosition,register_component, register_font} from '../src/layout/'
 import {Renderer} from '../src/renderers/pdfkit'
 
 const expect    = require("chai").expect;
 
 describe("render testting", function() {
 
+  register_font('candal', 'fonts/Candal/Candal.ttf')
+  register_font('cinzel', 'fonts/Cinzel/Cinzel-Regular.ttf')
+  register_font('monoton', 'fonts/Monoton/Monoton-Regular.ttf')
+  const phone = `
+  <View width="395"  background-color="#222222" padding="10" border-radius="20px"
+      >        
+      <View width="100%" align="center" padding="6px">
+          <View
+          background-color="#ffffff" width="50px" height="10px"
+          border-radius="15px"
+          />
+      </View>
+      <View width="375" height="667" overflow="hidden" id="screen" background-color="#ffffff">
+          <View id="content" >
+          </View>
+      </View>
+      
+      <View width="100%" align="center" padding="6px">
+          <View
+          background-color="#ffffff" width="50px" height="50px"
+          border-radius="50%"
+          />
+      </View>
+  </View>  
+  `    
+  
+  register_component('iphone', phone)
+  register_component('text', `<Label background-color="blue" />`)
+  register_component('t', `<Label background-color="#222222" />`)
+  register_component('note',`
+  <path background-color="black" width="30" height="20"
+  d="M16.899,3.05c-0.085-0.068-0.192-0.095-0.299-0.074L7.947,4.779c-0.17,0.034-0.291,0.182-0.291,0.353v7.364c-0.494-0.536-1.199-0.873-1.983-0.873c-1.491,0-2.704,1.213-2.704,2.704s1.213,2.704,2.704,2.704c1.491,0,2.705-1.213,2.705-2.704V7.952l7.933-1.659v4.399c-0.494-0.535-1.199-0.873-1.983-0.873c-1.491,0-2.704,1.213-2.704,2.704c0,1.492,1.213,2.705,2.704,2.705c1.49,0,2.704-1.213,2.704-2.705V3.33C17.031,3.221,16.982,3.119,16.899,3.05 M5.673,16.311c-1.094,0-1.983-0.889-1.983-1.983s0.889-1.983,1.983-1.983c1.095,0,1.983,0.889,1.983,1.983S6.768,16.311,5.673,16.311 M14.327,14.508c-1.095,0-1.983-0.889-1.983-1.984c0-1.094,0.889-1.982,1.983-1.982c1.094,0,1.983,0.889,1.983,1.982C16.311,13.619,15.421,14.508,14.327,14.508 M16.311,5.558L8.377,7.217V5.428l7.933-1.659V5.558z"
+></path>     
+  `)  
 
   it('baseline', () => {
 
+    let page_cnt = 1
+    const header = () => new EVG(`
+  <View width="100%" background-color="white" padding-bottom="10">
+    <View padding-left="15" padding="10">
+      <img src="images/wiki.jpeg" width="30" height="30"/>
+      <View width="20"/>
+      <t text="Page ${page_cnt++}, printed ${ (new Date()).toLocaleString() }" font-size="9"/>
+    </View>
+    <View width="100%" background-color="#888888" height="1"/>
+  </View>    
+    `)
+
+    const footer = () => new EVG(`
+  <View width="100%" background-color="white" padding="10">
+    <View width="100%" background-color="#888888" height="1" padding-bottom="5"/>
+    <View align="center">
+      <t text="(c) Copyright all rights reserved " font-size="9" background-color="gray"/>
+      <t text="ACME" font-size="9" background-color="red"/>
+      <t text=" Corporation" font-size="9" background-color="gray"/>
+    </View>
+    <View align="center"><t text="May the force be with you" font-size="7" background-color="gray"/></View>
+  </View>  
+    `)    
+    const create_text = (str) => {
+      // return str.split(" ").map( _ => `<View width="${_.length*10}" height="10" background-color="blue" margin="0"/>`).join('')
+      return str.split(" ").map( _ => `<t text="${_} "/>`).join('')
+    }
+    const smallnote = `<note width="10" height="10"/><View width="10"/>`
+    const create_para = () => `
+    <View align="center">${smallnote}${smallnote}${smallnote}</View>
+    <View width="100%" margin="20">${create_text(`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat      
+    `)}</View>    
+    `
+
     const evg = new EVG(`
 <View>
-
-  <View width="100%" height="40" background-color="yellow">
-    <View width="20" height="20" background-color="blue"/>
-    <View width="20" height="20" background-color="red"/>
-    <View width="20" height="20" background-color="green"/>  
+  <View padding="10">
+    <div><t font-family="candal" text="Hello World!" font-size="40"/></div>
+    <div><t font-family="cintzen" text="Hello World!" font-size="30"/></div>
+    <div><t font-family="monoton" text="Hello World!" font-size="20"/></div>
+  </View>
+  <View>
+    <img src="images/w.jpg" width="20%" height="20%"/>
+    <View width="80%" margin="20">
+      ${create_text(`
+      At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis 
+      `)}
+    </View>
   </View>
 
-  <View width="100%" height="40" background-color="#223344">
-    <View width="20" height="20" background-color="blue" border-radius="50%"/>
-    <View width="20" height="20" background-color="red" border-radius="50%"/>
-    <View width="20" height="20" background-color="green" border-radius="50%"/>  
-  </View>
-  <img src="images/w.jpg" width="200" height="200"/>
-  
+  ${create_para()}
+  ${create_para()}
+  ${create_para()}
+  ${create_para()}  
+  ${create_para()}
+  ${create_para()}
+  ${create_para()}
+  ${create_para()}
 </View>
     `)
+    
     const renderer = new Renderer(600,800)
     evg.calculate(600,800,renderer)    
-    renderer.render('./out/baseline.pdf', evg)
+    renderer.render('./out/baseline.pdf', evg, [header, footer])
 
   });  
 
@@ -39,37 +116,6 @@ describe("render testting", function() {
     // your test
     expect(3).to.equal(3)
 
-    const phone = `
-    <View width="395"  background-color="#222222" padding="10" border-radius="20px"
-        >        
-        <View width="100%" align="center" padding="6px">
-            <View
-            background-color="#ffffff" width="50px" height="10px"
-            border-radius="15px"
-            />
-        </View>
-        <View width="375" height="667" overflow="hidden" id="screen" background-color="#ffffff">
-            <View id="content" >
-            </View>
-        </View>
-        
-        <View width="100%" align="center" padding="6px">
-            <View
-            background-color="#ffffff" width="50px" height="50px"
-            border-radius="50%"
-            />
-        </View>
-    </View>  
-    `    
-    
-    register_component('iphone', phone)
-    register_component('text', `<Label background-color="blue" />`)
-    register_component('t', `<Label background-color="#222222" />`)
-    register_component('note',`
-    <path background-color="black" width="30" height="20"
-    d="M16.899,3.05c-0.085-0.068-0.192-0.095-0.299-0.074L7.947,4.779c-0.17,0.034-0.291,0.182-0.291,0.353v7.364c-0.494-0.536-1.199-0.873-1.983-0.873c-1.491,0-2.704,1.213-2.704,2.704s1.213,2.704,2.704,2.704c1.491,0,2.705-1.213,2.705-2.704V7.952l7.933-1.659v4.399c-0.494-0.535-1.199-0.873-1.983-0.873c-1.491,0-2.704,1.213-2.704,2.704c0,1.492,1.213,2.705,2.704,2.705c1.49,0,2.704-1.213,2.704-2.705V3.33C17.031,3.221,16.982,3.119,16.899,3.05 M5.673,16.311c-1.094,0-1.983-0.889-1.983-1.983s0.889-1.983,1.983-1.983c1.095,0,1.983,0.889,1.983,1.983S6.768,16.311,5.673,16.311 M14.327,14.508c-1.095,0-1.983-0.889-1.983-1.984c0-1.094,0.889-1.982,1.983-1.982c1.094,0,1.983,0.889,1.983,1.982C16.311,13.619,15.421,14.508,14.327,14.508 M16.311,5.558L8.377,7.217V5.428l7.933-1.659V5.558z"
- ></path>     
-    `)
 
     const evg = new EVG(`
 <View>

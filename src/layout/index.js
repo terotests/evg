@@ -26,6 +26,10 @@ class UICalculated {
 exports.UICalculated = UICalculated;
 const UICompRegistry = {};
 const UIRenderers = {};
+const UIFonts = {};
+exports.register_font = (name, fontFile) => {
+    UIFonts[name] = fontFile;
+};
 exports.register_component = (name, component) => {
     UICompRegistry[name] = component;
 };
@@ -176,6 +180,9 @@ class EVG {
     }
     findComponent(name) {
         return UICompRegistry[name];
+    }
+    findFont(name) {
+        return UIFonts[name];
     }
     findContent(list) {
         var list = list || [];
@@ -1083,6 +1090,8 @@ class EVG {
         this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
         this.innerWidth.pixels = this.width.pixels - (this.paddingRight.pixels + this.paddingLeft.pixels + this.borderWidth.pixels * 2);
         this.innerHeight.pixels = this.height.pixels - (this.paddingTop.pixels + this.paddingBottom.pixels + this.borderWidth.pixels * 2);
+        //    this.width.pixels = this.width.pixels - (this.marginLeft.pixels + this.marginRight.pixels);
+        //     this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
         // fix: fontsize
         if (this.fontSize.is_set) {
             switch (this.fontSize.unit) {

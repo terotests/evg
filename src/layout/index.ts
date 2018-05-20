@@ -29,7 +29,11 @@ export class UICalculated {
 
 const UICompRegistry = {};
 const UIRenderers = {};
+const UIFonts = {};
 
+export const register_font = (name:string, fontFile:string) => {
+  UIFonts[name] = fontFile; 
+}
 export const register_component = (name:string, component:string) => {
   UICompRegistry[name] = component; 
 }
@@ -139,6 +143,10 @@ export class EVG {
 		return UICompRegistry[name] 
   }  
 
+	findFont(name) {
+		return UIFonts[name] 
+  }  
+  
 	findContent(list) {
 		var list = list || [];
 		if(this.id.is_set && this.id.s_value == "content") {
@@ -910,11 +918,16 @@ export class EVG {
 					default : break
 				}
 			}
-		}
+    }
+    
 		this.width.pixels = this.width.pixels - (this.marginLeft.pixels + this.marginRight.pixels);
-		this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
+    this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
+    
 		this.innerWidth.pixels = this.width.pixels - (this.paddingRight.pixels + this.paddingLeft.pixels + this.borderWidth.pixels*2);
 		this.innerHeight.pixels = this.height.pixels - (this.paddingTop.pixels + this.paddingBottom.pixels + this.borderWidth.pixels*2);
+    
+//    this.width.pixels = this.width.pixels - (this.marginLeft.pixels + this.marginRight.pixels);
+//     this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
 
 		// fix: fontsize
 		if(this.fontSize.is_set) {
