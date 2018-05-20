@@ -74,9 +74,9 @@ describe("render testting", function () {
         const evg = new _1.EVG(`
 <View>
   <View padding="10">
-    <div><t font-family="candal" text="Hello World!" font-size="40"/></div>
+    <div rotate="-2"><t font-family="candal" text="Hello World!" font-size="40"/></div>
     <div><t font-family="cintzen" text="Hello World!" font-size="30"/></div>
-    <div><t font-family="monoton" text="Hello World!" font-size="20"/></div>
+    <div rotate="2"><t font-family="monoton" text="Hello World!" font-size="20"/></div>
   </View>
   <View>
     <View width="20%">
