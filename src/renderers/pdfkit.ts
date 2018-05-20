@@ -180,9 +180,9 @@ class Image {
   constructor(ui:EVG) {
     this.ui = ui
   }
-	initEngine () {}
-	remove() {}
-	render(ctx:any ) {
+  initEngine () {}
+  remove() {}
+  render(ctx:any ) {
     const ui = this.ui;
     const box = ui.calculated
     if(ui.imageUrl.is_set) {
@@ -195,7 +195,7 @@ class Image {
       ctx.image(ui.imageUrl.s_value,0,0, {width: box.render_width, height: box.render_height})
 
     }   
-	}
+  }
 }
 
 class QR_Code {
@@ -203,9 +203,9 @@ class QR_Code {
   constructor(ui:EVG) {
     this.ui = ui
   }
-	initEngine () {}
-	remove() {}
-	async render(ctx:any ) {
+  initEngine () {}
+  remove() {}
+  async render(ctx:any ) {
     const ui = this.ui;
     const box = ui.calculated
     if(ui.text.is_set) {
@@ -221,7 +221,7 @@ class QR_Code {
       ctx.image(url, 0, 0, {width: box.render_width, height: box.render_height})
      
     }   
-	}
+  }
 }
 
 
@@ -230,9 +230,9 @@ class View {
   constructor(ui:EVG) {
     this.ui = ui
   }
-	initEngine () {}
-	remove() {}
-	render(ctx:any ) {
+  initEngine () {}
+  remove() {}
+  render(ctx:any ) {
     const ui = this.ui;
     const box = ui.calculated
     if(ui.borderRadius.is_set) {
@@ -242,7 +242,7 @@ class View {
     }
     ctx.fill()
     ctx.stroke()
-	}
+  }
 }
 
 class Label {
@@ -250,9 +250,9 @@ class Label {
   constructor(ui:EVG) {
     this.ui = ui
   }
-	initEngine () {}
-	remove() {}
-	render(ctx:any  ) {
+  initEngine () {}
+  remove() {}
+  render(ctx:any  ) {
     const ui = this.ui;
     const box = ui.calculated
     if(ui.fontFamily.is_set) {
@@ -271,7 +271,7 @@ class Label {
       ctx.fontSize(12)
     }   
     ctx.text(ui.text.s_value, 0, 0)
-	}
+  }
 }
 // doc.path('M 0,20 L 100,160 Q 130,200 150,120 C 190,-40 200,200 300,150 L 400,90')
 // .stroke()
@@ -281,16 +281,15 @@ class Path {
   constructor(ui:EVG) {
     this.ui = ui
   }
-	initEngine () {}
-	remove() {}
-	render(ctx:any  ) {
+  initEngine () {}
+  remove() {}
+  render(ctx:any  ) {
     const ui = this.ui
     const parser = new svg.svgPathParser()
     parser.parse( ui.svgPath.s_value)
     parser.makePathAbsolute();
     parser.fitPathInto( ui.calculated.render_width, ui.calculated.render_height );
     const svgStr = parser.svgString()    
-    ctx.path( svgStr ).fill().stroke()
-    
-	}
+    ctx.path( svgStr ).fill().stroke()    
+  }
 }
