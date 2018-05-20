@@ -139,6 +139,28 @@ export class EVG {
   shadowOpacity = { unit : 0, is_set : false, pixels : 0.0, f_value : 0.0, s_value : "" }
   shadowRadius = { unit : 0, is_set : false, pixels : 0.0, f_value : 0.0, s_value : "" }  
 
+  static installFont( name:string, fileName:string) {
+    register_font(name, fileName)    
+  }
+
+  static installComponent( name:string, componentData:string) {
+    register_component(name, componentData)    
+  }
+
+  static async renderToFile( 
+    fileName:string, 
+    width:number, 
+    height:number,
+    item:EVG,
+    header?:(item:EVG)=>EVG,
+    footer?:(item:EVG)=>EVG) {
+      
+    const renderer = new Renderer(width, height)
+    item.calculate(width,height,renderer)    
+    renderer.render(fileName, item, [header, footer])
+    
+  }
+
   findComponent(name) {
     return UICompRegistry[name] 
   }  

@@ -1,5 +1,15 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+// TODO: generic renderer
+const pdfkit_1 = require("../renderers/pdfkit");
 var DOMParser = require('xmldom').DOMParser;
 class UIRenderPosition {
     constructor(x, y, renderer) {
@@ -178,6 +188,19 @@ class EVG {
             console.log(e);
         }
     }
+    static installFont(name, fileName) {
+        exports.register_font(name, fileName);
+    }
+    static installComponent(name, componentData) {
+        exports.register_component(name, componentData);
+    }
+    static renderToFile(fileName, width, height, item, header, footer) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const renderer = new pdfkit_1.Renderer(width, height);
+            item.calculate(width, height, renderer);
+            renderer.render(fileName, item, [header, footer]);
+        });
+    }
     findComponent(name) {
         return UICompRegistry[name];
     }
@@ -217,10 +240,10 @@ class EVG {
         try {
             // Event handlers are disabled for now...
             /*
-                  if(jsonDict["onClick"]) {
-                      console.log("hasClickHandler...", jsonDict["onClick"]);
-                      this.eventOnClick = jsonDict["onClick"]
-                      // How to add into the renderer???
+            if(jsonDict["onClick"]) {
+              console.log("hasClickHandler...", jsonDict["onClick"]);
+              this.eventOnClick = jsonDict["onClick"]
+              // How to add into the renderer???
             }
             */
             if (jsonDict["x"]) {
@@ -662,12 +685,12 @@ class EVG {
             var name = node.nodeName;
             // TODO: implement object references later
             /*
-                  if(name=="o") {
-                      var attr = node.attributes[0];
-                      if(attr) {
-                          var idx = parseInt(attr.nodeValue);
-                          return objectList[idx];
-                      }
+            if(name=="o") {
+              var attr = node.attributes[0];
+              if(attr) {
+                var idx = parseInt(attr.nodeValue);
+                return objectList[idx];
+              }
             }
             */
             var attrObj = {};
@@ -713,8 +736,8 @@ class EVG {
             // TODO: tag handlers
             // "<object id=\""+this._instanceId+"\"/>";
             /*
-                  if(this.tagHandlers && this.tagHandlers[name]) {
-                          
+            if(this.tagHandlers && this.tagHandlers[name]) {
+                
             }
             */
             if (b_component) {

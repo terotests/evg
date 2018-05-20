@@ -1,8 +1,9 @@
 {
   "name": "evg",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Elastic View Graphics",
-  "main": "index.js",
+  "main": "src/layout/index.js",
+  "types": "src/layout/index.d.ts",
   "scripts": {
     "test": "./node_modules/.bin/mocha --reporter spec"
   },
@@ -11,7 +12,7 @@
     "url": "git+https://github.com/terotests/evg.git"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/terotests/evg/issues"
   },
