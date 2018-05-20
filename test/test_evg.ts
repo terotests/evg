@@ -89,7 +89,7 @@ describe("render testting", function() {
   <View>
     <View width="20%">
       <img src="images/w.jpg" width="100%" height="100%"/>
-      <QRCode text="https://koodiklinikka.fi/" width="100%" height="100%"/>
+      <QRCode text="https://koodiklinikka.fi/" width="100" height="100" />
     </View>
     <View width="80%" margin="20">
       ${create_text(`
