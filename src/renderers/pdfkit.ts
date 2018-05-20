@@ -1,6 +1,6 @@
 import {EVG} from '../layout/'
 import PDFDocument from 'pdfkit'
-
+const QRCode = require('qrcode')
 const svg = require('../svg/')
  
 export class Renderer {
@@ -41,11 +41,11 @@ export class Renderer {
     }  
   }
   
-  render( filename:string, item:EVG, headers?:any[] ) : any {
+  async render( filename:string, item:EVG, headers?:any[] ) : Promise<any> {
     const fs = require('fs')
     const doc = this.doc
     doc.pipe( fs.createWriteStream(filename) )
-    this.renderItem( item, doc, headers  )
+    await this.renderItem( item, doc, headers  )
     doc.save()
     doc.end()
   }
@@ -73,7 +73,7 @@ export class Renderer {
     }
   }  
 
-  renderItem( item:EVG, ctx:any, headers?:any[] ) {
+  async renderItem( item:EVG, ctx:any, headers?:any[] ) {
     const old_opacity = this.opacity_now
     if(item.opacity.is_set) {
       this.opacity_now = item.opacity.f_value
@@ -92,21 +92,25 @@ export class Renderer {
       case 'div' :
       case 'View' :
         const r = new View(item)
-        r.render(ctx)
+        await r.render(ctx)
       break;
       case 'Label' :
         const label = new Label(item)
-        label.render(ctx)
+        await label.render(ctx)
       break;      
       case 'path' :
         const path = new Path(item)
-        path.render(ctx)
+        await path.render(ctx)
       break;   
       case 'img' :
         const im = new Image(item)
-        im.render(ctx)
+        await im.render(ctx)
       break;   
-
+      case 'QRCode' :
+        console.log('QRCode found !!!!')
+        const qr = new QR_Code(item)
+        await qr.render(ctx)
+      break; 
     }
 
     let page_y_pos = item.calculated.y
@@ -115,19 +119,19 @@ export class Renderer {
     let bottom_margin = 0
     let y_adjust = 0
 
-    const render_headers = (item?:EVG) => {
+    const render_headers = async (item?:EVG) => {
       if(headers) {
         const page_header = headers[0] ? headers[0]() : null
         const page_footer = headers[1] ? headers[1]() : null
         if(page_header) {
           page_header.calculate(this.width,this.height,this) 
-          this.renderItem( page_header, ctx )
+          await this.renderItem( page_header, ctx )
           top_margin = page_header.calculated.render_height
         }
         if(page_footer) {
           page_footer.calculate(this.width,this.height,this) 
           ctx.translate( 0, this.height - page_footer.calculated.render_height)
-          this.renderItem( page_footer, ctx )
+          await this.renderItem( page_footer, ctx )
           ctx.translate( 0, - (this.height - page_footer.calculated.render_height))
           bottom_margin = page_footer.calculated.render_height
         }
@@ -136,14 +140,14 @@ export class Renderer {
         }   
       }
     }
-    render_headers(item[0])
+    await render_headers(item[0])
     const total_margin = bottom_margin + top_margin
     const vertical_area = this.height - total_margin
 
     for( let child of item.items ) {
       if( page_item_cnt > 0 && ( (child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)) {
         ctx.addPage()
-        render_headers(child)
+        await render_headers(child)
         page_y_pos += this.height
         page_item_cnt = 0
         y_adjust = child.calculated.y 
@@ -151,7 +155,7 @@ export class Renderer {
       const dx = child.calculated.x
       const dy = child.calculated.y
       ctx.translate( dx, dy - y_adjust)
-      this.renderItem( child, ctx )
+      await this.renderItem( child, ctx )
       ctx.translate( -dx, -dy + y_adjust)
       page_item_cnt++
     }
@@ -193,6 +197,33 @@ class Image {
     }   
 	}
 }
+
+class QR_Code {
+  ui:EVG  
+  constructor(ui:EVG) {
+    this.ui = ui
+  }
+	initEngine () {}
+	remove() {}
+	async render(ctx:any ) {
+    const ui = this.ui;
+    const box = ui.calculated
+    if(ui.text.is_set) {
+
+      console.log('READY TO', ui.text.s_value)
+      // process.exit()
+
+      const url = await QRCode.toDataURL(ui.text.s_value)
+      console.log('QRCode rendering ', url)
+      console.log(box)
+      ctx.fillOpacity(1)
+      ctx.opacity(1)          
+      ctx.image(url, 0, 0, {width: box.render_width, height: box.render_height})
+     
+    }   
+	}
+}
+
 
 class View {
   ui:EVG  

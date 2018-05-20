@@ -87,13 +87,19 @@ describe("render testting", function() {
     <div><t font-family="monoton" text="Hello World!" font-size="20"/></div>
   </View>
   <View>
-    <img src="images/w.jpg" width="20%" height="20%"/>
+    <View width="20%">
+      <img src="images/w.jpg" width="100%" height="100%"/>
+      <QRCode text="https://koodiklinikka.fi/" width="100%" height="100%"/>
+    </View>
     <View width="80%" margin="20">
       ${create_text(`
       At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis 
       `)}
     </View>
   </View>
+  <div padding="10" align="center">
+    <t font-family="monoton" text="lets move forward..." font-size="20"/>
+  </div>
 
   ${create_para()}
   ${create_para()}
