@@ -4,12 +4,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 }
 Object.defineProperty(exports, "__esModule", { value: true });
 const pdfkit_1 = __importDefault(require("pdfkit"));
+const svg = require('../svg/');
 class Renderer {
     constructor(width, height) {
+        this.opacity_now = 1.0;
         this.doc = new pdfkit_1.default({ size: [width, height] });
     }
     hasCustomSize(item) {
-        console.log('Tag ', item.tagName);
         if (item.tagName == 'Label') {
             if (item.fontFamily.is_set) {
                 this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
@@ -35,20 +36,50 @@ class Renderer {
         const doc = this.doc;
         doc.pipe(fs.createWriteStream(filename));
         this.renderItem(item, doc);
-        // Write text using the font...
-        /*
-        doc.font('./fonts/Open_Sans/OpenSans-Regular.ttf')
-          .fontSize(25)
-          .text('Some text with an embedded font!', 100, 100)
-    
-        doc.font('./fonts/Great_Vibes/GreatVibes-Regular.ttf')
-          .fontSize(25)
-          .text('Some text with an embedded font!', 100, 130)
-        */
         doc.save();
         doc.end();
     }
+    setColors(ui, ctx) {
+        if (ui.backgroundColor.is_set) {
+            if (ui.opacity.is_set) {
+                ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value);
+                this.opacity_now = ui.opacity.f_value;
+            }
+            else {
+                ctx.fillColor(ui.backgroundColor.s_value, this.opacity_now);
+            }
+        }
+        else {
+            ctx.fillColor('white', 0);
+        }
+        if (ui.borderWidth.is_set && ui.borderColor.is_set) {
+            ctx.lineWidth(ui.borderWidth.pixels);
+            if (ui.opacity.is_set) {
+                ctx.strokeColor(ui.borderColor.s_value, ui.opacity.f_value);
+            }
+            else {
+                ctx.strokeColor(ui.borderColor.s_value, this.opacity_now);
+            }
+        }
+        else {
+            ctx.strokeColor('white', 0).stroke();
+        }
+    }
     renderItem(item, ctx) {
+        const old_opacity = this.opacity_now;
+        if (item.opacity.is_set) {
+            this.opacity_now = item.opacity.f_value;
+        }
+        ctx.fillOpacity(this.opacity_now);
+        ctx.opacity(this.opacity_now);
+        if (item.rotate.is_set) {
+            // ctx.rotate(item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })      
+            ctx.rotate(item.rotate.f_value);
+        }
+        if (item.scale.is_set && item.scale.f_value > 0.01) {
+            ctx.scale(item.scale.f_value);
+        }
+        this.setColors(item, ctx);
         switch (item.tagName) {
             case 'View':
                 const r = new View(item);
@@ -58,13 +89,52 @@ class Renderer {
                 const label = new Label(item);
                 label.render(ctx);
                 break;
+            case 'path':
+                const path = new Path(item);
+                path.render(ctx);
+                break;
+            case 'img':
+                const im = new Image(item);
+                im.render(ctx);
+                break;
         }
         for (let child of item.items) {
+            const dx = child.calculated.x;
+            const dy = child.calculated.y;
+            ctx.translate(dx, dy);
             this.renderItem(child, ctx);
+            ctx.translate(-dx, -dy);
         }
+        if (item.scale.is_set && item.scale.f_value > 0.01) {
+            ctx.scale(1 / item.scale.f_value);
+        }
+        if (item.rotate.is_set) {
+            // ctx.rotate( - item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })      
+            ctx.rotate(-item.rotate.f_value);
+        }
+        this.opacity_now = old_opacity;
     }
 }
 exports.Renderer = Renderer;
+class Image {
+    constructor(ui) {
+        this.ui = ui;
+    }
+    initEngine() { }
+    remove() { }
+    render(ctx) {
+        const ui = this.ui;
+        const box = ui.calculated;
+        if (ui.imageUrl.is_set) {
+            console.log(ui.imageUrl.s_value);
+            console.log(box);
+            const fs = require('fs');
+            ctx.fillOpacity(1);
+            ctx.opacity(1);
+            ctx.image(ui.imageUrl.s_value, 0, 0, { width: box.render_width, height: box.render_height });
+        }
+    }
+}
 class View {
     constructor(ui) {
         this.ui = ui;
@@ -75,39 +145,13 @@ class View {
         const ui = this.ui;
         const box = ui.calculated;
         if (ui.borderRadius.is_set) {
-            ctx.roundedRect(box.x, box.y, box.render_width, box.render_height, ui.borderRadius.pixels);
+            ctx.roundedRect(0, 0, box.render_width, box.render_height, ui.borderRadius.pixels);
         }
         else {
-            ctx.rect(box.x, box.y, box.render_width, box.render_height);
+            ctx.rect(0, 0, box.render_width, box.render_height);
         }
-        if (ui.backgroundColor.is_set) {
-            if (ui.opacity.is_set) {
-                ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value);
-            }
-            else {
-                console.log('Fill', ui.backgroundColor.s_value);
-                ctx.fillColor(ui.backgroundColor.s_value, 1);
-            }
-            ctx.fill();
-        }
-        else {
-            ctx.fillColor('white', 0);
-            ctx.fill();
-        }
-        if (ui.borderWidth.is_set && ui.borderColor.is_set) {
-            ctx.lineWidth(ui.borderWidth.pixels);
-            if (ui.opacity.is_set) {
-                ctx.strokeColor(ui.borderColor.s_value, ui.opacity.f_value);
-            }
-            else {
-                ctx.strokeColor(ui.borderColor.s_value, 1);
-            }
-            ctx.stroke();
-        }
-        else {
-            ctx.strokeColor('white', 0).stroke();
-        }
-        // ctx.closePath()
+        ctx.fill();
+        ctx.stroke();
     }
 }
 class Label {
@@ -131,10 +175,25 @@ class Label {
         else {
             ctx.fontSize(12);
         }
-        console.log('TEXT', ui.text.s_value);
-        console.log(box);
-        ctx.fillColor('black', 1);
-        ctx.text(ui.text.s_value, box.x, box.y);
+        ctx.text(ui.text.s_value, 0, 0);
+    }
+}
+// doc.path('M 0,20 L 100,160 Q 130,200 150,120 C 190,-40 200,200 300,150 L 400,90')
+// .stroke()
+class Path {
+    constructor(ui) {
+        this.ui = ui;
+    }
+    initEngine() { }
+    remove() { }
+    render(ctx) {
+        const ui = this.ui;
+        const parser = new svg.svgPathParser();
+        parser.parse(ui.svgPath.s_value);
+        parser.makePathAbsolute();
+        parser.fitPathInto(ui.calculated.render_width, ui.calculated.render_height);
+        const svgStr = parser.svgString();
+        ctx.path(svgStr).fill().stroke();
     }
 }
 //# sourceMappingURL=pdfkit.js.map

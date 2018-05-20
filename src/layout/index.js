@@ -177,6 +177,24 @@ class EVG {
     findComponent(name) {
         return UICompRegistry[name];
     }
+    findContent(list) {
+        var list = list || [];
+        if (this.id.is_set && this.id.s_value == "content") {
+            list.push(this);
+            return;
+        }
+        if (this.tagName == "content") {
+            list.push(this);
+            return;
+        }
+        for (var i = 0; i < this.items.length; i++) {
+            var item = this.items[i];
+            item.findContent(list);
+            if (list.length)
+                return list[0];
+        }
+        return list[0];
+    }
     add(childView) {
         if (!childView)
             return;
@@ -437,8 +455,8 @@ class EVG {
                 this.viewBox.s_value = value_viewBox;
                 this.viewBox.is_set = true;
             }
-            if (jsonDict["svgPath"] || jsonDict["path"]) {
-                var value_svgPath = jsonDict["svgPath"] || jsonDict["path"];
+            if (jsonDict["svgPath"] || jsonDict["path"] || jsonDict["d"]) {
+                var value_svgPath = jsonDict["svgPath"] || jsonDict["path"] || jsonDict["d"];
                 this.svgPath.s_value = value_svgPath;
                 this.svgPath.is_set = true;
             }
@@ -665,12 +683,15 @@ class EVG {
                     id_value = attr.nodeValue;
                 }
             }
+            console.log('***', name);
             var compData = this.findComponent(name);
             var content;
+            let b_component = false;
             if (compData) {
                 uiObj = new EVG(compData);
                 content = uiObj.findContent() || uiObj;
                 uiObj.readParams(attrObj);
+                b_component = true;
             }
             else {
                 uiObj = parentNode ? new EVG(attrObj) : this;
@@ -689,7 +710,11 @@ class EVG {
                           
             }
             */
-            uiObj.tagName = name;
+            if (b_component) {
+            }
+            else {
+                uiObj.tagName = name;
+            }
             // Aliases...
             var r = UIRenderers[name];
             if (r) {
@@ -719,7 +744,6 @@ class EVG {
     }
     adjustLayoutParams(node, renderer) {
         const special = renderer.hasCustomSize(node);
-        console.log('special ', special);
         if (typeof (special) !== 'undefined') {
             this.width.pixels = special.width;
             this.height.pixels = special.height;
@@ -1102,17 +1126,17 @@ class EVG {
         this.calculateLayout(container, new UIRenderPosition(0, 0, renderer));
     }
     calculateLayout(parentNode, render_pos) {
-        console.log('calculateLayout', parentNode.tagName, parentNode.text.s_value);
         var newPOS = new UIRenderPosition(render_pos.x, render_pos.y, render_pos.renderer);
         var render_start_y = render_pos.y;
+        var render_start_x = render_pos.x;
         var node = this;
         this.adjustLayoutParams(parentNode, render_pos.renderer);
         var elem_h = this.default_layout(node, render_pos);
-        console.log('node', node.tagName, node.calculated);
         node.calculated.render_height = elem_h;
         node.calculated.render_width = node.inline.is_set && node.inline.b_value && node.calculated.width_override ? node.calculated.width_override : node.width.pixels;
         node.calculated.height = elem_h + node.marginTop.pixels + node.marginBottom.pixels;
         node.calculated.width = node.calculated.render_width + node.marginLeft.pixels + node.marginRight.pixels;
+        // not using absoute coords for now...
         if (node.left.is_set) {
             node.calculated.x = node.marginLeft.pixels + node.left.pixels;
             node.calculated.absolute = true;
@@ -1138,7 +1162,6 @@ class EVG {
             newPOS.x += node.calculated.width;
             newPOS.y = render_start_y + elem_h + node.marginTop.pixels + node.marginBottom.pixels;
         }
-        console.log('node after adjustements...', node.tagName, node.calculated);
         return newPOS;
     }
     default_layout(node, render_pos) {
@@ -1149,7 +1172,7 @@ class EVG {
         if (node.height.is_set) {
             elem_h += node.innerHeight.pixels;
         }
-        var child_render_pos = new UIRenderPosition(render_pos.x + node.paddingLeft.pixels, render_pos.y + node.paddingTop.pixels, render_pos.renderer);
+        var child_render_pos = new UIRenderPosition(node.paddingLeft.pixels, node.paddingTop.pixels, render_pos.renderer);
         var child_heights = 0.0;
         var line_height = 0.0;
         var row_width = 0.0;
@@ -1216,7 +1239,6 @@ class EVG {
                     continue;
                 }
                 row_width += childNode.calculated.width;
-                console.log('width of ch ', childNode.tagName, " == ", childNode.calculated.width);
                 if (childNode.calculated.lineBreak || (row_width > node.innerWidth.pixels && (row_width - node.innerWidth.pixels > 0.5))) {
                     if (node.align.is_set && (node.align.s_value == "right" || node.align.s_value == "center")) {
                         // align right
@@ -1255,7 +1277,7 @@ class EVG {
                     current_y += line_height;
                     line_height = 0;
                     row_width = 0;
-                    child_render_pos.x = render_pos.x + node.paddingLeft.pixels;
+                    child_render_pos.x = node.paddingLeft.pixels;
                     child_render_pos.y = current_y;
                     child_render_pos = childNode.calculateLayout(node, child_render_pos);
                     current_row = [];
