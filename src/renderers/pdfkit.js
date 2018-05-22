@@ -14,9 +14,19 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const pdfkit_1 = __importDefault(require("pdfkit"));
 const QRCode = require('qrcode');
 const svg = require('../svg/');
+let default_font = 'fonts/Open_Sans/OpenSans-Regular.ttf';
+const fs = require('fs');
+if (!fs.existsSync(default_font)) {
+    default_font = '../../fonts/Open_Sans/OpenSans-Regular.ttf';
+}
+if (!fs.existsSync(default_font)) {
+    default_font = __dirname + '/../../fonts/Open_Sans/OpenSans-Regular.ttf';
+}
 class Renderer {
     constructor(width, height) {
         this.opacity_now = 1.0;
+        this.text_color = 'black';
+        this.font_family = default_font;
         this.doc = new pdfkit_1.default({ size: [width, height] });
         this.height = height;
         this.width = width;
@@ -29,11 +39,11 @@ class Renderer {
                     this.doc.font(font_file);
                 }
                 else {
-                    this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+                    this.doc.font(default_font);
                 }
             }
             else {
-                this.doc.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+                this.doc.font(default_font);
             }
             if (item.fontSize.is_set) {
                 this.doc.fontSize(item.fontSize.pixels);
@@ -53,12 +63,15 @@ class Renderer {
             const fs = require('fs');
             const doc = this.doc;
             doc.pipe(fs.createWriteStream(filename));
-            yield this.renderItem(item, doc, headers);
+            yield this.renderItem(item, doc, headers, true);
             doc.save();
             doc.end();
         });
     }
     setColors(ui, ctx) {
+        if (ui.color.is_set) {
+            this.text_color = ui.color.s_value;
+        }
         if (ui.backgroundColor.is_set) {
             if (ui.opacity.is_set) {
                 ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value);
@@ -84,9 +97,11 @@ class Renderer {
             ctx.strokeColor('white', 0).stroke();
         }
     }
-    renderItem(item, ctx, headers) {
+    renderItem(item, ctx, headers, is_first) {
         return __awaiter(this, void 0, void 0, function* () {
             const old_opacity = this.opacity_now;
+            const old_font = this.font_family;
+            const old_color = this.text_color;
             if (item.opacity.is_set) {
                 this.opacity_now = item.opacity.f_value;
             }
@@ -99,6 +114,12 @@ class Renderer {
             if (item.scale.is_set && item.scale.f_value > 0.01) {
                 ctx.scale(item.scale.f_value);
             }
+            if (item.fontFamily.is_set) {
+                const font_file = item.findFont(item.fontFamily.s_value);
+                if (font_file) {
+                    this.font_family = font_file;
+                }
+            }
             this.setColors(item, ctx);
             switch (item.tagName) {
                 case 'div':
@@ -108,7 +129,11 @@ class Renderer {
                     break;
                 case 'Label':
                     const label = new Label(item);
-                    yield label.render(ctx);
+                    ctx.save();
+                    ctx.fillOpacity(this.opacity_now);
+                    ctx.fillColor(this.text_color);
+                    yield label.render(ctx, this);
+                    ctx.restore();
                     break;
                 case 'path':
                     const path = new Path(item);
@@ -154,7 +179,9 @@ class Renderer {
             const total_margin = bottom_margin + top_margin;
             const vertical_area = this.height - total_margin;
             for (let child of item.items) {
-                if (page_item_cnt > 0 && ((child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)) {
+                if (is_first && page_item_cnt > 0 &&
+                    (!child.left.is_set && !child.top.is_set) &&
+                    ((child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)) {
                     ctx.addPage();
                     yield render_headers(child);
                     page_y_pos += this.height;
@@ -176,6 +203,8 @@ class Renderer {
                 ctx.rotate(-item.rotate.f_value);
             }
             this.opacity_now = old_opacity;
+            this.font_family = old_font;
+            this.text_color = old_color;
         });
     }
 }
@@ -230,8 +259,8 @@ class View {
         else {
             ctx.rect(0, 0, box.render_width, box.render_height);
         }
-        ctx.fill();
-        ctx.stroke();
+        ctx.fillAndStroke();
+        // ctx.stroke()
     }
 }
 class Label {
@@ -240,7 +269,7 @@ class Label {
     }
     initEngine() { }
     remove() { }
-    render(ctx) {
+    render(ctx, r) {
         const ui = this.ui;
         const box = ui.calculated;
         if (ui.fontFamily.is_set) {
@@ -249,11 +278,11 @@ class Label {
                 ctx.font(font_file);
             }
             else {
-                ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+                ctx.font(r.font_family);
             }
         }
         else {
-            ctx.font('fonts/Open_Sans/OpenSans-Regular.ttf');
+            ctx.font(r.font_family);
         }
         if (ui.fontSize.is_set) {
             ctx.fontSize(ui.fontSize.pixels);

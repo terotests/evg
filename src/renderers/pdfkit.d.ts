@@ -5,9 +5,11 @@ export declare class Renderer {
     height: number;
     doc: PDFDocument;
     opacity_now: number;
+    text_color: string;
+    font_family: string;
     constructor(width: number, height: number);
     hasCustomSize(item: EVG): any;
     render(filename: string, item: EVG, headers?: any[]): Promise<any>;
     setColors(ui: EVG, ctx: any): void;
-    renderItem(item: EVG, ctx: any, headers?: any[]): Promise<void>;
+    renderItem(item: EVG, ctx: any, headers?: any[], is_first?: boolean): Promise<void>;
 }

@@ -67,6 +67,8 @@ describe("render testting", function() {
       <t text=" Corporation" font-size="9" background-color="gray"/>
     </View>
     <View align="center"><t text="May the force be with you" font-size="7" background-color="gray"/></View>
+  
+    <div top="-450" left="250" font-family="monoton" font-size="70" width="1000" rotate="45" opacity="0.1">DRAFT</div>  
   </View>  
     `)    
     const create_text = (str) => {
@@ -193,20 +195,24 @@ describe("render testting", function() {
     <t text="time "></t>  
   </View>   
 
-  <iphone >
-    <View>
-      <text text="Component test..."/>
-    </View>
-    <View padding="20" width="30%">
-      <iphone scale="0.2" ><Label text="Component test..."/></iphone>
-    </View>
+  <View left="150" top="330" scale="0.5">  
+    <iphone >
+      <View left="1" top="1">
+        <View>
+          <text text="Component test..."/>
+        </View>
+        <View padding="20" width="30%">
+          <iphone scale="0.2" ><Label text="Component test..."/></iphone>
+        </View>
 
-    <View padding="20" width="30%">
-      <iphone scale="0.2" ><t text="Component test..."/>
-          
-      </iphone>
-    </View>
-  </iphone>
+        <View padding="20" width="30%">
+          <iphone scale="0.2" ><t text="Component test..."/>
+              
+          </iphone>
+        </View>
+      </View>
+    </iphone>
+  </View>
 
 
   <View left="150" top="50" scale="0.3" rotate="-10">
@@ -239,18 +245,18 @@ describe("render testting", function() {
 
   <View left="300" top="100" scale="0.5" rotate="-2">
     <iphone>
-    <View width="100%" padding="20">
-        <note width="30" height="30"/> 
-        <note width="40" height="40"/>
-        <note width="45" height="45"/>
-        <note width="50" height="50"/>
-        <note width="55" height="55"/>
-    </View>   
-    <View>
-      <img src="images/wiki.jpeg" width="200" height="200"/>
-      <img src="images/redom.jpg" width="100%" height="200"/>
-    </View>
-  </iphone> 
+      <View width="100%" padding="20">
+          <note width="30" height="30"/> 
+          <note width="40" height="40"/>
+          <note width="45" height="45"/>
+          <note width="50" height="50"/>
+          <note width="55" height="55"/>
+      </View>   
+      <View>
+        <img src="images/wiki.jpeg" width="200" height="200"/>
+        <img src="images/redom.jpg" width="100%" height="200"/>
+      </View>
+    </iphone> 
   </View>
 
 </View>
@@ -276,11 +282,7 @@ describe("render testting", function() {
     <View width="20" height="20" left="80" top="30" background-color="red" border-radius="50%"/>  
   </View>
 
-  <View width="100%" height="40" background-color="#ffdd33">
-    <View width="20" height="20" left="0" top="10" background-color="blue"/>
-    <View width="20" height="20" left="40" top="10" background-color="blue"/>
-    <View width="20" height="20" left="80" top="30" background-color="green" border-radius="50%"/>  
-  </View>
+
 
   <View left="200" top="200" background-color="blue" width="200" height="200">
     <View width="100%" height="40" background-color="#112233">
@@ -289,7 +291,43 @@ describe("render testting", function() {
       <View width="33" height="33" left="80" top="30" background-color="brown" border-radius="50%"/>  
     </View>  
   </View>
-  
+
+  <View width="100%" height="40" background-color="#ffdd33">
+    <View width="20" height="20" left="0" top="10" background-color="blue"/>
+    <View width="20" height="20" left="40" top="10" background-color="blue"/>
+    <View width="20" height="20" left="80" top="30" background-color="green" border-radius="50%"/>  
+  </View>  
+
+  <View width="100%" height="140" background-color="#ffeeee">
+    <t text="This should be layout in stacked fashion and not affected by left,top"/>
+    <View left="200" top="200" background-color="red" width="40" height="40">
+    </View>
+  </View>  
+  <View width="100%" height="140" background-color="#ffeeee">
+    <t text="This should be layout in stacked fashion and not affected by left,top"/>
+    <View left="200" top="200" background-color="red" width="40" height="40">
+    </View>
+  </View>    
+  <View width="100%" height="140" background-color="#ffeeee">
+    <t text="This should be layout in stacked fashion and not affected by left,top"/>
+    <View left="200" top="200" background-color="red" width="40" height="40">
+    </View>
+  </View>    
+  <View width="100%" height="140" background-color="#ffeeee">
+    <t text="This should be layout in stacked fashion and not affected by left,top"/>
+    <View left="200" top="100" background-color="red" width="40" height="140">
+    </View>
+  </View>    
+  <View width="100%" height="140" background-color="#ffeeee">
+    <t text="This should be layout in stacked fashion and not affected by left,top"/>
+    <View left="200" top="100" background-color="red" width="40" height="240">
+    </View>
+  </View>    
+  <View width="100%" height="140" background-color="#ffeeee">
+    <t text="This should be layout in stacked fashion and not affected by left,top"/>
+    <View left="200" top="100" background-color="red" width="40" height="240">
+    </View>
+  </View>   
 </View>
     `)
     

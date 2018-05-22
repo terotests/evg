@@ -679,6 +679,22 @@ class EVG {
         }
         catch (e) { }
     }
+    inherit(chNode, parentNode) {
+        if (!parentNode)
+            return;
+        if (!chNode.fontFamily.is_set && parentNode.fontFamily.is_set) {
+            chNode.fontFamily = parentNode.fontFamily;
+        }
+        if (!chNode.fontSize.is_set && parentNode.fontSize.is_set) {
+            chNode.fontSize = parentNode.fontSize;
+        }
+        if (!chNode.color.is_set && parentNode.color.is_set) {
+            chNode.color = parentNode.color;
+        }
+        if (!chNode.align.is_set && parentNode.align.is_set) {
+            chNode.align = parentNode.align;
+        }
+    }
     readXMLDoc(node, parentNode) {
         var uiObj;
         if (node.nodeType === 1) {
@@ -713,7 +729,6 @@ class EVG {
                     id_value = attr.nodeValue;
                 }
             }
-            console.log('***', name);
             var compData = this.findComponent(name);
             var content;
             let b_component = false;
@@ -753,18 +768,45 @@ class EVG {
             if (name == "Hover") {
                 parentNode.metaTags[name] = uiObj; // <-- can be accessed by the renderers
             }
+            this.inherit(content, parentNode);
             for (var i = 0; i < node.childNodes.length; i++) {
                 var childNode = node.childNodes[i];
                 var childUI = this.readXMLDoc(childNode, uiObj);
-                if (childUI)
-                    content.add(childUI);
+                if (Array.isArray(childUI)) {
+                    for (let ch of childUI) {
+                        this.inherit(ch, content);
+                        content.add(ch);
+                    }
+                }
+                else {
+                    if (childUI)
+                        content.add(childUI);
+                }
             }
             return uiObj;
         }
-        if (node.nodeType === 3) {
+        // --- adding the text nodes
+        /*
+        const create_text = (str) => {
+          // return str.split(" ").map( _ => `<View width="${_.length*10}" height="10" background-color="blue" margin="0"/>`).join('')
+          return str.split(" ").map( _ => `<t text="${_} "/>`).join('')
+        }
+        */
+        if (node.nodeType === 3 || node.nodeType === 4) {
+            const str = node.nodeValue;
+            const lines = str.split(' ').filter(_ => _.trim().length).map(_ => {
+                const n = new EVG('');
+                n.tagName = 'Label';
+                n.text.is_set = true;
+                n.text.s_value = _ + ' ';
+                return n;
+            });
+            return lines;
+            /*
             var str = node.nodeValue;
-            if (str && str.trim() && parentNode)
-                parentNode.readParams({ 'text': str });
+            console.log('text',str)
+            if(str && str.trim() && parentNode) parentNode.readParams({'text': str});
+            */
         }
     }
     parseXML(xmlStr) {
@@ -1371,10 +1413,7 @@ class EVG {
         }
         if (!node.height.is_set) {
             elem_h += child_heights;
-            console.log('');
-            console.log('at end ', node.tagName);
             const special = render_pos.renderer.hasCustomSize(node);
-            console.log('... ', special);
             if (typeof (special) !== 'undefined') {
                 elem_h += special.height;
                 node.calculated.width_override = special.width;
@@ -1382,7 +1421,6 @@ class EVG {
                 node.calculated.render_width = special.width;
                 node.calculated.render_height = special.height;
                 node.width.pixels = special.width;
-                console.log('Applied Special ', node.calculated);
             }
             /*
             if(node.renderer && node.renderer.customSize) {

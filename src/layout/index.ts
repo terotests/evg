@@ -154,7 +154,7 @@ export class EVG {
     item:EVG,
     header?:(item:EVG)=>EVG,
     footer?:(item:EVG)=>EVG) {
-      
+
     const renderer = new Renderer(width, height)
     item.calculate(width,height,renderer)    
     renderer.render(fileName, item, [header, footer])
@@ -632,6 +632,21 @@ export class EVG {
       }
     } catch(e) { }    
   }
+  inherit( chNode:EVG, parentNode?:EVG) {
+    if(!parentNode) return
+    if(!chNode.fontFamily.is_set && parentNode.fontFamily.is_set) {
+      chNode.fontFamily = parentNode.fontFamily
+    }
+    if(!chNode.fontSize.is_set && parentNode.fontSize.is_set) {
+      chNode.fontSize = parentNode.fontSize
+    }
+    if(!chNode.color.is_set && parentNode.color.is_set) {
+      chNode.color = parentNode.color
+    }
+    if(!chNode.align.is_set && parentNode.align.is_set) {
+      chNode.align = parentNode.align
+    }
+  }
   readXMLDoc(node:any, parentNode:any) {
 
     var uiObj;
@@ -667,7 +682,6 @@ export class EVG {
           id_value = attr.nodeValue;
         }
       }      
-      console.log('***', name)
       var compData = this.findComponent(name)
       var content;
       let b_component = false
@@ -708,17 +722,45 @@ export class EVG {
         parentNode.metaTags[name] = uiObj; // <-- can be accessed by the renderers
       }
 
+      this.inherit( content, parentNode )      
+
       for(var i=0; i<node.childNodes.length; i++) {
         var childNode = node.childNodes[i]
         var childUI = this.readXMLDoc(childNode, uiObj);
-        if( childUI ) content.add(childUI); 
+        if(Array.isArray(childUI)) {
+          for( let ch of childUI) {
+            this.inherit( ch, content )
+            content.add( ch )
+          }
+        } else {
+          if( childUI ) content.add(childUI); 
+        }
       }
       return uiObj;
     }
-
-    if(node.nodeType===3) {
+    // --- adding the text nodes
+    /*
+    const create_text = (str) => {
+      // return str.split(" ").map( _ => `<View width="${_.length*10}" height="10" background-color="blue" margin="0"/>`).join('')
+      return str.split(" ").map( _ => `<t text="${_} "/>`).join('')
+    }    
+    */
+    if(node.nodeType===3 || node.nodeType===4) {
+      
+      const str = node.nodeValue;      
+      const lines = str.split(' ').filter( _ => _.trim().length ).map( _ => {
+        const n = new EVG('');
+        n.tagName = 'Label'
+        n.text.is_set = true
+        n.text.s_value = _ + ' ';
+        return n;
+      })
+      return lines
+      /*
       var str = node.nodeValue;
+      console.log('text',str)
       if(str && str.trim() && parentNode) parentNode.readParams({'text': str});
+      */
     }
   }  
 
@@ -1161,12 +1203,7 @@ export class EVG {
 
     if(!node.height.is_set) { 
       elem_h += child_heights; 
-      
-      console.log('')
-      console.log('at end ', node.tagName)
-
       const special = render_pos.renderer.hasCustomSize( node )
-      console.log('... ', special)
       if(typeof(special) !== 'undefined') {
         elem_h += special.height;
         node.calculated.width_override = special.width;
@@ -1174,7 +1211,6 @@ export class EVG {
         node.calculated.render_width = special.width;
         node.calculated.render_height = special.height;
         node.width.pixels = special.width;
-        console.log('Applied Special ', node.calculated)
       }
       /*
       if(node.renderer && node.renderer.customSize) {

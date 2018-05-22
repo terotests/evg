@@ -406,6 +406,7 @@ export declare class EVG {
         type: number;
     };
     readParams(jsonDict: any): void;
+    inherit(chNode: EVG, parentNode?: EVG): void;
     readXMLDoc(node: any, parentNode: any): any;
     parseXML(xmlStr: any): any;
     constructor(strJSON: string | any, context?: any);
