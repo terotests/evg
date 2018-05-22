@@ -1,0 +1,4 @@
+ <div margin="10" border-radius="5" background-color="#337799" color="white" padding="10">
+  <div font-size="16" color="#ffee77"> This is a container component from components/container.xml</div>
+  <div id="content" font-size="12" margin-top="10" />
+</div>

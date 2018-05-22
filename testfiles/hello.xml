@@ -46,19 +46,22 @@
     asf jlas lja sj aj aösfj öaj öaj slöja slkj sadölja söljsfad
     </div>    
   </div> 
-  <div align="center" font-size="30">Center text</div>
-  <div align="center" font-size="25">Center text</div>
+  <container>
+    Text and QR placed in container comp <QRCode text="http://www.yle.fi/" width="20" height="20"/>
+  </container>
   <div align="center" font-size="20">Center text</div>
+  <div align="center" font-size="15">Center text</div>
+  <div align="center" font-size="10">Center text</div>
   <div font-family="audiowide" align="center">
-    <div font-size="30">Center text</div>
-    <div font-size="25">Center text</div>
     <div font-size="20">Center text</div>
+    <div font-size="15">Center text</div>
+    <div font-size="10">Center text</div>
   </div>
 
   <div font-family="audiowide" align="right">
-    <div font-size="30">Right text</div>
-    <div font-size="25">Right text</div>
     <div font-size="20">Right text</div>
+    <div font-size="15">Right text</div>
+    <div font-size="10">Right text</div>
   </div>  
 
   <div font-family="audiowide" align="left" font-family="candal"
