@@ -1,10 +1,13 @@
 # EVG
 
+```s
+npm i evg
+```
+
 ## Command line
 
 Running from command line
 ```s
-# convert hello.xml -> hello.pdf
 evg hello.xml hello.pdf
 ```
 
