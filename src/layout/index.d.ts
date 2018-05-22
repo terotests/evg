@@ -31,6 +31,8 @@ export declare class EVG {
     isHidden: boolean;
     tapHandler: any;
     metaTags: {};
+    header: EVG;
+    footer: EVG;
     x: {
         unit: number;
         is_set: boolean;
@@ -144,6 +146,13 @@ export declare class EVG {
         s_value: string;
     };
     lineBreak: {
+        unit: number;
+        is_set: boolean;
+        f_value: number;
+        s_value: string;
+        b_value: boolean;
+    };
+    pageBreak: {
         unit: number;
         is_set: boolean;
         f_value: number;

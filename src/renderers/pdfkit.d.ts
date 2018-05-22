@@ -7,6 +7,8 @@ export declare class Renderer {
     opacity_now: number;
     text_color: string;
     font_family: string;
+    static_header: any;
+    static_footer: any;
     constructor(width: number, height: number);
     hasCustomSize(item: EVG): any;
     render(filename: string, item: EVG, headers?: any[]): Promise<any>;

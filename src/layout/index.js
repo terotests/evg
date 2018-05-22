@@ -82,6 +82,7 @@ class EVG {
         this.innerWidth = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         this.innerHeight = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         this.lineBreak = { unit: 0, is_set: false, f_value: 0.0, s_value: "", b_value: false };
+        this.pageBreak = { unit: 0, is_set: false, f_value: 0.0, s_value: "", b_value: false };
         this.overflow = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         this.fontSize = { unit: 0, is_set: false, pixels: 0.0, f_value: 14.0, s_value: "" };
         this.fontFamily = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
@@ -384,6 +385,17 @@ class EVG {
                     this.innerHeight.pixels = innerHeight.value;
                 }
                 this.innerHeight.is_set = true;
+            }
+            if (jsonDict["pageBreak"] || jsonDict["page-break"]) {
+                var value_pageBreak = jsonDict["pageBreak"] || jsonDict["page-break"];
+                var pageBreak = value_pageBreak;
+                if (pageBreak == "true" || pageBreak == "1") {
+                    this.pageBreak.b_value = true;
+                }
+                else {
+                    this.pageBreak.b_value = false;
+                }
+                this.pageBreak.is_set = true;
             }
             if (jsonDict["lineBreak"] || jsonDict["line-break"]) {
                 var value_lineBreak = jsonDict["lineBreak"] || jsonDict["line-break"];
@@ -779,6 +791,14 @@ class EVG {
                     }
                 }
                 else {
+                    if (childUI && childUI.tagName == 'header') {
+                        uiObj.header = childUI;
+                        continue;
+                    }
+                    if (childUI && childUI.tagName == 'footer') {
+                        uiObj.footer = childUI;
+                        continue;
+                    }
                     if (childUI)
                         content.add(childUI);
                 }
@@ -793,7 +813,7 @@ class EVG {
         }
         */
         if (node.nodeType === 3 || node.nodeType === 4) {
-            const str = node.nodeValue;
+            const str = node.nodeValue.trim();
             const lines = str.split(' ').filter(_ => _.trim().length).map(_ => {
                 const n = new EVG('');
                 n.tagName = 'Label';

@@ -1,7 +1,7 @@
 import {EVG} from '../layout/'
 import PDFDocument from 'pdfkit'
+import {EVGPathParser, PathCollector, PathScaler} from '../svg/path'
 const QRCode = require('qrcode')
-const svg = require('../svg/')
 
 let default_font = 'fonts/Open_Sans/OpenSans-Regular.ttf';
 const fs = require('fs')
@@ -21,6 +21,9 @@ export class Renderer {
   opacity_now = 1.0
   text_color = 'black'
   font_family = default_font
+
+  static_header = null
+  static_footer = null
 
   constructor( width:number, height:number) {
     this.doc = new PDFDocument({size:[width, height]})
@@ -112,6 +115,8 @@ export class Renderer {
     }
     this.setColors( item, ctx  )    
     switch(item.tagName) {
+      case 'header' :
+      case 'footer' :
       case 'div' :
       case 'View' :
         const r = new View(item)
@@ -145,11 +150,14 @@ export class Renderer {
     let top_margin = 0
     let bottom_margin = 0
     let y_adjust = 0
+   
+    if(item.header) this.static_header = item.header
+    if(item.footer) this.static_footer = item.footer
 
     const render_headers = async (item?:EVG) => {
-      if(headers) {
-        const page_header = headers[0] ? headers[0]() : null
-        const page_footer = headers[1] ? headers[1]() : null
+      if(headers || this.static_header || this.static_footer) {
+        const page_header = headers && headers[0] ? headers[0]() : this.static_header 
+        const page_footer = headers && headers[1] ? headers[1]() : this.static_footer 
         if(page_header) {
           page_header.calculate(this.width,this.height,this) 
           await this.renderItem( page_header, ctx )
@@ -167,14 +175,15 @@ export class Renderer {
         }   
       }
     }
-    await render_headers(item[0])
+    if(is_first) await render_headers(item[0])
     const total_margin = bottom_margin + top_margin
     const vertical_area = this.height - total_margin
 
     for( let child of item.items ) {
       if( is_first && page_item_cnt > 0 && 
-          ( !child.left.is_set && !child.top.is_set) && 
-          ( (child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)) {
+          ( child.pageBreak.is_set || (
+            ( !child.left.is_set && !child.top.is_set) && 
+            ( (child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)))) {
         ctx.addPage()
         await render_headers(child)
         page_y_pos += this.height
@@ -285,7 +294,10 @@ class Label {
     } else {
       ctx.fontSize(12)
     }   
-    ctx.text(ui.text.s_value, 0, 0)
+    ctx.text(ui.text.s_value, 0, -3,{
+      lineGap:0,
+      paragraphGap:0
+    })
   }
 }
 
@@ -298,11 +310,10 @@ class Path {
   remove() {}
   render(ctx:any  ) {
     const ui = this.ui
-    const parser = new svg.svgPathParser()
-    parser.parse( ui.svgPath.s_value)
-    parser.makePathAbsolute();
-    parser.fitPathInto( ui.calculated.render_width, ui.calculated.render_height );
-    const svgStr = parser.svgString()    
+    const parser = new EVGPathParser()
+    const coll = new PathScaler();
+    parser.parsePath(ui.svgPath.s_value, coll);
+    const svgStr = coll.getString( ui.calculated.render_width, ui.calculated.render_height )    
     ctx.path( svgStr ).fill().stroke()    
   }
 }
