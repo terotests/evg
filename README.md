@@ -1,7 +1,7 @@
 # EVG
 
 ```s
-npm i evg
+npm i -g evg
 ```
 
 ## Command line
