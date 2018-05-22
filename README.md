@@ -7,7 +7,7 @@ npm i evg
 ## Command line
 
 Running from command line
-```s
+```
 evg hello.xml hello.pdf
 ```
 
