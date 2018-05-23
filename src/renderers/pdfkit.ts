@@ -139,7 +139,6 @@ export class Renderer {
         await im.render(ctx)
       break;   
       case 'QRCode' :
-        console.log('QRCode found !!!!')
         const qr = new QR_Code(item)
         await qr.render(ctx)
       break; 

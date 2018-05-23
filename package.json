@@ -1,6 +1,6 @@
 {
   "name": "evg",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Elastic View Graphics",
   "main": "src/layout/index.js",
   "types": "src/layout/index.d.ts",

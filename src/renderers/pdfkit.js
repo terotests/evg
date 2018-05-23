@@ -148,7 +148,6 @@ class Renderer {
                     yield im.render(ctx);
                     break;
                 case 'QRCode':
-                    console.log('QRCode found !!!!');
                     const qr = new QR_Code(item);
                     yield qr.render(ctx);
                     break;
