@@ -787,11 +787,11 @@ export class EVG {
     if(node.nodeType===3 || node.nodeType===4) {
       
       const str = node.nodeValue.trim();      
-      const lines = str.split(' ').filter( _ => _.trim().length ).map( (_,i) => {
+      const lines = str.split(' ').filter( _ => _.trim().length ).map( (_,i,arr) => {
         const n = new EVG('');
         n.tagName = 'Label'
         n.text.is_set = true
-        n.text.s_value = ( (i > 0) ? ' ' : '') + _;
+        n.text.s_value = _ + ( (i < arr.length - 1) ? ' ' : '');
         return n;
       })
       return lines
