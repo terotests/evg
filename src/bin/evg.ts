@@ -3,7 +3,7 @@
 import {EVG} from '../layout/index'
 
 const argv = require('minimist')(process.argv.slice(2));
-if(argv._.length < 2) {
+if(argv._.length < 1) {
   console.log(`
 USAGE: evg <infile> <outfile>  
   `)
@@ -64,7 +64,6 @@ if( fs.existsSync(curr_dir+'/fonts/')) {
     try {
       const font_name = path.basename(f).split('.')[0]
       if(font_name != 'OFL') {
-        console.log('FONT ', font_name)
         EVG.installFont(font_name, f)
       }
     } catch(e) {
@@ -75,7 +74,7 @@ if( fs.existsSync(curr_dir+'/fonts/')) {
 
 try {
   const infile = './' + argv._[0]
-  const outfile = argv._[1]
+  const outfile = argv._[1] || ('./' + path.basename(infile).split('.')[0] + ".pdf")
   const data = fs.readFileSync(infile, 'utf8')
   const node = new EVG(data)
   EVG.renderToFile(outfile, 595.28, 841.89, node)    

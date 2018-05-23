@@ -11,6 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // TODO: generic renderer
 const pdfkit_1 = require("../renderers/pdfkit");
 var DOMParser = require('xmldom').DOMParser;
+const XMLSerializer = require('xmldom').XMLSerializer;
 class UIRenderPosition {
     constructor(x, y, renderer) {
         this.x = 0;
@@ -791,6 +792,21 @@ class EVG {
                     }
                 }
                 else {
+                    if (childUI && childUI.tagName == 'component') {
+                        // uiObj.header = childUI
+                        const serializer = new XMLSerializer();
+                        let compDef;
+                        for (let ii = 0; ii < childNode.childNodes.length; ii++) {
+                            if (childNode.childNodes[ii].nodeType == 1) {
+                                compDef = childNode.childNodes[ii];
+                                break;
+                            }
+                        }
+                        if (compDef) {
+                            exports.register_component(childUI.id.s_value, serializer.serializeToString(compDef));
+                        }
+                        continue;
+                    }
                     if (childUI && childUI.tagName == 'header') {
                         uiObj.header = childUI;
                         continue;
@@ -814,11 +830,11 @@ class EVG {
         */
         if (node.nodeType === 3 || node.nodeType === 4) {
             const str = node.nodeValue.trim();
-            const lines = str.split(' ').filter(_ => _.trim().length).map(_ => {
+            const lines = str.split(' ').filter(_ => _.trim().length).map((_, i) => {
                 const n = new EVG('');
                 n.tagName = 'Label';
                 n.text.is_set = true;
-                n.text.s_value = _ + ' ';
+                n.text.s_value = ((i > 0) ? ' ' : '') + _;
                 return n;
             });
             return lines;
@@ -1408,6 +1424,7 @@ class EVG {
             }
             if (node.verticalAlign.is_set && (node.verticalAlign.s_value == "bottom" || node.verticalAlign.s_value == "center")) {
                 if (current_row.length > 0) {
+                    // console.log('verticalAlign with line height ', line_height)
                     for (var i2 = 0; i2 < current_row.length; i2++) {
                         var row_item = current_row[i2];
                         var deltaY = line_height - (row_item.calculated.height);

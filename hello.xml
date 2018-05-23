@@ -1,0 +1,252 @@
+<div>
+
+  <!-- test adding some components -->
+  <component id="h1">
+    <div margin-top="10" margin-bottom="20" margin-left="20">
+      <div font-size="28" color="#666" id="content"/>
+      <div margin-top="7" margin-bottom="7">
+        <div height="3" background-color="#ff77aa" />
+      </div>
+    </div>
+  </component>  
+
+  <component id="h2">
+    <div margin-top="5" margin-bottom="10" margin-left="20">
+      <div font-size="20" color="#888" id="content"/>
+      <div margin-top="7" margin-bottom="7">
+        <div height="2" background-color="#ff77aa" />
+      </div>
+    </div>
+  </component>  
+
+  <component id="lorem">
+    <div>
+      Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. 
+    </div>     
+  </component>
+  <component id="foobar">
+    <div padding="15" border-radius="5" background-color="#e7e7e7" color="black" margin="20">
+        <div width="20%"><vader background-color="#777" width="100%" height="100%"/></div>
+        <div width="80%" id="content" padding="10">
+        </div>
+    </div>
+  </component>
+
+  <header background-color="white" padding="5" font-size="9">
+    <div color="black" align="center">Top Header</div>
+    <div margin="10">
+      <div height="1" background-color="#555555" />
+    </div>
+  </header>
+  <footer background-color="white" padding="5" font-size="9">
+    <div margin="10">
+      <div height="1" background-color="#555555" />
+    </div>
+    <div color="black" align="center">Page Footer</div>
+  </footer>  
+
+  <h1>Hello World!</h1>
+  <foobar>
+    <lorem/>
+  </foobar>
+
+  <View>
+    <View width="20%">
+      <img src="images/wiki.jpeg" width="100%" height="100%"/>
+    </View>
+    <View width="80%" margin="20" font-size="10">
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.      
+    </View>
+  </View>
+
+  <div height="120">
+    <cloud left="40" top="20" width="100" height="150" background-color="#3377ff" opacity="0.6"/>
+    <cloud left="140" top="30" scale="0.8" width="100" height="150" background-color="#3377ff" opacity="0.6"/>
+    <cloud left="80" top="40" width="100" height="150" background-color="#3377ff" opacity="0.6"/>
+  </div>
+
+  <h2>Absolute positioning, scale, rotate, opacity</h2>
+  <div>
+    <foobar scale="0.5" left="50" top="40" rotate="-10">
+      <lorem/>
+    </foobar>
+    <foobar scale="0.5" left="250" top="40" rotate="10" opacity="0.7">
+      <lorem/>
+    </foobar>
+  </div>
+
+  <!-- insert new page -->
+  <div page-break="true" />
+
+  <h1>Mixing text, icons and QR codes</h1> 
+  <div align="center">
+    
+    <div color="blue" width="200">Teksti DIV alueen sisällä
+      asdfj aösdfj öalsj ölajs öjas 
+      sdlasj falökj föasj ölajs köljölaj sfölkajs 
+    </div>
+    <div color="black" width="200" font-family="audiowide" background-color="#ffff66"
+      border-radius="10"
+      padding="10"
+    >
+      Text and <note/> <note scale="0.9"/><note scale="0.8"/>
+      Add QR <QRCode text="http://www.yle.fi/" width="30" height="30"/>
+      asdfj aösdfj öalsj ölajs öjas 
+      sdlasj falökj föasj ölajs köljölaj sfölkajs 
+      <div font-family="sans" color="blue"> Something with different font</div>
+      Can <div inline="true" color="red">inline</div> text
+    </div> 
+    <div color="black" width="200" font-family="candal" background-color="#ffff66"
+      border-radius="10"
+      padding="10"
+      align="right"
+    >
+      Teksti DIV alueen sisällä  <note/>
+
+      asdfj aösdfj öalsj ölajs öjas 
+      sdlasj falökj föasj ölajs köljölaj sfölkajs 
+      <div font-family="sans" color="blue"> Something with different font</div>
+      Else
+    </div> 
+
+    <QRCode text="http://www.yle.fi/" width="100" height="100"/>
+
+    <div color="black" width="200" font-family="audiowide" background-color="#ffff66"
+      border-radius="10"
+      padding="10">
+    <QRCode text="http://www.yle.fi/" width="100" height="100"/>
+    asf jlas lja sj aj aösfj öaj öaj slöja slkj sadölja söljsfad
+    </div>    
+  </div> 
+  <h1 page-break="true">Inheriting text styles and align</h1> 
+  <div align="center" font-size="15">Center text</div>
+  <div align="center" font-size="10">Center text</div>
+
+  <div font-family="Helvetica" align="center">
+    <div font-size="30">Helvetica text</div>
+    <div font-size="25">Helvetica text</div>
+    <div font-size="20">Helvetica text</div>
+  </div>
+    
+  <div font-family="audiowide" align="center">
+    <div font-size="30">Center text</div>
+    <div font-size="25">Center text</div>
+    <div font-size="20">Center text</div>
+  </div>
+
+  <div font-family="audiowide" align="right">
+    <div font-size="30">Right text</div>
+    <div font-size="25">Right text</div>
+    <div font-size="20">Right text</div>
+  </div>  
+
+  <div font-family="audiowide" align="left" font-family="candal"
+    >
+    <div font-size="30">Left text</div>
+    <div font-size="25">Left text</div>
+    <div font-size="20">Left text</div>
+  </div>  
+
+  <div font-family="sans" align="left" 
+    >
+    <![CDATA[ 
+  <div font-family="audiowide" align="left" font-family="candal"
+    >
+    <div font-size="20">Left text</div>
+    <div font-size="15">Left text</div>
+    <div font-size="10">Left text</div>
+  </div>     
+    
+    ]]>
+  </div>  
+
+  <h1 page-break="true">Icons</h1>
+
+  <div padding="5" align="center">
+      <camera width="100" height="100" background-color="#3377ff" opacity="0.6" margin="2"/>
+      <vader width="100" height="100" background-color="#3377ff" opacity="0.6" margin="2"/>
+      <cloud width="100" height="100" background-color="#3377ff" opacity="0.6" margin="2"/>
+  </div>
+
+  <h2>Border radius</h2>
+
+  <div background-color="orange" border-radius="50%" width="100" height="100" color="white"
+    font-size="30"
+    align="center"
+    vertical-align="center" 
+    >
+    <div height="100%" width="0" />    
+    <div vertical-align="center">50%</div>
+  </div>
+  <div background-color="orange" border-radius="10px" width="100" height="100" color="white"
+    font-size="30"
+    align="center" 
+    vertical-align="center" 
+  >
+    <div height="100%" width="0" />
+    <div >10px</div>
+  </div>
+
+  <h2>Margin = 10 (fixed size)</h2>
+
+  <div background-color="orange" border-radius="50%" width="100" height="100" color="white"
+    font-size="30"
+    align="center"
+    margin="10"
+    vertical-align="center" 
+    >
+    <div height="100%" width="0" />    
+    <div vertical-align="center">50%</div>
+  </div>
+  <div background-color="orange" border-radius="10px" width="100" height="100" color="white"
+    font-size="30"
+    align="center" 
+    margin="10"
+    vertical-align="center" 
+  >
+    <div height="100%" width="0" />
+    <div >10px</div>
+  </div>  
+
+
+  <h2>Margin = 10, free size</h2>
+
+  <div background-color="orange" border-radius="50%" width="100" color="white"
+    font-size="30"
+    align="center"
+    margin="10"
+    vertical-align="center" 
+    >Hello
+  </div>
+  <div background-color="orange" border-radius="10px" width="100"   color="white"
+    font-size="30"
+    align="center" 
+    margin="10"
+    vertical-align="center" 
+  >Hello
+  </div>    
+
+  <h2>Margin = 10, Padding=10, width="200"</h2>
+
+  <div background-color="orange" border-radius="50%" width="200"  color="white"
+    font-size="30"
+    align="center"
+    margin="10"
+    padding="10"
+    vertical-align="center" 
+    >Hello
+  </div>
+  <div background-color="orange" border-radius="10px" width="200" color="white"
+    font-size="30"
+    align="center" 
+    margin="10"
+    padding="10"
+    vertical-align="center" 
+  >Hello
+  </div> 
+
+
+
+
+
+</div>

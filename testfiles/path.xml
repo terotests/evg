@@ -1,7 +1,0 @@
-<div padding="20">
-    <camera width="100" height="150" background-color="#3377ff" opacity="0.6" margin="10"/>
-    <credit width="100" height="150" background-color="#3377ff" opacity="0.6" margin="10"/>
-    <vader width="100" height="150" background-color="#3377ff" opacity="0.6" margin="10"/>
-    <cloud width="100" height="150" background-color="#3377ff" opacity="0.6" margin="10"/>
-    <notworking width="100" height="150" background-color="#3377ff" opacity="0.6" margin="10"/>
-</div>
