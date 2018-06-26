@@ -196,6 +196,13 @@ class EVG {
     static installComponent(name, componentData) {
         exports.register_component(name, componentData);
     }
+    static renderToStream(inputStream, width, height, item, header, footer) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const renderer = new pdfkit_1.Renderer(width, height);
+            item.calculate(width, height, renderer);
+            renderer.renderToStream(inputStream, item, [header, footer]);
+        });
+    }
     static renderToFile(fileName, width, height, item, header, footer) {
         return __awaiter(this, void 0, void 0, function* () {
             const renderer = new pdfkit_1.Renderer(width, height);

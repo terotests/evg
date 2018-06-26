@@ -282,6 +282,14 @@ describe("render testting", function () {
     <View width="20" height="20" left="80" top="30" background-color="green" border-radius="50%"/>  
   </View>  
 
+  <View width="100" height="100" background-color="#22ffee">
+    <View width="70" height="70" background-color="#ff3333"></View>
+  </View>
+
+  <View width="100" height="100" background-color="#ffeeee" border-radius="20" overflow="hidden">
+    <View width="70" height="70" background-color="#ff3333"></View>
+  </View>  
+
   <View width="100%" height="140" background-color="#ffeeee">
     <t text="This should be layout in stacked fashion and not affected by left,top"/>
     <View left="200" top="200" background-color="red" width="40" height="40">
@@ -312,6 +320,7 @@ describe("render testting", function () {
     <View left="200" top="100" background-color="red" width="40" height="240">
     </View>
   </View>   
+
 </View>
     `);
         const renderer = new pdfkit_1.Renderer(600, 800);

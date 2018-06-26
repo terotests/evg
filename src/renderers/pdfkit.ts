@@ -65,6 +65,15 @@ export class Renderer {
     doc.end()
   }
 
+  async renderToStream( inputStream:any, item:EVG, headers?:any[] ) : Promise<any> {
+    const fs = require('fs')
+    const doc = this.doc
+    doc.pipe( inputStream )
+    await this.renderItem( item, doc, headers, true  )
+    doc.save()
+    doc.end()
+  }  
+
   setColors( ui:EVG, ctx:any) {
     if( ui.color.is_set) {
       this.text_color = ui.color.s_value
@@ -192,7 +201,9 @@ export class Renderer {
       const dx = child.calculated.x
       const dy = child.calculated.y
       ctx.translate( dx, dy - y_adjust)
+      ctx.save()
       await this.renderItem( child, ctx )
+      ctx.restore()
       ctx.translate( -dx, -dy + y_adjust)
       page_item_cnt++
     }
@@ -263,6 +274,21 @@ class View {
     } else {
       ctx.rect(0,0, box.render_width, box.render_height)
     }
+
+    // overflow property is set hidden, create the clip path and path again...
+    if(ui.overflow.is_set) {
+      if(ui.overflow.s_value === 'hidden') {
+        // creates the clip path
+        ctx.clip()
+        // needs to re-create the path
+        if(ui.borderRadius.is_set) {
+          ctx.roundedRect(0,0, box.render_width, box.render_height, ui.borderRadius.pixels)
+        } else {
+          ctx.rect(0,0, box.render_width, box.render_height)
+        }        
+      }      
+    }
+    // overflow...
     ctx.fillAndStroke()
     // ctx.stroke()
   }
@@ -313,6 +339,15 @@ class Path {
     const coll = new PathScaler();
     parser.parsePath(ui.svgPath.s_value, coll);
     const svgStr = coll.getString( ui.calculated.render_width, ui.calculated.render_height )    
-    ctx.path( svgStr ).fill().stroke()    
+    ctx.path( svgStr )
+    if(ui.overflow.is_set) {
+      if(ui.overflow.s_value === 'hidden') {
+        // creates the clip path
+        ctx.clip()
+        // needs to re-create the path
+        ctx.path( svgStr )        
+      }      
+    }      
+    ctx.fill().stroke()    
   }
 }

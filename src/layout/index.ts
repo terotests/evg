@@ -152,6 +152,18 @@ export class EVG {
     register_component(name, componentData)    
   }
 
+  static async renderToStream( 
+    inputStream:any, 
+    width:number, 
+    height:number,
+    item:EVG,
+    header?:(item:EVG)=>EVG,
+    footer?:(item:EVG)=>EVG) {
+    const renderer = new Renderer(width, height)
+    item.calculate(width,height,renderer)    
+    renderer.renderToStream(inputStream, item, [header, footer])
+  }  
+
   static async renderToFile( 
     fileName:string, 
     width:number, 

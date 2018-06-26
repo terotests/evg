@@ -12,6 +12,7 @@ export declare class Renderer {
     constructor(width: number, height: number);
     hasCustomSize(item: EVG): any;
     render(filename: string, item: EVG, headers?: any[]): Promise<any>;
+    renderToStream(inputStream: any, item: EVG, headers?: any[]): Promise<any>;
     setColors(ui: EVG, ctx: any): void;
     renderItem(item: EVG, ctx: any, headers?: any[], is_first?: boolean): Promise<void>;
 }

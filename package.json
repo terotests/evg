@@ -1,11 +1,11 @@
 {
   "name": "evg",
-  "version": "1.0.17",
+  "version": "1.0.24",
   "description": "Elastic View Graphics",
   "main": "src/layout/index.js",
   "types": "src/layout/index.d.ts",
   "scripts": {
-    "test": "./node_modules/.bin/mocha --reporter spec"
+    "test": "tsc && ./node_modules/.bin/mocha --reporter spec"
   },
   "repository": {
     "type": "git",

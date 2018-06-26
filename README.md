@@ -32,6 +32,7 @@ The engine supports following commands (and more):
 - `font-size`, `font-family` can be used to specify TTF fonts used (or `fonts/` dir for CLI)
 - horizontal align `align=center`, `align=left`, `align=right`
 - absolute positioning `top` and `left`, `bottom`, `right`
+- flag `overflow="hidden"` for View and Path elements 
 
 Extra features include:
 
@@ -76,6 +77,10 @@ const node = new EVG(`<View>
 </View>
 `)
 EVG.renderToFile('./out.pdf', 600,800, node)
+
+// or render to stream 
+const fs = require('fs')
+EVG.renderToStream(fs.createWriteStream('fileName.pdf'), 600,800, node)
 ```
 
 ## Creating own components using inline XML

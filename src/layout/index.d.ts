@@ -405,6 +405,7 @@ export declare class EVG {
     };
     static installFont(name: string, fileName: string): void;
     static installComponent(name: string, componentData: string): void;
+    static renderToStream(inputStream: any, width: number, height: number, item: EVG, header?: (item: EVG) => EVG, footer?: (item: EVG) => EVG): Promise<void>;
     static renderToFile(fileName: string, width: number, height: number, item: EVG, header?: (item: EVG) => EVG, footer?: (item: EVG) => EVG): Promise<void>;
     findComponent(name: any): any;
     findFont(name: any): any;
