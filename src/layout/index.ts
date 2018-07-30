@@ -1081,9 +1081,23 @@ export class EVG {
     this.adjustLayoutParams(parentNode, render_pos.renderer);
     var elem_h = this.default_layout(node, render_pos);
     node.calculated.render_height = elem_h
-    node.calculated.render_width  = node.inline.is_set && node.inline.b_value && node.calculated.width_override ?  node.calculated.width_override : node.width.pixels;
+    if(node.inline.is_set && node.inline.b_value && node.calculated.width_override) {
+      console.log('--- inline used ---', node.id.s_value)
+    }
+    node.calculated.render_width  = 
+      node.inline.is_set && node.inline.b_value && node.calculated.width_override ?  
+        node.calculated.width_override + 
+        node.borderWidth.pixels 
+        //node.paddingLeft.pixels +
+        //node.paddingRight.pixels 
+      : 
+      node.width.pixels;
     node.calculated.height = elem_h + node.marginTop.pixels + node.marginBottom.pixels;
-    node.calculated.width  = node.calculated.render_width + node.marginLeft.pixels + node.marginRight.pixels;
+
+    node.calculated.width  = 
+      node.calculated.render_width + 
+      node.marginLeft.pixels + node.marginRight.pixels;
+
     // not using absoute coords for now...
     if( node.left.is_set ) {
       node.calculated.x = node.marginLeft.pixels + node.left.pixels;
@@ -1255,6 +1269,7 @@ export class EVG {
       elem_h += child_heights; 
       const special = render_pos.renderer.hasCustomSize( node )
       if(typeof(special) !== 'undefined') {
+        console.log('special width ', special.width)
         elem_h += special.height;
         node.calculated.width_override = special.width;
         node.calculated.width = special.width;
