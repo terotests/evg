@@ -395,10 +395,43 @@ describe("render testting", function() {
     
     <div>TODO: Distribute text evenly</div>
 
-    <div width="200" padding="0" background-color="#ffffee" id="individual5">
-      asdf asfdj ölasjdf ölajs döajs följasd ölajsd ajsdölajsd ökladjs ölkjad lökajsf lökajsf asf
+    <div width="200" padding="0" background-color="#ffffee" id="individual5" align="fill">
+      Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
     </div>      
-    
+
+    <div width="200" padding="0" background-color="#ffffee" id="individual5" align="fill" font-size="8">
+    Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+    </div>      
+
+    <div  width="100" height="100" >
+      <div width="100" height="100"  overflow="hidden"
+      border-radius="10"
+        >
+        <img src="images/child.jpg" width="130" height="130"/>
+      </div>       
+    </div>
+
+
+    <path width="100" height="100"  overflow="hidden"
+    background-color="black"
+    d="M10,6.536c-2.263,0-4.099,1.836-4.099,4.098S7.737,14.732,10,14.732s4.099-1.836,4.099-4.098S12.263,6.536,10,6.536M10,13.871c-1.784,0-3.235-1.453-3.235-3.237S8.216,7.399,10,7.399c1.784,0,3.235,1.452,3.235,3.235S11.784,13.871,10,13.871M17.118,5.672l-3.237,0.014L12.52,3.697c-0.082-0.105-0.209-0.168-0.343-0.168H7.824c-0.134,0-0.261,0.062-0.343,0.168L6.12,5.686H2.882c-0.951,0-1.726,0.748-1.726,1.699v7.362c0,0.951,0.774,1.725,1.726,1.725h14.236c0.951,0,1.726-0.773,1.726-1.725V7.195C18.844,6.244,18.069,5.672,17.118,5.672 M17.98,14.746c0,0.477-0.386,0.861-0.862,0.861H2.882c-0.477,0-0.863-0.385-0.863-0.861V7.384c0-0.477,0.386-0.85,0.863-0.85l3.451,0.014c0.134,0,0.261-0.062,0.343-0.168l1.361-1.989h3.926l1.361,1.989c0.082,0.105,0.209,0.168,0.343,0.168l3.451-0.014c0.477,0,0.862,0.184,0.862,0.661V14.746z" 
+    ><View width="70" height="70" background-color="#ff3333"></View>
+    </path>     
+
+    <path background-color="black" 
+       width="200" heigth="200"      
+        d="M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
+      />   
+
+    <div  width="100" height="100" >
+      <path width="100" height="100"  overflow="hidden"
+      background-color="red"
+        d="M 60 0 L 120 0 L 180 60 L 180 120 L 120 180 L 60 180 L 0 120 L 0 60"
+        >
+        <img src="images/child.jpg" width="130" height="130"/>
+      </path>       
+    </div>
+ 
 
   </div>
 
