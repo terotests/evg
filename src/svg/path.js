@@ -120,7 +120,6 @@ class PathExecutor {
     constructor() {
     }
     ClosePath() {
-        console.log("Close Path called with ");
     }
     Move(x, y) {
         console.log((("Move called with " + x) + ", ") + y);
@@ -500,13 +499,6 @@ class EVGPathParser {
             const c = s.charCodeAt(this.i);
             if (c === 90 || c === 122) {
                 // "M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
-                console.log('------ path z segment -----');
-                console.log(s);
-                console.log(args);
-                console.log('arg_cnt', arg_cnt);
-                console.log('require_args', require_args);
-                // callback.Line(startx, starty)
-                console.log('first point : ', first_x, first_y);
                 callback.Line(first_x, first_y);
                 callback.ClosePath();
                 /*
@@ -523,6 +515,7 @@ class EVGPathParser {
                 cy = first_y;
                 cx2 = first_x;
                 cy2 = first_y;
+                is_first = true;
                 continue;
             }
             if ((((c == (86)) || (c == (118))) || (c == (72))) || (c == (104))) {

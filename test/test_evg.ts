@@ -254,7 +254,6 @@ describe("render testting", function() {
       </View>   
       <View>
         <img src="images/wiki.jpeg" width="200" height="200"/>
-        <img src="images/redom.jpg" width="100%" height="200"/>
       </View>
     </iphone> 
   </View>
@@ -423,23 +422,62 @@ describe("render testting", function() {
         d="M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
       />   
 
-    <div  width="100" height="100" >
-      <path width="100" height="100"  overflow="hidden"
-      background-color="red"
-        d="M 60 0 L 120 0 L 180 60 L 180 120 L 120 180 L 60 180 L 0 120 L 0 60"
-        >
-        <img src="images/child.jpg" width="130" height="130"/>
-      </path>       
-    </div>
- 
 
   </div>
 
+  <div page-break="true">
+    <div width="100%" height="100%" left="0" top="0" background-color="#3ac6d8">
+
+    </div>
+    <div height="100" padding="20" >
+      <path width="20%" height="100"  overflow="hidden"
+      background-color="red"
+        d="M 60 0 L 120 0 L 180 60 L 180 120 L 120 180 L 60 180 L 0 120 L 0 60"
+        >
+        <img src="images/child.jpg" width="100%" height="100%"/>
+      </path>       
+
+      <div width="80%" padding="20">
+        HEllo there!!!! Tässä on kuvateksti lapselle :)
+      </div
+    </div> 
+
+    <div height="100" padding="20" >      
+      <div width="20%" height="20%"  overflow="hidden" border-radius="50">
+        <img src="images/child.jpg" width="100%" height="100%"/>
+      </div>       
+
+      <div width="80%" padding="20">
+        HEllo there!!!! Tässä on kuvateksti lapselle :)
+      </div>
+    </div> 
+
+  </div>
+
+  <div page-break="true">
+    <div width="100%" height="100%" left="0" top="0" background-color="#3ac6d8">
+
+    </div>
+
+    <div padding="20" margin="20" >      
+      <div width="100" height="100" left="0" top="0"  overflow="hidden" border-radius="50%"
+        >
+        <img src="images/child.jpg" width="100" height="100"/>
+      </div>      
+      <div width="100" height="100" left="0" top="0"  border-radius="50"
+        border-width="3" border-color="white"
+        >
+      </div>       
+      
+    </div> 
+    
+  </div>  
 </View>
     `)
     
-    const renderer = new Renderer(600,800)
-    evg.calculate(600,800,renderer)
+    // 600 x 800
+    const renderer = new Renderer(400,280)
+    evg.calculate(400,100,renderer)
     renderer.render('./out/test2.pdf', evg)
 
   });  

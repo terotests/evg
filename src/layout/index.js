@@ -1250,9 +1250,6 @@ class EVG {
         this.adjustLayoutParams(parentNode, render_pos.renderer);
         var elem_h = this.default_layout(node, render_pos);
         node.calculated.render_height = elem_h;
-        if (node.inline.is_set && node.inline.b_value && node.calculated.width_override) {
-            console.log('--- inline used ---', node.id.s_value);
-        }
         node.calculated.render_width =
             node.inline.is_set && node.inline.b_value && node.calculated.width_override ?
                 node.calculated.width_override +
@@ -1299,7 +1296,8 @@ class EVG {
         }
         var elem_h = node.paddingTop.pixels + node.paddingBottom.pixels;
         if (node.height.is_set) {
-            elem_h += node.innerHeight.pixels;
+            // NOTE: added + node.borderWidth.pixels * 2
+            elem_h += node.innerHeight.pixels + node.borderWidth.pixels * 2;
         }
         var child_render_pos = new UIRenderPosition(node.paddingLeft.pixels, node.paddingTop.pixels, render_pos.renderer);
         var child_heights = 0.0;
