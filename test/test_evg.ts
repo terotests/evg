@@ -254,7 +254,6 @@ describe("render testting", function() {
       </View>   
       <View>
         <img src="images/wiki.jpeg" width="200" height="200"/>
-        <img src="images/redom.jpg" width="100%" height="200"/>
       </View>
     </iphone> 
   </View>
@@ -306,6 +305,12 @@ describe("render testting", function() {
     <View width="70" height="70" background-color="#ff3333"></View>
   </View>  
 
+  <path width="100" height="100"  overflow="hidden"
+  background-color="black"
+  d="M10,6.536c-2.263,0-4.099,1.836-4.099,4.098S7.737,14.732,10,14.732s4.099-1.836,4.099-4.098S12.263,6.536,10,6.536M10,13.871c-1.784,0-3.235-1.453-3.235-3.237S8.216,7.399,10,7.399c1.784,0,3.235,1.452,3.235,3.235S11.784,13.871,10,13.871M17.118,5.672l-3.237,0.014L12.52,3.697c-0.082-0.105-0.209-0.168-0.343-0.168H7.824c-0.134,0-0.261,0.062-0.343,0.168L6.12,5.686H2.882c-0.951,0-1.726,0.748-1.726,1.699v7.362c0,0.951,0.774,1.725,1.726,1.725h14.236c0.951,0,1.726-0.773,1.726-1.725V7.195C18.844,6.244,18.069,5.672,17.118,5.672 M17.98,14.746c0,0.477-0.386,0.861-0.862,0.861H2.882c-0.477,0-0.863-0.385-0.863-0.861V7.384c0-0.477,0.386-0.85,0.863-0.85l3.451,0.014c0.134,0,0.261-0.062,0.343-0.168l1.361-1.989h3.926l1.361,1.989c0.082,0.105,0.209,0.168,0.343,0.168l3.451-0.014c0.477,0,0.862,0.184,0.862,0.661V14.746z" 
+  ><View width="70" height="70" background-color="#ff3333"></View>
+  </path>  
+
   <View width="100%" height="140" background-color="#ffeeee">
     <t text="This should be layout in stacked fashion and not affected by left,top"/>
     <View left="200" top="200" background-color="red" width="40" height="40">
@@ -337,11 +342,142 @@ describe("render testting", function() {
     </View>
   </View>   
 
+  <div page-break="true">
+    <div inline="true" padding="10" background-color="cyan" id="outer">
+      <div inline="true" overflow="hidden" border-width="20" border-color="blue"
+        id="inner div"
+        background-color="white" padding="10">
+      aaaaaaaaaa bbb ccc
+      </div>
+    </div>  
+    <div inline="true" padding="1" background-color="cyan" id="outer">
+      <div inline="true" overflow="hidden" border-width="1" border-color="blue"
+        id="inner div"
+        background-color="white" padding="1">
+      aaaaaaaaaa bbb ccc
+      </div>
+    </div>  
+
+    <div inline="true" padding="5" background-color="cyan" id="outer">
+      <div inline="true" overflow="hidden" border-width="1" border-color="blue"
+        id="inner div"
+        background-color="white" padding="10">
+      aaaaaaaaaa bbb ccc
+      </div>
+    </div>     
+    
+    <div inline="true" padding="5" background-color="cyan" id="outer">
+      <div inline="true" overflow="hidden" border-width="1" border-color="blue"
+        id="inner div"
+        background-color="white" padding="10">
+        <div width="20" height="20" background-color="red"/>
+        <div width="20" height="20" background-color="blue"/>
+        <div width="20" height="20" background-color="red"/>
+      </div>
+    </div>    
+    
+    <div width="200" padding="5" background-color="#ffeeaa" id="individual">
+      asdf asfdj ölasjdf ölajs döajs följasd ölajsd ajsdölajsd ökladjs ölkjad lökajsf lökajsf asf
+    </div>   
+    
+    <div width="200" padding="0" background-color="#aaeeff" id="individual2">
+      asdf asfdj ölasjdf ölajs döajs följasd ölajsd ajsdölajsd ökladjs ölkjad lökajsf lökajsf asf
+    </div>  
+    
+    <div>
+      <div width="200" padding="5" background-color="#aaffee" id="individual" >
+        <div width="20" height="20" background-color="red"/>
+        <div width="20" height="20" background-color="blue"/>
+        <div width="20" height="20" background-color="red"/>
+      </div>       
+    </div>
+    
+    <div>TODO: Distribute text evenly</div>
+
+    <div width="200" padding="0" background-color="#ffffee" id="individual5" align="fill">
+      Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+    </div>      
+
+    <div width="200" padding="0" background-color="#ffffee" id="individual5" align="fill" font-size="8">
+    Lorem ipsum dolor sit amet, consectetur adipisci elit, sed eiusmod tempor incidunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquid ex ea commodi consequat. Quis aute iure reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint obcaecat cupiditat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+    </div>      
+
+    <div  width="100" height="100" >
+      <div width="100" height="100"  overflow="hidden"
+      border-radius="10"
+        >
+        <img src="images/child.jpg" width="130" height="130"/>
+      </div>       
+    </div>
+
+
+    <path width="100" height="100"  overflow="hidden"
+    background-color="black"
+    d="M10,6.536c-2.263,0-4.099,1.836-4.099,4.098S7.737,14.732,10,14.732s4.099-1.836,4.099-4.098S12.263,6.536,10,6.536M10,13.871c-1.784,0-3.235-1.453-3.235-3.237S8.216,7.399,10,7.399c1.784,0,3.235,1.452,3.235,3.235S11.784,13.871,10,13.871M17.118,5.672l-3.237,0.014L12.52,3.697c-0.082-0.105-0.209-0.168-0.343-0.168H7.824c-0.134,0-0.261,0.062-0.343,0.168L6.12,5.686H2.882c-0.951,0-1.726,0.748-1.726,1.699v7.362c0,0.951,0.774,1.725,1.726,1.725h14.236c0.951,0,1.726-0.773,1.726-1.725V7.195C18.844,6.244,18.069,5.672,17.118,5.672 M17.98,14.746c0,0.477-0.386,0.861-0.862,0.861H2.882c-0.477,0-0.863-0.385-0.863-0.861V7.384c0-0.477,0.386-0.85,0.863-0.85l3.451,0.014c0.134,0,0.261-0.062,0.343-0.168l1.361-1.989h3.926l1.361,1.989c0.082,0.105,0.209,0.168,0.343,0.168l3.451-0.014c0.477,0,0.862,0.184,0.862,0.661V14.746z" 
+    ><View width="70" height="70" background-color="#ff3333"></View>
+    </path>     
+
+    <path background-color="black" 
+       width="200" heigth="200"      
+        d="M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
+      />   
+
+
+  </div>
+
+  <div page-break="true">
+    <div width="100%" height="100%" left="0" top="0" background-color="#3ac6d8">
+
+    </div>
+    <div height="100" padding="20" >
+      <path width="20%" height="100"  overflow="hidden"
+      background-color="red"
+        d="M 60 0 L 120 0 L 180 60 L 180 120 L 120 180 L 60 180 L 0 120 L 0 60"
+        >
+        <img src="images/child.jpg" width="100%" height="100%"/>
+      </path>       
+
+      <div width="80%" padding="20">
+        HEllo there!!!! Tässä on kuvateksti lapselle :)
+      </div
+    </div> 
+
+    <div height="100" padding="20" >      
+      <div width="20%" height="20%"  overflow="hidden" border-radius="50">
+        <img src="images/child.jpg" width="100%" height="100%"/>
+      </div>       
+
+      <div width="80%" padding="20">
+        HEllo there!!!! Tässä on kuvateksti lapselle :)
+      </div>
+    </div> 
+
+  </div>
+
+  <div page-break="true">
+    <div width="100%" height="100%" left="0" top="0" background-color="#3ac6d8">
+
+    </div>
+
+    <div padding="20" margin="20" >      
+      <div width="100" height="100" left="0" top="0"  overflow="hidden" border-radius="50%"
+        >
+        <img src="images/child.jpg" width="100" height="100"/>
+      </div>      
+      <div width="100" height="100" left="0" top="0"  border-radius="50"
+        border-width="3" border-color="white"
+        >
+      </div>       
+      
+    </div> 
+    
+  </div>  
 </View>
     `)
     
-    const renderer = new Renderer(600,800)
-    evg.calculate(600,800,renderer)
+    // 600 x 800
+    const renderer = new Renderer(400,280)
+    evg.calculate(400,100,renderer)
     renderer.render('./out/test2.pdf', evg)
 
   });  

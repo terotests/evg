@@ -102,6 +102,9 @@ export class Mat2  {
 export class PathExecutor  {
   constructor() {
   }
+  ClosePath () {
+    
+  }
   Move (x, y) {
     console.log((("Move called with " + x) + ", ") + y);
   };
@@ -428,6 +431,8 @@ export class EVGPathParser  {
     let cx2 = 0.0;
     let cy2 = 0.0;
     let last_i = -1;
+    let is_first = true
+    let first_x = 0, first_y = 0;
     // TODO: handle z in path, see notworking.xml
     while (this.i < this.__len) {
       if ( last_i == this.i ) {
@@ -435,6 +440,27 @@ export class EVGPathParser  {
       }
       last_i = this.i;
       const c = s.charCodeAt(this.i );
+      if( c === 90 || c === 122) {
+        // "M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
+        callback.Line( first_x, first_y )
+        callback.ClosePath()
+        /*
+        callback.Move(args.t0, args.t1);
+        cx = args.t0;
+        cy = args.t1;
+        cmd = 76;
+        require_args = 2;
+        cx2 = cx;
+        cy2 = cy;
+        */
+        arg_cnt = 0
+        cx = first_x
+        cy = first_y
+        cx2 = first_x
+        cy2 = first_y        
+        is_first = true
+        continue;  
+      }      
       if ( (((c == (86)) || (c == (118))) || (c == (72))) || (c == (104)) ) {
         cmd = c;
         require_args = 1;
@@ -494,7 +520,12 @@ export class EVGPathParser  {
         arg_cnt = arg_cnt + 1;
         if ( arg_cnt >= require_args ) {
           switch (cmd ) { 
+            // "m"
             case 109 : 
+              if( is_first ) {
+                first_x = cx + args.t0
+                first_y = cy + args.t1
+              }
               callback.Move(cx + args.t0, cy + args.t1);
               cx = args.t0;
               cy = args.t1;
@@ -503,7 +534,12 @@ export class EVGPathParser  {
               cx2 = cx;
               cy2 = cy;
               break;
+            // "M"
             case 77 : 
+              if( is_first ) {
+                first_x = args.t0
+                first_y = args.t1
+              }
               callback.Move(args.t0, args.t1);
               cx = args.t0;
               cy = args.t1;
@@ -512,6 +548,45 @@ export class EVGPathParser  {
               cx2 = cx;
               cy2 = cy;
               break;
+            // "z"
+            case 122 : 
+              // if points, create path to that point...
+              callback.Line( first_x, first_y )
+              callback.ClosePath()
+              arg_cnt = 0
+              cx = first_x
+              cy = first_y
+              cx2 = first_x
+              cy2 = first_y
+              break;
+            // "Z"
+            case 90 : 
+              // "M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
+              console.log('------ path z segment -----')
+              console.log(args)
+              console.log('arg_cnt', arg_cnt)
+              console.log('require_args', require_args)
+
+              // callback.Line(startx, starty)
+              callback.Line( first_x, first_y )
+              callback.ClosePath()
+              /*
+              callback.Move(args.t0, args.t1);
+              cx = args.t0;
+              cy = args.t1;
+              cmd = 76;
+              require_args = 2;
+              cx2 = cx;
+              cy2 = cy;
+              */
+              arg_cnt = 0
+              cx = first_x
+              cy = first_y
+              cx2 = first_x
+              cy2 = first_y
+              break;
+
+            // "l"
             case 108 : 
               callback.Line(cx + args.t0, cy + args.t1);
               cx = cx + args.t0;
@@ -519,14 +594,14 @@ export class EVGPathParser  {
               cx2 = cx;
               cy2 = cy;
               break;
-            case 76 : 
+            case 76 :            
               callback.Line(args.t0, args.t1);
               cx = args.t0;
               cy = args.t1;
               cx2 = cx;
               cy2 = cy;
               break;
-            case 104 : 
+            case 104 :           
               callback.Line(cx + args.t0, cy);
               cx = cx + args.t0;
               cx2 = cx;
@@ -553,13 +628,14 @@ export class EVGPathParser  {
               cx = cx + args.t4;
               cy = cy + args.t5;
               break;
-            case 67 : 
+            case 67 :             
               callback.Curve(args.t0, args.t1, args.t2, args.t3, args.t4, args.t5);
               cx2 = args.t2;
               cy2 = args.t3;
               cx = args.t4;
               cy = args.t5;
               break;
+              // 
             case 115 : 
               callback.Curve((cx + cx) - cx2, (cy + cy) - cy2, cx + args.t0, cy + args.t1, cx + args.t2, cy + args.t3);
               cx2 = cx + args.t0;
@@ -567,6 +643,7 @@ export class EVGPathParser  {
               cx = cx + args.t2;
               cy = cy + args.t3;
               break;
+              // "S"
             case 83 : 
               callback.Curve((cx + cx) - cx2, (cy + cy) - cy2, args.t0, args.t1, args.t2, args.t3);
               cx2 = args.t0;
@@ -574,6 +651,7 @@ export class EVGPathParser  {
               cx = args.t2;
               cy = args.t3;
               break;
+              // "q"
             case 113 : 
               QPx.t0 = cx;
               QPy.t0 = cy;
@@ -595,6 +673,7 @@ export class EVGPathParser  {
               cx = CPx.t3;
               cy = CPy.t3;
               break;
+              // "Q"
             case 81 : 
               QPx.t0 = cx;
               QPy.t0 = cy;
@@ -678,6 +757,7 @@ export class EVGPathParser  {
               break;
           };
           arg_cnt = 0;
+          is_first = false
         }
       }
     };

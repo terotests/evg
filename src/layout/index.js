@@ -1250,9 +1250,18 @@ class EVG {
         this.adjustLayoutParams(parentNode, render_pos.renderer);
         var elem_h = this.default_layout(node, render_pos);
         node.calculated.render_height = elem_h;
-        node.calculated.render_width = node.inline.is_set && node.inline.b_value && node.calculated.width_override ? node.calculated.width_override : node.width.pixels;
+        node.calculated.render_width =
+            node.inline.is_set && node.inline.b_value && node.calculated.width_override ?
+                node.calculated.width_override +
+                    node.borderWidth.pixels
+                //node.paddingLeft.pixels +
+                //node.paddingRight.pixels 
+                :
+                    node.width.pixels;
         node.calculated.height = elem_h + node.marginTop.pixels + node.marginBottom.pixels;
-        node.calculated.width = node.calculated.render_width + node.marginLeft.pixels + node.marginRight.pixels;
+        node.calculated.width =
+            node.calculated.render_width +
+                node.marginLeft.pixels + node.marginRight.pixels;
         // not using absoute coords for now...
         if (node.left.is_set) {
             node.calculated.x = node.marginLeft.pixels + node.left.pixels;
@@ -1287,7 +1296,8 @@ class EVG {
         }
         var elem_h = node.paddingTop.pixels + node.paddingBottom.pixels;
         if (node.height.is_set) {
-            elem_h += node.innerHeight.pixels;
+            // NOTE: added + node.borderWidth.pixels * 2
+            elem_h += node.innerHeight.pixels + node.borderWidth.pixels * 2;
         }
         var child_render_pos = new UIRenderPosition(node.paddingLeft.pixels, node.paddingTop.pixels, render_pos.renderer);
         var child_heights = 0.0;
@@ -1357,7 +1367,34 @@ class EVG {
                 }
                 row_width += childNode.calculated.width;
                 if (childNode.calculated.lineBreak || (row_width > node.innerWidth.pixels && (row_width - node.innerWidth.pixels > 0.5))) {
-                    if (node.align.is_set && (node.align.s_value == "right" || node.align.s_value == "center")) {
+                    if (node.align.is_set &&
+                        (node.align.s_value == "fill")) {
+                        // distribute evenly
+                        let lastItem = current_row[current_row.length - 1];
+                        var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + 0.5 * lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
+                        for (var i2 = 0; i2 < current_row.length; i2++) {
+                            var row_item = current_row[i2];
+                            const divider = current_row.length > 1 ? current_row.length - 1 : 1;
+                            row_item.calculated.x += deltaX * (i2 / divider);
+                        }
+                    }
+                    if (node.align.is_set &&
+                        (node.align.s_value == "right" ||
+                            node.align.s_value == "center")) {
+                        // align right
+                        let lastItem = current_row[current_row.length - 1];
+                        var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + 0.5 * lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
+                        if (node.align.is_set && (node.align.s_value == "center")) {
+                            deltaX = deltaX / 2;
+                        } // align center
+                        for (var i2 = 0; i2 < current_row.length; i2++) {
+                            var row_item = current_row[i2];
+                            row_item.calculated.x += deltaX;
+                        }
+                    }
+                    if (node.align.is_set &&
+                        (node.align.s_value == "right" ||
+                            node.align.s_value == "center")) {
                         // align right
                         let lastItem = current_row[current_row.length - 1];
                         var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + 0.5 * lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
@@ -1459,6 +1496,7 @@ class EVG {
             elem_h += child_heights;
             const special = render_pos.renderer.hasCustomSize(node);
             if (typeof (special) !== 'undefined') {
+                // console.log('special width ', special.width)
                 elem_h += special.height;
                 node.calculated.width_override = special.width;
                 node.calculated.width = special.width;

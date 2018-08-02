@@ -23,6 +23,7 @@ export declare class Mat2 {
 }
 export declare class PathExecutor {
     constructor();
+    ClosePath(): void;
     Move(x: any, y: any): void;
     Line(x: any, y: any): void;
     Curve(x0: any, y0: any, x1: any, y1: any, x2: any, y2: any): void;
