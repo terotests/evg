@@ -403,6 +403,7 @@ export declare class EVG {
         f_value: number;
         s_value: string;
     };
+    static installShippedFonts(): void;
     static installFont(name: string, fileName: string): void;
     static installComponent(name: string, componentData: string): void;
     static renderToStream(inputStream: any, width: number, height: number, item: EVG, header?: (item: EVG) => EVG, footer?: (item: EVG) => EVG): Promise<void>;

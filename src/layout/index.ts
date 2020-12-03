@@ -1,5 +1,7 @@
 // TODO: generic renderer
 import { Renderer } from "../renderers/pdfkit";
+import * as path from "path";
+import * as fs from "fs";
 
 var DOMParser = require("xmldom").DOMParser;
 const XMLSerializer = require("xmldom").XMLSerializer;
@@ -321,6 +323,27 @@ export class EVG {
     f_value: 0.0,
     s_value: "",
   };
+
+  static installShippedFonts() {
+    const rootPath = path.resolve(__dirname, "../../fonts");
+    fs.readdir(rootPath, (err, files) => {
+      files.forEach((pathName) => {
+        const fontPath = rootPath + "/" + pathName;
+        if (fs.lstatSync(fontPath).isDirectory()) {
+          fs.readdir(fontPath, (err, files) => {
+            files
+              .filter((f) => f.indexOf(".ttf") > 0)
+              .forEach((font) => {
+                EVG.installFont(
+                  path.parse(font).name.toLocaleLowerCase(),
+                  fontPath + "/" + font
+                );
+              });
+          });
+        }
+      });
+    });
+  }
 
   static installFont(name: string, fileName: string) {
     register_font(name, fileName);

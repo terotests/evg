@@ -4,10 +4,11 @@ require("mocha");
 const layout_1 = require("../src/layout/");
 const pdfkit_1 = require("../src/renderers/pdfkit");
 const expect = require("chai").expect;
-describe("render testting", function () {
-    layout_1.EVG.installFont("candal", "fonts/Candal/Candal.ttf");
-    layout_1.EVG.installFont("cinzel", "fonts/Cinzel/Cinzel-Regular.ttf");
-    layout_1.EVG.installFont("monoton", "fonts/Monoton/Monoton-Regular.ttf");
+describe("render testing", function () {
+    layout_1.EVG.installShippedFonts();
+    // EVG.installFont("candal", "fonts/Candal/Candal.ttf");
+    // EVG.installFont("cinzel", "fonts/Cinzel/Cinzel-Regular.ttf");
+    // EVG.installFont("monoton", "fonts/Monoton/Monoton-Regular.ttf");
     const phone = `
   <View width="395"  background-color="#222222" padding="10" border-radius="20px"
       >        
@@ -54,7 +55,7 @@ describe("render testting", function () {
   <View width="100%" background-color="white" padding="10">
     <View width="100%" background-color="#888888" height="1" padding-bottom="5"/>
     <View align="center">
-      <t text="(c) Copyright all rights reserved " font-size="9" background-color="gray"/>
+      <t text="(c) Copyright all rights reserved " font-size="9" background-color="gray" font-family="opensans-bolditalic"/>
       <t text="ACME" font-size="9" background-color="red"/>
       <t text=" Corporation" font-size="9" background-color="gray"/>
     </View>

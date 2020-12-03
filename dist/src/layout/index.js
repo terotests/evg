@@ -12,6 +12,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.EVG = exports.register_renderer = exports.register_component = exports.register_font = exports.UICalculated = exports.UIRenderPosition = void 0;
 // TODO: generic renderer
 const pdfkit_1 = require("../renderers/pdfkit");
+const path = require("path");
+const fs = require("fs");
 var DOMParser = require("xmldom").DOMParser;
 const XMLSerializer = require("xmldom").XMLSerializer;
 class UIRenderPosition {
@@ -375,6 +377,23 @@ class EVG {
         catch (e) {
             console.log(e);
         }
+    }
+    static installShippedFonts() {
+        const rootPath = path.resolve(__dirname, "../../fonts");
+        fs.readdir(rootPath, (err, files) => {
+            files.forEach((pathName) => {
+                const fontPath = rootPath + "/" + pathName;
+                if (fs.lstatSync(fontPath).isDirectory()) {
+                    fs.readdir(fontPath, (err, files) => {
+                        files
+                            .filter((f) => f.indexOf(".ttf") > 0)
+                            .forEach((font) => {
+                            EVG.installFont(path.parse(font).name.toLocaleLowerCase(), fontPath + "/" + font);
+                        });
+                    });
+                }
+            });
+        });
     }
     static installFont(name, fileName) {
         exports.register_font(name, fileName);
