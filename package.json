@@ -1,11 +1,11 @@
 {
   "name": "evg",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "Elastic View Graphics",
-  "main": "src/layout/index.js",
-  "types": "src/layout/index.d.ts",
+  "main": "dist/layout/index.js",
   "scripts": {
-    "test": "tsc && ./node_modules/.bin/mocha --reporter spec"
+    "mocha": "ts-mocha -p ./tsconfig.json test/test_*.ts",
+    "test": "tsc && ts-mocha -p ./tsconfig.json test/**/test_*.ts"
   },
   "repository": {
     "type": "git",
@@ -21,16 +21,20 @@
   },
   "homepage": "https://github.com/terotests/evg#readme",
   "dependencies": {
-    "@types/node": "^10.1.2",
     "chai": "^4.1.2",
     "jspdf": "^1.3.5",
-    "minimist": "^1.2.0",
+    "minimist": "^1.2.5",
     "pdfkit": "^0.8.3",
-    "qrcode": "^1.2.0",
+    "qrcode": "^1.4.4",
     "xmldom": "^0.1.27"
   },
   "devDependencies": {
-    "@types/mocha": "^5.2.0",
-    "mocha": "^5.2.0"
+    "@types/expect": "^24.3.0",
+    "@types/mocha": "^5.2.7",
+    "@types/node": "^10.17.48",
+    "@types/pdfkit": "^0.10.6",
+    "mocha": "^5.2.0",
+    "ts-mocha": "^8.0.0",
+    "typescript": "^4.1.2"
   }
 }

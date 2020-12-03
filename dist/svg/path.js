@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.EVGPathParser = exports.PathSegment = exports.PathCollector = exports.PathScaler = exports.PathExecutor = exports.Mat2 = exports.Vec2 = void 0;
 class Vec2 {
     constructor() {
         this.x = 0;
@@ -30,17 +31,14 @@ class Mat2 {
         this.m4 = 0.0;
         this.m5 = 0.0;
     }
-    ;
     setTranslate(tx, ty) {
         this.m4 = tx;
         this.m5 = ty;
     }
-    ;
     setScale(sx, sy) {
         this.m1 = sx;
         this.m3 = sy;
     }
-    ;
     setSkewX(v) {
         this.m0 = 1.0;
         this.m1 = 0.0;
@@ -49,7 +47,6 @@ class Mat2 {
         this.m4 = 0.0;
         this.m5 = 0.0;
     }
-    ;
     setSkewY(v) {
         this.m0 = 1.0;
         this.m1 = Math.tan(v);
@@ -58,7 +55,6 @@ class Mat2 {
         this.m4 = 0.0;
         this.m5 = 0.0;
     }
-    ;
     setRotation(v) {
         const cs = Math.cos(v);
         const sn = Math.sin(v);
@@ -69,70 +65,72 @@ class Mat2 {
         this.m4 = 0.0;
         this.m5 = 0.0;
     }
-    ;
     multiply(b) {
-        const t0 = (this.m0 * b.m0) + (this.m1 * b.m2);
-        const t2 = (this.m2 * b.m0) + (this.m3 * b.m2);
-        const t4 = ((this.m4 * b.m0) + (this.m5 * b.m2)) + b.m4;
-        this.m1 = (this.m0 * b.m1) + (this.m1 * b.m3);
-        this.m3 = (this.m2 * b.m1) + (this.m3 * b.m3);
-        this.m5 = ((this.m4 * b.m1) + (this.m5 * b.m3)) + b.m5;
+        const t0 = this.m0 * b.m0 + this.m1 * b.m2;
+        const t2 = this.m2 * b.m0 + this.m3 * b.m2;
+        const t4 = this.m4 * b.m0 + this.m5 * b.m2 + b.m4;
+        this.m1 = this.m0 * b.m1 + this.m1 * b.m3;
+        this.m3 = this.m2 * b.m1 + this.m3 * b.m3;
+        this.m5 = this.m4 * b.m1 + this.m5 * b.m3 + b.m5;
         this.m0 = t0;
         this.m2 = t2;
         this.m4 = t4;
     }
-    ;
     inverse() {
-        let invdet = (this.m0 * this.m3) - (this.m2 * this.m1);
+        let invdet = this.m0 * this.m3 - this.m2 * this.m1;
         const det = invdet;
-        if ((det > -0.0001) && (det < 0.0001)) {
+        if (det > -0.0001 && det < 0.0001) {
             this.toIdentity();
             return this;
         }
         invdet = 1.0 / det;
         const inv = new Mat2();
         inv.m0 = this.m3 * invdet;
-        inv.m2 = (-1.0 * this.m2) * invdet;
-        inv.m4 = (this.m2 * this.m5) - ((this.m3 * this.m4) * invdet);
-        inv.m1 = (-1.0 * this.m1) * invdet;
+        inv.m2 = -1.0 * this.m2 * invdet;
+        inv.m4 = this.m2 * this.m5 - this.m3 * this.m4 * invdet;
+        inv.m1 = -1.0 * this.m1 * invdet;
         inv.m3 = this.m0 * invdet;
-        inv.m5 = (this.m1 * this.m4) - ((this.m0 * this.m5) * invdet);
+        inv.m5 = this.m1 * this.m4 - this.m0 * this.m5 * invdet;
         return inv;
     }
-    ;
     transformPoint(v) {
         const res = new Vec2();
-        res.x = ((v.x * this.m0) + (v.y * this.m2)) + this.m4;
-        res.y = ((v.x * this.m1) + (v.y * this.m3)) + this.m5;
+        res.x = v.x * this.m0 + v.y * this.m2 + this.m4;
+        res.y = v.x * this.m1 + v.y * this.m3 + this.m5;
         return res;
     }
-    ;
     rotateVector(v) {
         const res = new Vec2();
-        res.x = (v.x * this.m0) + (v.y * this.m2);
-        res.y = (v.x * this.m1) + (v.y * this.m3);
+        res.x = v.x * this.m0 + v.y * this.m2;
+        res.y = v.x * this.m1 + v.y * this.m3;
         return res;
     }
-    ;
 }
 exports.Mat2 = Mat2;
 class PathExecutor {
-    constructor() {
-    }
-    ClosePath() {
-    }
+    constructor() { }
+    ClosePath() { }
     Move(x, y) {
-        console.log((("Move called with " + x) + ", ") + y);
+        console.log("Move called with " + x + ", " + y);
     }
-    ;
     Line(x, y) {
-        console.log((("Line called with " + x) + ", ") + y);
+        console.log("Line called with " + x + ", " + y);
     }
-    ;
     Curve(x0, y0, x1, y1, x2, y2) {
-        console.log(((((((((((("Cubic bezier curve called with " + x0) + ", ") + y0) + " ") + x1) + ", ") + y1) + " ") + x2) + ", ") + y2) + " ");
+        console.log("Cubic bezier curve called with " +
+            x0 +
+            ", " +
+            y0 +
+            " " +
+            x1 +
+            ", " +
+            y1 +
+            " " +
+            x2 +
+            ", " +
+            y2 +
+            " ");
     }
-    ;
 }
 exports.PathExecutor = PathExecutor;
 class PathScaler extends PathExecutor {
@@ -142,37 +140,39 @@ class PathScaler extends PathExecutor {
         this.pathParts = [];
     }
     Move(x, y) {
-        this.pathParts.push(['M', x, y]);
+        this.pathParts.push(["M", x, y]);
     }
-    ;
     Line(x, y) {
-        this.pathParts.push(['L', x, y]);
+        this.pathParts.push(["L", x, y]);
     }
-    ;
     Curve(x0, y0, x1, y1, x2, y2) {
-        this.pathParts.push(['C', x0, y0, x1, y1, x2, y2]);
+        this.pathParts.push(["C", x0, y0, x1, y1, x2, y2]);
     }
-    ;
     getString(width, height) {
-        let minx, miny, maxx, maxy;
-        this.pathParts.forEach(segment => {
+        let minx = 0, miny = 0, maxx = 0, maxy = 0;
+        this.pathParts.forEach((segment) => {
             segment.forEach((value, i) => {
-                if (i > 0 && ((i & 1) == 1)) {
-                    if (typeof (minx) === 'undefined' || value < minx)
-                        minx = value;
-                    if (typeof (maxx) === 'undefined' || value > maxx)
-                        maxx = value;
-                }
-                if (i > 0 && ((i & 1) === 0)) {
-                    if (typeof (miny) === 'undefined' || value < miny)
-                        miny = value;
-                    if (typeof (maxy) === 'undefined' || value > maxy)
-                        maxy = value;
+                if (typeof value === "number") {
+                    if (i > 0 && (i & 1) == 1) {
+                        if (typeof minx === "undefined" || value < minx)
+                            minx = value;
+                        if (typeof maxx === "undefined" || value > maxx)
+                            maxx = value;
+                    }
+                    if (i > 0 && (i & 1) === 0) {
+                        if (typeof miny === "undefined" || value < miny)
+                            miny = value;
+                        if (typeof maxy === "undefined" || value > maxy)
+                            maxy = value;
+                    }
                 }
             });
         });
         const orig_width = maxx - minx;
         const orig_height = maxy - miny;
+        if (orig_width === 0 || orig_height === 0) {
+            return "";
+        }
         let scale_amount_x = width / orig_width;
         let scale_amount_y = height / orig_height;
         if (width / height < orig_width / orig_height) {
@@ -181,18 +181,21 @@ class PathScaler extends PathExecutor {
         else {
             scale_amount_x = scale_amount_y;
         }
-        return this.pathParts.map(segment => {
+        return this.pathParts
+            .map((segment) => {
             return segment.map((value, i) => {
                 if (i === 0)
                     return value;
-                if ((i & 1) == 1) {
-                    return (value - minx) * scale_amount_x;
+                if (typeof value === "number") {
+                    if ((i & 1) == 1) {
+                        return (value - minx) * scale_amount_x;
+                    }
+                    return (value - miny) * scale_amount_y;
                 }
-                return (value - miny) * scale_amount_y;
             });
-        }).join(" ");
+        })
+            .join(" ");
     }
-    ;
 }
 exports.PathScaler = PathScaler;
 class PathCollector extends PathExecutor {
@@ -202,21 +205,17 @@ class PathCollector extends PathExecutor {
         this.pathParts = [];
     }
     Move(x, y) {
-        this.pathParts.push(((("M " + x) + " ") + y) + " ");
+        this.pathParts.push("M " + x + " " + y + " ");
     }
-    ;
     Line(x, y) {
-        this.pathParts.push(((("L " + x) + " ") + y) + " ");
+        this.pathParts.push("L " + x + " " + y + " ");
     }
-    ;
     Curve(x0, y0, x1, y1, x2, y2) {
-        this.pathParts.push(((((((((((("C " + x0) + " ") + y0) + " ") + x1) + " ") + y1) + " ") + x2) + " ") + y2) + " ");
+        this.pathParts.push("C " + x0 + " " + y0 + " " + x1 + " " + y1 + " " + x2 + " " + y2 + " ");
     }
-    ;
     getString() {
         return this.pathParts.join(" ");
     }
-    ;
 }
 exports.PathCollector = PathCollector;
 class PathSegment {
@@ -231,57 +230,29 @@ class PathSegment {
     }
 }
 exports.PathSegment = PathSegment;
-class EVGBezierPath {
-    constructor() {
-        this.points = [];
-        this.pointCnt = 0;
-        this.closed = false;
-        this.bounds = Vec2.CreateNew(0.0, 0.0);
-        this.cp1 = Vec2.CreateNew(0.0, 0.0);
-        this.cp2 = Vec2.CreateNew(0.0, 0.0);
-        this.controlPoint = Vec2.CreateNew(0.0, 0.0);
-    }
-    close() {
-        this.closed = true;
-    }
-    ;
-    Line(point) {
-    }
-    ;
-    moveTo(point) {
-        this.controlPoint.x = point.x;
-        this.controlPoint.y = point.y;
-    }
-    ;
-}
-exports.EVGBezierPath = EVGBezierPath;
 class EVGPathParser {
     constructor() {
         this.i = 0;
         this.__len = 0;
         this.last_number = 0.0;
+        this.buff = "";
     }
     __sqr(v) {
         return v * v;
     }
-    ;
     __xformPoint(point, seg) {
-        const res = Vec2.CreateNew((((point.x * seg.t0) + (point.y * seg.t2)) + seg.t4), (((point.x * seg.t1) + (point.y * seg.t3)) + seg.t5));
+        const res = Vec2.CreateNew(point.x * seg.t0 + point.y * seg.t2 + seg.t4, point.x * seg.t1 + point.y * seg.t3 + seg.t5);
         return res;
     }
-    ;
     __xformVec(point, seg) {
-        return Vec2.CreateNew(((point.x * seg.t0) + (point.y * seg.t2)), ((point.x * seg.t1) + (point.y * seg.t3)));
+        return Vec2.CreateNew(point.x * seg.t0 + point.y * seg.t2, point.x * seg.t1 + point.y * seg.t3);
     }
-    ;
     __vmag(point) {
-        return Math.sqrt(((point.x * point.x) + (point.y * point.y)));
+        return Math.sqrt(point.x * point.x + point.y * point.y);
     }
-    ;
     __vecrat(u, v) {
-        return ((u.x * v.x) + (u.y * v.y)) / (this.__vmag(u) * this.__vmag(v));
+        return (u.x * v.x + u.y * v.y) / (this.__vmag(u) * this.__vmag(v));
     }
-    ;
     __vecang(u, v) {
         let r = this.__vecrat(u, v);
         if (r < -1.0) {
@@ -291,12 +262,11 @@ class EVGPathParser {
             r = 1.0;
         }
         let res = 1.0;
-        if ((u.x * v.y) < (u.y * v.x)) {
+        if (u.x * v.y < u.y * v.x) {
             res = -1.0;
         }
-        return res * (Math.acos(r));
+        return res * Math.acos(r);
     }
-    ;
     scanNumber() {
         const s = this.buff;
         let fc = s.charCodeAt(this.i);
@@ -304,25 +274,31 @@ class EVGPathParser {
         let sp = 0;
         let ep = 0;
         fc = s.charCodeAt(this.i);
-        if ((((fc == 45) && ((s.charCodeAt((this.i + 1))) >= 46)) && ((s.charCodeAt((this.i + 1))) <= 57)) || ((fc >= 48) && (fc <= 57))) {
+        if ((fc == 45 &&
+            s.charCodeAt(this.i + 1) >= 46 &&
+            s.charCodeAt(this.i + 1) <= 57) ||
+            (fc >= 48 && fc <= 57)) {
             sp = this.i;
             this.i = 1 + this.i;
             c = s.charCodeAt(this.i);
-            while ((this.i < this.__len) && ((((c >= 48) && (c <= 57)) || (c == (46))) || ((this.i == sp) && ((c == (43)) || (c == (45)))))) {
+            while (this.i < this.__len &&
+                ((c >= 48 && c <= 57) ||
+                    c == 46 ||
+                    (this.i == sp && (c == 43 || c == 45)))) {
                 this.i = 1 + this.i;
                 if (this.i >= this.__len) {
                     break;
                 }
                 c = s.charCodeAt(this.i);
             }
-            ;
             ep = this.i;
-            this.last_number = (isNaN(parseFloat((s.substring(sp, ep)))) ? undefined : parseFloat((s.substring(sp, ep))));
+            this.last_number = isNaN(parseFloat(s.substring(sp, ep)))
+                ? 0.0
+                : parseFloat(s.substring(sp, ep));
             return true;
         }
         return false;
     }
-    ;
     pathArcTo(callback, cp, args, rel) {
         let rx = 0.0;
         let ry = 0.0;
@@ -373,8 +349,8 @@ class EVGPathParser {
         rx = Math.abs(args.t0);
         ry = Math.abs(args.t1);
         rotx = (args.t2 / 180.0) * PI_VALUE;
-        fa = ((Math.abs(args.t3)) > 0.00001) ? 1.0 : 0.0;
-        fs = ((Math.abs(args.t4)) > 0.00001) ? 1.0 : 0.0;
+        fa = Math.abs(args.t3) > 0.00001 ? 1.0 : 0.0;
+        fs = Math.abs(args.t4) > 0.00001 ? 1.0 : 0.0;
         x1 = cpx;
         y1 = cpy;
         if (rel) {
@@ -387,48 +363,48 @@ class EVGPathParser {
         }
         dx = x1 - x2;
         dy = y1 - y2;
-        d = Math.sqrt(((dx * dx) + (dy * dy)));
-        if (((d < 0.00001) || (rx < 0.00001)) || (ry < 0.00001)) {
+        d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 0.00001 || rx < 0.00001 || ry < 0.00001) {
             callback.Line(x2, y2);
             return Vec2.CreateNew(x2, y2);
         }
         sinrx = Math.sin(rotx);
         cosrx = Math.cos(rotx);
-        x1p = ((cosrx * dx) / 2.0) + ((sinrx * dy) / 2.0);
-        y1p = (((-1.0 * sinrx) * dx) / 2.0) + ((cosrx * dy) / 2.0);
-        d = ((x1p * x1p) / (rx * rx)) + ((y1p * y1p) / (ry * ry));
+        x1p = (cosrx * dx) / 2.0 + (sinrx * dy) / 2.0;
+        y1p = (-1.0 * sinrx * dx) / 2.0 + (cosrx * dy) / 2.0;
+        d = (x1p * x1p) / (rx * rx) + (y1p * y1p) / (ry * ry);
         if (d > 1.0) {
             d = Math.sqrt(d);
             rx = rx * d;
             ry = ry * d;
         }
         s = 0.0;
-        sa = (((rx * rx) * (ry * ry)) - ((rx * rx) * (y1p * y1p))) - ((ry * ry) * (x1p * x1p));
-        sb = ((rx * rx) * (y1p * y1p)) + ((ry * ry) * (x1p * x1p));
+        sa = rx * rx * (ry * ry) - rx * rx * (y1p * y1p) - ry * ry * (x1p * x1p);
+        sb = rx * rx * (y1p * y1p) + ry * ry * (x1p * x1p);
         if (sa < 0.0) {
             sa = 0.0;
         }
         if (sb > 0.0) {
-            s = Math.sqrt((sa / sb));
+            s = Math.sqrt(sa / sb);
         }
         if (fa == fs) {
             s = -1.0 * s;
         }
-        cxp = ((s * rx) * y1p) / ry;
-        cyp = ((s * (-1.0 * ry)) * x1p) / rx;
-        cx = ((x1 + x2) / 2.0) + ((cosrx * cxp) - (sinrx * cyp));
-        cy = ((y1 + y2) / 2.0) + ((sinrx * cxp) + (cosrx * cyp));
-        const u = Vec2.CreateNew(((x1p - cxp) / rx), ((y1p - cyp) / ry));
-        const v = Vec2.CreateNew((((-1.0 * x1p) - cxp) / rx), (((-1.0 * y1p) - cyp) / ry));
+        cxp = (s * rx * y1p) / ry;
+        cyp = (s * (-1.0 * ry) * x1p) / rx;
+        cx = (x1 + x2) / 2.0 + (cosrx * cxp - sinrx * cyp);
+        cy = (y1 + y2) / 2.0 + (sinrx * cxp + cosrx * cyp);
+        const u = Vec2.CreateNew((x1p - cxp) / rx, (y1p - cyp) / ry);
+        const v = Vec2.CreateNew((-1.0 * x1p - cxp) / rx, (-1.0 * y1p - cyp) / ry);
         const unitV = Vec2.CreateNew(1.0, 0.0);
         a1 = this.__vecang(unitV, u);
         da = this.__vecang(u, v);
-        if ((fs == 0.0) && (da > 0.0)) {
-            da = da - (2.0 * PI_VALUE);
+        if (fs == 0.0 && da > 0.0) {
+            da = da - 2.0 * PI_VALUE;
         }
         else {
-            if ((fs == 1.0) && (da < 0.0)) {
-                da = (2.0 * PI_VALUE) + da;
+            if (fs == 1.0 && da < 0.0) {
+                da = 2.0 * PI_VALUE + da;
             }
         }
         t.t0 = cosrx;
@@ -437,21 +413,21 @@ class EVGPathParser {
         t.t3 = cosrx;
         t.t4 = cx;
         t.t5 = cy;
-        ndivs = Math.floor((((Math.abs(da)) / (PI_VALUE * 0.5)) + 1.0));
-        hda = (da / (ndivs)) / 2.0;
-        kappa = Math.abs((((4.0 / 3.0) * (1.0 - (Math.cos(hda)))) / (Math.sin(hda))));
+        ndivs = Math.floor(Math.abs(da) / (PI_VALUE * 0.5) + 1.0);
+        hda = da / ndivs / 2.0;
+        kappa = Math.abs(((4.0 / 3.0) * (1.0 - Math.cos(hda))) / Math.sin(hda));
         if (da < 0.0) {
             kappa = -1.0 * kappa;
         }
         i_1 = 0;
         while (i_1 <= ndivs) {
-            a = a1 + ((da * (i_1)) / (ndivs));
+            a = a1 + (da * i_1) / ndivs;
             dx = Math.cos(a);
             dy = Math.sin(a);
-            const trans = this.__xformPoint(Vec2.CreateNew((dx * rx), (dy * ry)), t);
+            const trans = this.__xformPoint(Vec2.CreateNew(dx * rx, dy * ry), t);
             x = trans.x;
             y = trans.y;
-            const v_trans = this.__xformVec(Vec2.CreateNew((((-1.0 * dy) * rx) * kappa), ((dx * ry) * kappa)), t);
+            const v_trans = this.__xformVec(Vec2.CreateNew(-1.0 * dy * rx * kappa, dx * ry * kappa), t);
             tanx = v_trans.x;
             tany = v_trans.y;
             if (i_1 > 0) {
@@ -463,19 +439,15 @@ class EVGPathParser {
             ptany = tany;
             i_1 = i_1 + 1;
         }
-        ;
         const rv = Vec2.CreateNew(x2, y2);
         return rv;
     }
-    ;
     parsePath(path, callback) {
         this.i = 0;
         this.buff = path;
         const s = this.buff;
         this.__len = s.length;
-        /** unused:  const buff_1 = path   **/
         let cmd = 76;
-        /** unused:  const path_1 = new EVGBezierPath()   **/
         const args = new PathSegment();
         let require_args = 2;
         let arg_cnt = 0;
@@ -518,31 +490,31 @@ class EVGPathParser {
                 is_first = true;
                 continue;
             }
-            if ((((c == (86)) || (c == (118))) || (c == (72))) || (c == (104))) {
+            if (c == 86 || c == 118 || c == 72 || c == 104) {
                 cmd = c;
                 require_args = 1;
                 arg_cnt = 0;
                 continue;
             }
-            if ((((((c == (109)) || (c == (77))) || (c == (76))) || (c == (108))) || (c == (116))) || (c == (84))) {
+            if (c == 109 || c == 77 || c == 76 || c == 108 || c == 116 || c == 84) {
                 cmd = c;
                 require_args = 2;
                 arg_cnt = 0;
                 continue;
             }
-            if ((((c == (113)) || (c == (81))) || (c == (83))) || (c == (115))) {
+            if (c == 113 || c == 81 || c == 83 || c == 115) {
                 cmd = c;
                 require_args = 4;
                 arg_cnt = 0;
                 continue;
             }
-            if ((c == (99)) || (c == (67))) {
+            if (c == 99 || c == 67) {
                 cmd = c;
                 require_args = 6;
                 arg_cnt = 0;
                 continue;
             }
-            if ((c == (97)) || (c == (65))) {
+            if (c == 97 || c == 65) {
                 cmd = c;
                 require_args = 7;
                 arg_cnt = 0;
@@ -574,7 +546,6 @@ class EVGPathParser {
                     default:
                         break;
                 }
-                ;
                 arg_cnt = arg_cnt + 1;
                 if (arg_cnt >= require_args) {
                     switch (cmd) {
@@ -620,10 +591,10 @@ class EVGPathParser {
                         // "Z"
                         case 90:
                             // "M 0 200 v -200 h 200 a 100 100 90 0 1 0 200 a 100 100 90 0 1 -200 0 Z"
-                            console.log('------ path z segment -----');
+                            console.log("------ path z segment -----");
                             console.log(args);
-                            console.log('arg_cnt', arg_cnt);
-                            console.log('require_args', require_args);
+                            console.log("arg_cnt", arg_cnt);
+                            console.log("require_args", require_args);
                             // callback.Line(startx, starty)
                             callback.Line(first_x, first_y);
                             callback.ClosePath();
@@ -691,9 +662,9 @@ class EVGPathParser {
                             cx = args.t4;
                             cy = args.t5;
                             break;
-                        // 
+                        //
                         case 115:
-                            callback.Curve((cx + cx) - cx2, (cy + cy) - cy2, cx + args.t0, cy + args.t1, cx + args.t2, cy + args.t3);
+                            callback.Curve(cx + cx - cx2, cy + cy - cy2, cx + args.t0, cy + args.t1, cx + args.t2, cy + args.t3);
                             cx2 = cx + args.t0;
                             cy2 = cy + args.t1;
                             cx = cx + args.t2;
@@ -701,7 +672,7 @@ class EVGPathParser {
                             break;
                         // "S"
                         case 83:
-                            callback.Curve((cx + cx) - cx2, (cy + cy) - cy2, args.t0, args.t1, args.t2, args.t3);
+                            callback.Curve(cx + cx - cx2, cy + cy - cy2, args.t0, args.t1, args.t2, args.t3);
                             cx2 = args.t0;
                             cy2 = args.t1;
                             cx = args.t2;
@@ -717,10 +688,10 @@ class EVGPathParser {
                             QPy.t2 = cy + args.t3;
                             CPx.t0 = QPx.t0;
                             CPy.t0 = QPy.t0;
-                            CPx.t1 = QPx.t0 + ((2.0 / 3.0) * (QPx.t1 - QPx.t0));
-                            CPy.t1 = QPy.t0 + ((2.0 / 3.0) * (QPy.t1 - QPy.t0));
-                            CPx.t2 = QPx.t2 + ((2.0 / 3.0) * (QPx.t1 - QPx.t2));
-                            CPy.t2 = QPy.t2 + ((2.0 / 3.0) * (QPy.t1 - QPy.t2));
+                            CPx.t1 = QPx.t0 + (2.0 / 3.0) * (QPx.t1 - QPx.t0);
+                            CPy.t1 = QPy.t0 + (2.0 / 3.0) * (QPy.t1 - QPy.t0);
+                            CPx.t2 = QPx.t2 + (2.0 / 3.0) * (QPx.t1 - QPx.t2);
+                            CPy.t2 = QPy.t2 + (2.0 / 3.0) * (QPy.t1 - QPy.t2);
                             CPx.t3 = QPx.t2;
                             CPy.t3 = QPy.t2;
                             callback.Curve(CPx.t1, CPy.t1, CPx.t2, CPy.t2, CPx.t3, CPy.t3);
@@ -739,10 +710,10 @@ class EVGPathParser {
                             QPy.t2 = args.t3;
                             CPx.t0 = QPx.t0;
                             CPy.t0 = QPy.t0;
-                            CPx.t1 = QPx.t0 + ((2.0 / 3.0) * (QPx.t1 - QPx.t0));
-                            CPy.t1 = QPy.t0 + ((2.0 / 3.0) * (QPy.t1 - QPy.t0));
-                            CPx.t2 = QPx.t2 + ((2.0 / 3.0) * (QPx.t1 - QPx.t2));
-                            CPy.t2 = QPy.t2 + ((2.0 / 3.0) * (QPy.t1 - QPy.t2));
+                            CPx.t1 = QPx.t0 + (2.0 / 3.0) * (QPx.t1 - QPx.t0);
+                            CPy.t1 = QPy.t0 + (2.0 / 3.0) * (QPy.t1 - QPy.t0);
+                            CPx.t2 = QPx.t2 + (2.0 / 3.0) * (QPx.t1 - QPx.t2);
+                            CPy.t2 = QPy.t2 + (2.0 / 3.0) * (QPy.t1 - QPy.t2);
                             CPx.t3 = QPx.t2;
                             CPy.t3 = QPy.t2;
                             callback.Curve(CPx.t1, CPy.t1, CPx.t2, CPy.t2, CPx.t3, CPy.t3);
@@ -754,14 +725,14 @@ class EVGPathParser {
                         case 84:
                             QPx.t0 = cx;
                             QPy.t0 = cy;
-                            QPx.t1 = (2.0 * cx) - cx2;
-                            QPy.t1 = (2.0 * cy) - cy2;
+                            QPx.t1 = 2.0 * cx - cx2;
+                            QPy.t1 = 2.0 * cy - cy2;
                             QPx.t2 = args.t0;
                             QPy.t2 = args.t1;
                             CPx.t0 = QPx.t0;
                             CPy.t0 = QPy.t0;
-                            CPx.t1 = QPx.t0 + ((2.0 / 3.0) * (QPx.t1 - QPx.t0));
-                            CPy.t1 = QPy.t0 + ((2.0 / 3.0) * (QPy.t1 - QPy.t0));
+                            CPx.t1 = QPx.t0 + (2.0 / 3.0) * (QPx.t1 - QPx.t0);
+                            CPy.t1 = QPy.t0 + (2.0 / 3.0) * (QPy.t1 - QPy.t0);
                             CPx.t2 = QPx.t2;
                             CPy.t2 = QPy.t2;
                             callback.Curve(CPx.t0, CPy.t0, CPx.t1, CPy.t1, CPx.t2, CPy.t2);
@@ -773,14 +744,14 @@ class EVGPathParser {
                         case 116:
                             QPx.t0 = cx;
                             QPy.t0 = cy;
-                            QPx.t1 = (2.0 * cx) - cx2;
-                            QPy.t1 = (2.0 * cy) - cy2;
+                            QPx.t1 = 2.0 * cx - cx2;
+                            QPy.t1 = 2.0 * cy - cy2;
                             QPx.t2 = cx + args.t0;
                             QPy.t2 = cy + args.t1;
                             CPx.t0 = QPx.t0;
                             CPy.t0 = QPy.t0;
-                            CPx.t1 = QPx.t0 + ((2.0 / 3.0) * (QPx.t1 - QPx.t0));
-                            CPy.t1 = QPy.t0 + ((2.0 / 3.0) * (QPy.t1 - QPy.t0));
+                            CPx.t1 = QPx.t0 + (2.0 / 3.0) * (QPx.t1 - QPx.t0);
+                            CPy.t1 = QPy.t0 + (2.0 / 3.0) * (QPy.t1 - QPy.t0);
                             CPx.t2 = QPx.t2;
                             CPy.t2 = QPy.t2;
                             callback.Curve(CPx.t0, CPy.t0, CPx.t1, CPy.t1, CPx.t2, CPy.t2);
@@ -812,15 +783,12 @@ class EVGPathParser {
                             }
                             break;
                     }
-                    ;
                     arg_cnt = 0;
                     is_first = false;
                 }
             }
         }
-        ;
     }
-    ;
 }
 exports.EVGPathParser = EVGPathParser;
 /*
@@ -864,5 +832,5 @@ function __js_main() {
   console.log(coll_5.getString());
 }
 __js_main();
-*/ 
+*/
 //# sourceMappingURL=path.js.map

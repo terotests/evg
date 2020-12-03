@@ -1,9 +1,6 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-}
 Object.defineProperty(exports, "__esModule", { value: true });
-const pdfkit_1 = __importDefault(require("pdfkit"));
+const pdfkit_1 = require("pdfkit");
 const fs = require('fs');
 const doc = new pdfkit_1.default;
 doc.pipe(fs.createWriteStream('./output.pdf'));

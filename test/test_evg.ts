@@ -1,16 +1,13 @@
+import "mocha";
+import { EVG } from "../src/layout/";
+import { Renderer } from "../src/renderers/pdfkit";
 
-
-import 'mocha';
-import { EVG } from '../src/layout/'
-import {Renderer} from '../src/renderers/pdfkit'
-
-const expect    = require("chai").expect;
+const expect = require("chai").expect;
 
 describe("render testting", function() {
-
-  EVG.installFont('candal', 'fonts/Candal/Candal.ttf')
-  EVG.installFont('cinzel', 'fonts/Cinzel/Cinzel-Regular.ttf')
-  EVG.installFont('monoton', 'fonts/Monoton/Monoton-Regular.ttf')
+  EVG.installFont("candal", "fonts/Candal/Candal.ttf");
+  EVG.installFont("cinzel", "fonts/Cinzel/Cinzel-Regular.ttf");
+  EVG.installFont("monoton", "fonts/Monoton/Monoton-Regular.ttf");
 
   const phone = `
   <View width="395"  background-color="#222222" padding="10" border-radius="20px"
@@ -33,32 +30,36 @@ describe("render testting", function() {
           />
       </View>
   </View>  
-  `    
-  
-  EVG.installComponent('iphone', phone)
-  EVG.installComponent('text', `<Label background-color="blue" />`)
-  EVG.installComponent('t', `<Label background-color="#222222" />`)
-  EVG.installComponent('note',`
+  `;
+
+  EVG.installComponent("iphone", phone);
+  EVG.installComponent("text", `<Label background-color="blue" />`);
+  EVG.installComponent("t", `<Label background-color="#222222" />`);
+  EVG.installComponent(
+    "note",
+    `
   <path background-color="black" width="30" height="20"
   d="M16.899,3.05c-0.085-0.068-0.192-0.095-0.299-0.074L7.947,4.779c-0.17,0.034-0.291,0.182-0.291,0.353v7.364c-0.494-0.536-1.199-0.873-1.983-0.873c-1.491,0-2.704,1.213-2.704,2.704s1.213,2.704,2.704,2.704c1.491,0,2.705-1.213,2.705-2.704V7.952l7.933-1.659v4.399c-0.494-0.535-1.199-0.873-1.983-0.873c-1.491,0-2.704,1.213-2.704,2.704c0,1.492,1.213,2.705,2.704,2.705c1.49,0,2.704-1.213,2.704-2.705V3.33C17.031,3.221,16.982,3.119,16.899,3.05 M5.673,16.311c-1.094,0-1.983-0.889-1.983-1.983s0.889-1.983,1.983-1.983c1.095,0,1.983,0.889,1.983,1.983S6.768,16.311,5.673,16.311 M14.327,14.508c-1.095,0-1.983-0.889-1.983-1.984c0-1.094,0.889-1.982,1.983-1.982c1.094,0,1.983,0.889,1.983,1.982C16.311,13.619,15.421,14.508,14.327,14.508 M16.311,5.558L8.377,7.217V5.428l7.933-1.659V5.558z"
 ></path>     
-  `)  
+  `
+  );
 
-  it('baseline', () => {
-
-    let page_cnt = 1
-    const header = () => new EVG(`
+  it("baseline", () => {
+    let page_cnt = 1;
+    const header = () =>
+      new EVG(`
   <View width="100%" background-color="white" padding-bottom="10">
     <View padding-left="15" padding="10">
       <img src="images/wiki.jpeg" width="30" height="30"/>
       <View width="20"/>
-      <t text="Page ${page_cnt++}, printed ${ (new Date()).toLocaleString() }" font-size="9"/>
+      <t text="Page ${page_cnt++}, printed ${new Date().toLocaleString()}" font-size="9"/>
     </View>
     <View width="100%" background-color="#888888" height="1"/>
   </View>    
-    `)
+    `);
 
-    const footer = () => new EVG(`
+    const footer = () =>
+      new EVG(`
   <View width="100%" background-color="white" padding="10">
     <View width="100%" background-color="#888888" height="1" padding-bottom="5"/>
     <View align="center">
@@ -70,28 +71,31 @@ describe("render testting", function() {
   
     <div top="-450" left="250" font-family="monoton" font-size="70" width="1000" rotate="45" opacity="0.1">DRAFT</div>  
   </View>  
-    `)    
-    const create_text = (str) => {
+    `);
+    const create_text = (str: string) => {
       // return str.split(" ").map( _ => `<View width="${_.length*10}" height="10" background-color="blue" margin="0"/>`).join('')
-      return str.split(" ").map( _ => `<t text="${_} "/>`).join('')
-    }
-    const smallnote = `<note width="10" height="10"/><View width="10"/>`
+      return str
+        .split(" ")
+        .map((_) => `<t text="${_} "/>`)
+        .join("");
+    };
+    const smallnote = `<note width="10" height="10"/><View width="10"/>`;
     const create_para = () => `
     <View align="center">${smallnote}${smallnote}${smallnote}</View>
     <View width="100%" margin="20">${create_text(`At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat      
     `)}</View>    
-    `
+    `;
 
     const evg = new EVG(`
 <View>
   <View padding="10">
-    <div rotate="-2"><t font-family="candal" text="Hello World!" font-size="40"/></div>
+    <div rotate="-2"><t font-family="candal" text="Testing file write" font-size="40"/></div>
     <div><t font-family="cintzen" text="Hello World!" font-size="30"/></div>
-    <div rotate="2"><t font-family="monoton" text="Hello World!" font-size="20"/></div>
+    <div rotate="2"><t font-family="monoton" text="äd91;'å" font-size="20"/></div>
   </View>
   <View>
     <View width="20%">
-      <img src="images/w.jpg" width="100%" height="100%"/>
+      <img src="images/wiki.jpeg" width="100%" height="100%"/>
       <QRCode text="https://koodiklinikka.fi/" width="100" height="100" />
     </View>
     <View width="80%" margin="20">
@@ -113,21 +117,19 @@ describe("render testting", function() {
   ${create_para()}
   ${create_para()}
 </View>
-    `)
-    
-    const renderer = new Renderer(600,800)
-    evg.calculate(600,800,renderer)    
-    renderer.render('./out/baseline.pdf', evg, [header, footer])
+    `);
 
-    EVG.renderToFile('./out/baseline2.pdf', 600, 800, evg, header, footer)
-    EVG.renderToFile('./out/baseline3.pdf', 600, 800, evg)
+    const renderer = new Renderer(600, 800);
+    evg.calculate(600, 800, renderer);
+    renderer.render("./out/baseline.pdf", evg, [header, footer]);
 
-  });  
+    EVG.renderToFile("./out/baseline2.pdf", 600, 800, evg, header, footer);
+    EVG.renderToFile("./out/baseline3.pdf", 600, 800, evg);
+  });
 
-  it('iphone test', () => {
+  it("iphone test", () => {
     // your test
-    expect(3).to.equal(3)
-
+    expect(3).to.equal(3);
 
     const evg = new EVG(`
 <View>
@@ -259,13 +261,13 @@ describe("render testting", function() {
   </View>
 
 </View>
-    `)
-    const renderer = new Renderer(600,800)
-    evg.calculate(600,800,renderer)
-    renderer.render('./out/test1.pdf', evg)
-  });  
+    `);
+    const renderer = new Renderer(600, 800);
+    evg.calculate(600, 800, renderer);
+    renderer.render("./out/test1.pdf", evg);
+  });
 
-  it('absolute position test', () => {
+  it("absolute position test", () => {
     const evg = new EVG(`
 <View>
 
@@ -406,7 +408,7 @@ describe("render testting", function() {
       <div width="100" height="100"  overflow="hidden"
       border-radius="10"
         >
-        <img src="images/child.jpg" width="130" height="130"/>
+        <img src="images/wiki.jpeg" width="130" height="130"/>
       </div>       
     </div>
 
@@ -434,7 +436,7 @@ describe("render testting", function() {
       background-color="red"
         d="M 60 0 L 120 0 L 180 60 L 180 120 L 120 180 L 60 180 L 0 120 L 0 60"
         >
-        <img src="images/child.jpg" width="100%" height="100%"/>
+        <img src="images/wiki.jpeg" width="100%" height="100%"/>
       </path>       
 
       <div width="80%" padding="20">
@@ -444,7 +446,7 @@ describe("render testting", function() {
 
     <div height="100" padding="20" >      
       <div width="20%" height="20%"  overflow="hidden" border-radius="50">
-        <img src="images/child.jpg" width="100%" height="100%"/>
+        <img src="images/wiki.jpeg" width="100%" height="100%"/>
       </div>       
 
       <div width="80%" padding="20">
@@ -462,7 +464,7 @@ describe("render testting", function() {
     <div padding="20" margin="20" >      
       <div width="100" height="100" left="0" top="0"  overflow="hidden" border-radius="50%"
         >
-        <img src="images/child.jpg" width="100" height="100"/>
+        <img src="images/wiki.jpeg" width="100" height="100"/>
       </div>      
       <div width="100" height="100" left="0" top="0"  border-radius="50"
         border-width="3" border-color="white"
@@ -473,13 +475,11 @@ describe("render testting", function() {
     
   </div>  
 </View>
-    `)
-    
+    `);
+
     // 600 x 800
-    const renderer = new Renderer(400,280)
-    evg.calculate(400,100,renderer)
-    renderer.render('./out/test2.pdf', evg)
-
-  });  
+    const renderer = new Renderer(400, 280);
+    evg.calculate(400, 100, renderer);
+    renderer.render("./out/test2.pdf", evg);
+  });
 });
-

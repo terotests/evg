@@ -1,9 +1,9 @@
-import { EVG } from '../layout/';
-import PDFDocument from 'pdfkit';
+import { EVG } from "../layout/";
+import PDFDocument from "pdfkit";
 export declare class Renderer {
     width: number;
     height: number;
-    doc: PDFDocument;
+    doc: typeof PDFDocument;
     opacity_now: number;
     text_color: string;
     font_family: string;

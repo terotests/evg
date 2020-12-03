@@ -1,4 +1,4 @@
-import { Renderer } from '../renderers/pdfkit';
+import { Renderer } from "../renderers/pdfkit";
 export declare class UIRenderPosition {
     x: number;
     y: number;
@@ -27,12 +27,12 @@ export declare class EVG {
     renderer: any;
     parentView: any;
     eventHandlers: {};
-    tagName: any;
+    tagName: string | null;
     isHidden: boolean;
     tapHandler: any;
     metaTags: {};
-    header: EVG;
-    footer: EVG;
+    header?: EVG;
+    footer?: EVG;
     x: {
         unit: number;
         is_set: boolean;
@@ -407,18 +407,18 @@ export declare class EVG {
     static installComponent(name: string, componentData: string): void;
     static renderToStream(inputStream: any, width: number, height: number, item: EVG, header?: (item: EVG) => EVG, footer?: (item: EVG) => EVG): Promise<void>;
     static renderToFile(fileName: string, width: number, height: number, item: EVG, header?: (item: EVG) => EVG, footer?: (item: EVG) => EVG): Promise<void>;
-    findComponent(name: any): any;
-    findFont(name: any): any;
-    findContent(list: any): any;
+    findComponent(name: string): string;
+    findFont(name: string): string;
+    findContent(listParam?: any[]): any;
     add(childView: any): this;
-    convertStrToValue: (str: any) => {
+    convertStrToValue: (str: string) => {
         value: number;
         type: number;
     };
     readParams(jsonDict: any): void;
     inherit(chNode: EVG, parentNode?: EVG): void;
     readXMLDoc(node: any, parentNode: any): any;
-    parseXML(xmlStr: any): any;
+    parseXML(xmlStr: string): any;
     constructor(strJSON: string | any, context?: any);
     adjustLayoutParams(node: EVG, renderer: Renderer): void;
     calculate(width: number, height: number, renderer: Renderer): void;

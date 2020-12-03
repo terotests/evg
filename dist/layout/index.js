@@ -1,17 +1,19 @@
 "use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
         function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.EVG = exports.register_renderer = exports.register_component = exports.register_font = exports.UICalculated = exports.UIRenderPosition = void 0;
 // TODO: generic renderer
 const pdfkit_1 = require("../renderers/pdfkit");
-var DOMParser = require('xmldom').DOMParser;
-const XMLSerializer = require('xmldom').XMLSerializer;
+var DOMParser = require("xmldom").DOMParser;
+const XMLSerializer = require("xmldom").XMLSerializer;
 class UIRenderPosition {
     constructor(x, y, renderer) {
         this.x = 0;
@@ -30,6 +32,7 @@ class UICalculated {
         this.height = 0;
         this.render_width = 0;
         this.render_height = 0;
+        this.width_override = 0;
         this.lineBreak = false;
         this.absolute = false;
     }
@@ -38,15 +41,18 @@ exports.UICalculated = UICalculated;
 const UICompRegistry = {};
 const UIRenderers = {};
 const UIFonts = {};
-exports.register_font = (name, fontFile) => {
+const register_font = (name, fontFile) => {
     UIFonts[name] = fontFile;
 };
-exports.register_component = (name, component) => {
+exports.register_font = register_font;
+const register_component = (name, component) => {
     UICompRegistry[name] = component;
 };
-exports.register_renderer = (name, component) => {
+exports.register_component = register_component;
+const register_renderer = (name, component) => {
     UIRenderers[name] = component;
 };
+exports.register_renderer = register_renderer;
 class EVG {
     constructor(strJSON, context) {
         this.items = [];
@@ -77,23 +83,101 @@ class EVG {
         this.width = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         this.height = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         this.inline = { unit: 0, is_set: false, pixels: 0.0, b_value: false, s_value: "" };
-        this.direction = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
+        this.direction = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
         this.align = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.verticalAlign = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.innerWidth = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.innerHeight = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.lineBreak = { unit: 0, is_set: false, f_value: 0.0, s_value: "", b_value: false };
-        this.pageBreak = { unit: 0, is_set: false, f_value: 0.0, s_value: "", b_value: false };
+        this.verticalAlign = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.innerWidth = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.innerHeight = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.lineBreak = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            b_value: false,
+        };
+        this.pageBreak = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            b_value: false,
+        };
         this.overflow = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.fontSize = { unit: 0, is_set: false, pixels: 0.0, f_value: 14.0, s_value: "" };
-        this.fontFamily = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.color = { unit: 0, is_set: false, f_value: 0.0, s_value: "", color: "#000000" };
-        this.backgroundColor = { unit: 0, is_set: false, f_value: 0.0, s_value: "", color: "#000000" };
+        this.fontSize = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 14.0,
+            s_value: "",
+        };
+        this.fontFamily = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.color = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            color: "#000000",
+        };
+        this.backgroundColor = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            color: "#000000",
+        };
         this.opacity = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         this.rotate = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.borderWidth = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.borderColor = { unit: 0, is_set: false, f_value: 0.0, s_value: "", color: "#000000" };
-        this.borderRadius = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
+        this.borderWidth = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.borderColor = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            color: "#000000",
+        };
+        this.borderRadius = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
         // FIX: add scale
         this.scale = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
         // FIX: add viewport
@@ -107,27 +191,129 @@ class EVG {
             is_set: false,
             colors: [],
             stops: [],
-            s_value: ""
+            s_value: "",
         };
-        this.vColorSlide = { unit: 0, is_set: false, f_value: 0.0, s_value: "", b_value: false };
-        this.vColorSlideBreak = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.vColorSlideTop = { unit: 0, is_set: false, f_value: 0.0, s_value: "", color: "#000000" };
-        this.vColorSlideBottom = { unit: 0, is_set: false, f_value: 0.0, s_value: "", color: "#000000" };
+        this.vColorSlide = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            b_value: false,
+        };
+        this.vColorSlideBreak = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.vColorSlideTop = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            color: "#000000",
+        };
+        this.vColorSlideBottom = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            color: "#000000",
+        };
         this.margin = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.marginLeft = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.marginRight = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.marginBottom = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.marginTop = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
+        this.marginLeft = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.marginRight = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.marginBottom = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.marginTop = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
         this.padding = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.paddingLeft = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.paddingRight = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.paddingBottom = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.paddingTop = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.shadowColor = { unit: 0, is_set: false, f_value: 0.0, s_value: "", color: "#000000" };
-        this.shadowOffsetX = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.shadowOffsetY = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.shadowOpacity = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
-        this.shadowRadius = { unit: 0, is_set: false, pixels: 0.0, f_value: 0.0, s_value: "" };
+        this.paddingLeft = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.paddingRight = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.paddingBottom = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.paddingTop = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.shadowColor = {
+            unit: 0,
+            is_set: false,
+            f_value: 0.0,
+            s_value: "",
+            color: "#000000",
+        };
+        this.shadowOffsetX = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.shadowOffsetY = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.shadowOpacity = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
+        this.shadowRadius = {
+            unit: 0,
+            is_set: false,
+            pixels: 0.0,
+            f_value: 0.0,
+            s_value: "",
+        };
         this.convertStrToValue = function (str) {
             var b_had = false;
             var type = 0;
@@ -171,12 +357,12 @@ class EVG {
         this._context = context;
         if (!strJSON)
             return;
-        if (typeof (strJSON) == 'object') {
+        if (typeof strJSON == "object") {
             this.readParams(strJSON);
             return;
         }
         try {
-            if (typeof (strJSON) == 'string') {
+            if (typeof strJSON == "string") {
                 const s = strJSON.trim();
                 if (s[0] == "<") {
                     this.parseXML(s);
@@ -216,8 +402,8 @@ class EVG {
     findFont(name) {
         return UIFonts[name];
     }
-    findContent(list) {
-        var list = list || [];
+    findContent(listParam) {
+        const list = listParam || [];
         if (this.id.is_set && this.id.s_value == "content") {
             list.push(this);
             return;
@@ -227,7 +413,7 @@ class EVG {
             return;
         }
         for (var i = 0; i < this.items.length; i++) {
-            var item = this.items[i];
+            const item = this.items[i];
             item.findContent(list);
             if (list.length)
                 return list[0];
@@ -238,7 +424,9 @@ class EVG {
         if (!childView)
             return;
         if (childView.forEach) {
-            childView.forEach((item) => { this.add(item); });
+            childView.forEach((item) => {
+                this.add(item);
+            });
             return;
         }
         childView.parentView = this;
@@ -768,13 +956,6 @@ class EVG {
                 if (this._context)
                     this._context.set_object(id_value, uiObj);
             }
-            // TODO: tag handlers
-            // "<object id=\""+this._instanceId+"\"/>";
-            /*
-            if(this.tagHandlers && this.tagHandlers[name]) {
-                
-            }
-            */
             if (b_component) {
             }
             else {
@@ -799,7 +980,7 @@ class EVG {
                     }
                 }
                 else {
-                    if (childUI && childUI.tagName == 'component') {
+                    if (childUI && childUI.tagName == "component") {
                         // uiObj.header = childUI
                         const serializer = new XMLSerializer();
                         let compDef;
@@ -814,11 +995,11 @@ class EVG {
                         }
                         continue;
                     }
-                    if (childUI && childUI.tagName == 'header') {
+                    if (childUI && childUI.tagName == "header") {
                         uiObj.header = childUI;
                         continue;
                     }
-                    if (childUI && childUI.tagName == 'footer') {
+                    if (childUI && childUI.tagName == "footer") {
                         uiObj.footer = childUI;
                         continue;
                     }
@@ -837,11 +1018,14 @@ class EVG {
         */
         if (node.nodeType === 3 || node.nodeType === 4) {
             const str = node.nodeValue.trim();
-            const lines = str.split(' ').filter(_ => _.trim().length).map((_, i, arr) => {
-                const n = new EVG('');
-                n.tagName = 'Label';
+            const lines = str
+                .split(" ")
+                .filter((_) => _.trim().length)
+                .map((_, i, arr) => {
+                const n = new EVG("");
+                n.tagName = "Label";
                 n.text.is_set = true;
-                n.text.s_value = _ + ((i < arr.length - 1) ? ' ' : '');
+                n.text.s_value = _ + (i < arr.length - 1 ? " " : "");
                 return n;
             });
             return lines;
@@ -859,7 +1043,7 @@ class EVG {
     }
     adjustLayoutParams(node, renderer) {
         const special = renderer.hasCustomSize(node);
-        if (typeof (special) !== 'undefined') {
+        if (typeof special !== "undefined") {
             this.width.pixels = special.width;
             this.height.pixels = special.height;
         }
@@ -867,7 +1051,8 @@ class EVG {
             if (this.width.is_set) {
                 switch (this.width.unit) {
                     case 1:
-                        this.width.pixels = node.innerWidth.pixels * this.width.f_value / 100;
+                        this.width.pixels =
+                            (node.innerWidth.pixels * this.width.f_value) / 100;
                         break;
                     case 2:
                         this.width.pixels = node.fontSize.pixels * this.width.f_value;
@@ -876,13 +1061,15 @@ class EVG {
                         this.width.pixels = this.width.f_value;
                         break;
                     case 4:
-                        this.width.pixels = node.innerHeight.pixels * this.width.f_value / 100;
+                        this.width.pixels =
+                            (node.innerHeight.pixels * this.width.f_value) / 100;
                         break;
                     // fix: for width fill
                     case 5:
                         this.width.pixels = 0;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             else {
@@ -891,7 +1078,8 @@ class EVG {
             if (this.height.is_set) {
                 switch (this.height.unit) {
                     case 1:
-                        this.height.pixels = node.innerWidth.pixels * this.height.f_value / 100;
+                        this.height.pixels =
+                            (node.innerWidth.pixels * this.height.f_value) / 100;
                         break;
                     case 2:
                         this.height.pixels = node.fontSize.pixels * this.height.f_value;
@@ -900,13 +1088,16 @@ class EVG {
                         this.height.pixels = this.height.f_value;
                         break;
                     case 4:
-                        this.height.pixels = node.innerHeight.pixels * this.height.f_value / 100;
+                        this.height.pixels =
+                            (node.innerHeight.pixels * this.height.f_value) / 100;
                         break;
                     // fix: for height fill
                     case 5:
-                        this.height.pixels = node.innerHeight.pixels * this.width.f_value / 100;
+                        this.height.pixels =
+                            (node.innerHeight.pixels * this.width.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             else {
@@ -916,7 +1107,7 @@ class EVG {
         if (this.left.is_set) {
             switch (this.left.unit) {
                 case 1:
-                    this.left.pixels = node.innerWidth.pixels * this.left.f_value / 100;
+                    this.left.pixels = (node.innerWidth.pixels * this.left.f_value) / 100;
                     break;
                 case 2:
                     this.left.pixels = node.fontSize.pixels * this.left.f_value;
@@ -925,16 +1116,19 @@ class EVG {
                     this.left.pixels = this.left.f_value;
                     break;
                 case 4:
-                    this.left.pixels = node.innerHeight.pixels * this.left.f_value / 100;
+                    this.left.pixels =
+                        (node.innerHeight.pixels * this.left.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
         // fix: right
         if (this.right.is_set) {
             switch (this.right.unit) {
                 case 1:
-                    this.right.pixels = node.innerWidth.pixels * this.right.f_value / 100;
+                    this.right.pixels =
+                        (node.innerWidth.pixels * this.right.f_value) / 100;
                     break;
                 case 2:
                     this.right.pixels = node.fontSize.pixels * this.right.f_value;
@@ -943,15 +1137,17 @@ class EVG {
                     this.right.pixels = this.right.f_value;
                     break;
                 case 4:
-                    this.right.pixels = node.innerHeight.pixels * this.right.f_value / 100;
+                    this.right.pixels =
+                        (node.innerHeight.pixels * this.right.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
         if (this.top.is_set) {
             switch (this.top.unit) {
                 case 1:
-                    this.top.pixels = node.innerWidth.pixels * this.top.f_value / 100;
+                    this.top.pixels = (node.innerWidth.pixels * this.top.f_value) / 100;
                     break;
                 case 2:
                     this.top.pixels = node.fontSize.pixels * this.top.f_value;
@@ -960,16 +1156,18 @@ class EVG {
                     this.top.pixels = this.top.f_value;
                     break;
                 case 4:
-                    this.top.pixels = node.innerHeight.pixels * this.top.f_value / 100;
+                    this.top.pixels = (node.innerHeight.pixels * this.top.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
         // fix bottom...
         if (this.bottom.is_set) {
             switch (this.bottom.unit) {
                 case 1:
-                    this.bottom.pixels = node.innerWidth.pixels * this.bottom.f_value / 100;
+                    this.bottom.pixels =
+                        (node.innerWidth.pixels * this.bottom.f_value) / 100;
                     break;
                 case 2:
                     this.bottom.pixels = node.fontSize.pixels * this.bottom.f_value;
@@ -978,32 +1176,39 @@ class EVG {
                     this.bottom.pixels = this.bottom.f_value;
                     break;
                 case 4:
-                    this.bottom.pixels = node.innerHeight.pixels * this.bottom.f_value / 100;
+                    this.bottom.pixels =
+                        (node.innerHeight.pixels * this.bottom.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
         if (this.borderWidth.is_set) {
             switch (this.borderWidth.unit) {
                 case 1:
-                    this.borderWidth.pixels = node.innerWidth.pixels * this.borderWidth.f_value / 100;
+                    this.borderWidth.pixels =
+                        (node.innerWidth.pixels * this.borderWidth.f_value) / 100;
                     break;
                 case 2:
-                    this.borderWidth.pixels = node.fontSize.pixels * this.borderWidth.f_value;
+                    this.borderWidth.pixels =
+                        node.fontSize.pixels * this.borderWidth.f_value;
                     break;
                 case 3:
                     this.borderWidth.pixels = this.borderWidth.f_value;
                     break;
                 case 4:
-                    this.borderWidth.pixels = node.innerHeight.pixels * this.borderWidth.f_value / 100;
+                    this.borderWidth.pixels =
+                        (node.innerHeight.pixels * this.borderWidth.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
         if (this.margin.is_set) {
             switch (this.margin.unit) {
                 case 1:
-                    this.margin.pixels = node.innerWidth.pixels * this.margin.f_value / 100;
+                    this.margin.pixels =
+                        (node.innerWidth.pixels * this.margin.f_value) / 100;
                     break;
                 case 2:
                     this.margin.pixels = node.fontSize.pixels * this.margin.f_value;
@@ -1012,9 +1217,11 @@ class EVG {
                     this.margin.pixels = this.margin.f_value;
                     break;
                 case 4:
-                    this.margin.pixels = node.innerHeight.pixels * this.margin.f_value / 100;
+                    this.margin.pixels =
+                        (node.innerHeight.pixels * this.margin.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
             if (!this.marginLeft.is_set) {
                 this.marginLeft.pixels = this.margin.pixels;
@@ -1022,18 +1229,22 @@ class EVG {
             else {
                 switch (this.marginLeft.unit) {
                     case 1:
-                        this.marginLeft.pixels = node.innerWidth.pixels * this.marginLeft.f_value / 100;
+                        this.marginLeft.pixels =
+                            (node.innerWidth.pixels * this.marginLeft.f_value) / 100;
                         break;
                     case 2:
-                        this.marginLeft.pixels = node.fontSize.pixels * this.marginLeft.f_value;
+                        this.marginLeft.pixels =
+                            node.fontSize.pixels * this.marginLeft.f_value;
                         break;
                     case 3:
                         this.marginLeft.pixels = this.marginLeft.f_value;
                         break;
                     case 4:
-                        this.marginLeft.pixels = node.innerHeight.pixels * this.marginLeft.f_value / 100;
+                        this.marginLeft.pixels =
+                            (node.innerHeight.pixels * this.marginLeft.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             if (!this.marginRight.is_set) {
@@ -1042,18 +1253,22 @@ class EVG {
             else {
                 switch (this.marginRight.unit) {
                     case 1:
-                        this.marginRight.pixels = node.innerWidth.pixels * this.marginRight.f_value / 100;
+                        this.marginRight.pixels =
+                            (node.innerWidth.pixels * this.marginRight.f_value) / 100;
                         break;
                     case 2:
-                        this.marginRight.pixels = node.fontSize.pixels * this.marginRight.f_value;
+                        this.marginRight.pixels =
+                            node.fontSize.pixels * this.marginRight.f_value;
                         break;
                     case 3:
                         this.marginRight.pixels = this.marginRight.f_value;
                         break;
                     case 4:
-                        this.marginRight.pixels = node.innerHeight.pixels * this.marginRight.f_value / 100;
+                        this.marginRight.pixels =
+                            (node.innerHeight.pixels * this.marginRight.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             if (!this.marginTop.is_set) {
@@ -1062,18 +1277,22 @@ class EVG {
             else {
                 switch (this.marginTop.unit) {
                     case 1:
-                        this.marginTop.pixels = node.innerWidth.pixels * this.marginTop.f_value / 100;
+                        this.marginTop.pixels =
+                            (node.innerWidth.pixels * this.marginTop.f_value) / 100;
                         break;
                     case 2:
-                        this.marginTop.pixels = node.fontSize.pixels * this.marginTop.f_value;
+                        this.marginTop.pixels =
+                            node.fontSize.pixels * this.marginTop.f_value;
                         break;
                     case 3:
                         this.marginTop.pixels = this.marginTop.f_value;
                         break;
                     case 4:
-                        this.marginTop.pixels = node.innerHeight.pixels * this.marginTop.f_value / 100;
+                        this.marginTop.pixels =
+                            (node.innerHeight.pixels * this.marginTop.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             if (!this.marginBottom.is_set) {
@@ -1082,25 +1301,30 @@ class EVG {
             else {
                 switch (this.marginBottom.unit) {
                     case 1:
-                        this.marginBottom.pixels = node.innerWidth.pixels * this.marginBottom.f_value / 100;
+                        this.marginBottom.pixels =
+                            (node.innerWidth.pixels * this.marginBottom.f_value) / 100;
                         break;
                     case 2:
-                        this.marginBottom.pixels = node.fontSize.pixels * this.marginBottom.f_value;
+                        this.marginBottom.pixels =
+                            node.fontSize.pixels * this.marginBottom.f_value;
                         break;
                     case 3:
                         this.marginBottom.pixels = this.marginBottom.f_value;
                         break;
                     case 4:
-                        this.marginBottom.pixels = node.innerHeight.pixels * this.marginBottom.f_value / 100;
+                        this.marginBottom.pixels =
+                            (node.innerHeight.pixels * this.marginBottom.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
         }
         if (this.padding.is_set) {
             switch (this.padding.unit) {
                 case 1:
-                    this.padding.pixels = node.innerWidth.pixels * this.padding.f_value / 100;
+                    this.padding.pixels =
+                        (node.innerWidth.pixels * this.padding.f_value) / 100;
                     break;
                 case 2:
                     this.padding.pixels = node.fontSize.pixels * this.padding.f_value;
@@ -1109,9 +1333,11 @@ class EVG {
                     this.padding.pixels = this.padding.f_value;
                     break;
                 case 4:
-                    this.padding.pixels = node.innerHeight.pixels * this.padding.f_value / 100;
+                    this.padding.pixels =
+                        (node.innerHeight.pixels * this.padding.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
             if (!this.paddingLeft.is_set) {
                 this.paddingLeft.pixels = this.padding.pixels;
@@ -1119,18 +1345,22 @@ class EVG {
             else {
                 switch (this.paddingLeft.unit) {
                     case 1:
-                        this.paddingLeft.pixels = node.innerWidth.pixels * this.paddingLeft.f_value / 100;
+                        this.paddingLeft.pixels =
+                            (node.innerWidth.pixels * this.paddingLeft.f_value) / 100;
                         break;
                     case 2:
-                        this.paddingLeft.pixels = node.fontSize.pixels * this.paddingLeft.f_value;
+                        this.paddingLeft.pixels =
+                            node.fontSize.pixels * this.paddingLeft.f_value;
                         break;
                     case 3:
                         this.paddingLeft.pixels = this.paddingLeft.f_value;
                         break;
                     case 4:
-                        this.paddingLeft.pixels = node.innerHeight.pixels * this.paddingLeft.f_value / 100;
+                        this.paddingLeft.pixels =
+                            (node.innerHeight.pixels * this.paddingLeft.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             if (!this.paddingRight.is_set) {
@@ -1139,18 +1369,22 @@ class EVG {
             else {
                 switch (this.paddingRight.unit) {
                     case 1:
-                        this.paddingRight.pixels = node.innerWidth.pixels * this.paddingRight.f_value / 100;
+                        this.paddingRight.pixels =
+                            (node.innerWidth.pixels * this.paddingRight.f_value) / 100;
                         break;
                     case 2:
-                        this.paddingRight.pixels = node.fontSize.pixels * this.paddingRight.f_value;
+                        this.paddingRight.pixels =
+                            node.fontSize.pixels * this.paddingRight.f_value;
                         break;
                     case 3:
                         this.paddingRight.pixels = this.paddingRight.f_value;
                         break;
                     case 4:
-                        this.paddingRight.pixels = node.innerHeight.pixels * this.paddingRight.f_value / 100;
+                        this.paddingRight.pixels =
+                            (node.innerHeight.pixels * this.paddingRight.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             if (!this.paddingTop.is_set) {
@@ -1159,18 +1393,22 @@ class EVG {
             else {
                 switch (this.paddingTop.unit) {
                     case 1:
-                        this.paddingTop.pixels = node.innerWidth.pixels * this.paddingTop.f_value / 100;
+                        this.paddingTop.pixels =
+                            (node.innerWidth.pixels * this.paddingTop.f_value) / 100;
                         break;
                     case 2:
-                        this.paddingTop.pixels = node.fontSize.pixels * this.paddingTop.f_value;
+                        this.paddingTop.pixels =
+                            node.fontSize.pixels * this.paddingTop.f_value;
                         break;
                     case 3:
                         this.paddingTop.pixels = this.paddingTop.f_value;
                         break;
                     case 4:
-                        this.paddingTop.pixels = node.innerHeight.pixels * this.paddingTop.f_value / 100;
+                        this.paddingTop.pixels =
+                            (node.innerHeight.pixels * this.paddingTop.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
             if (!this.paddingBottom.is_set) {
@@ -1179,32 +1417,47 @@ class EVG {
             else {
                 switch (this.paddingBottom.unit) {
                     case 1:
-                        this.paddingBottom.pixels = node.innerWidth.pixels * this.paddingBottom.f_value / 100;
+                        this.paddingBottom.pixels =
+                            (node.innerWidth.pixels * this.paddingBottom.f_value) / 100;
                         break;
                     case 2:
-                        this.paddingBottom.pixels = node.fontSize.pixels * this.paddingBottom.f_value;
+                        this.paddingBottom.pixels =
+                            node.fontSize.pixels * this.paddingBottom.f_value;
                         break;
                     case 3:
                         this.paddingBottom.pixels = this.paddingBottom.f_value;
                         break;
                     case 4:
-                        this.paddingBottom.pixels = node.innerHeight.pixels * this.paddingBottom.f_value / 100;
+                        this.paddingBottom.pixels =
+                            (node.innerHeight.pixels * this.paddingBottom.f_value) / 100;
                         break;
-                    default: break;
+                    default:
+                        break;
                 }
             }
         }
-        this.width.pixels = this.width.pixels - (this.marginLeft.pixels + this.marginRight.pixels);
-        this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
-        this.innerWidth.pixels = this.width.pixels - (this.paddingRight.pixels + this.paddingLeft.pixels + this.borderWidth.pixels * 2);
-        this.innerHeight.pixels = this.height.pixels - (this.paddingTop.pixels + this.paddingBottom.pixels + this.borderWidth.pixels * 2);
+        this.width.pixels =
+            this.width.pixels - (this.marginLeft.pixels + this.marginRight.pixels);
+        this.height.pixels =
+            this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
+        this.innerWidth.pixels =
+            this.width.pixels -
+                (this.paddingRight.pixels +
+                    this.paddingLeft.pixels +
+                    this.borderWidth.pixels * 2);
+        this.innerHeight.pixels =
+            this.height.pixels -
+                (this.paddingTop.pixels +
+                    this.paddingBottom.pixels +
+                    this.borderWidth.pixels * 2);
         //    this.width.pixels = this.width.pixels - (this.marginLeft.pixels + this.marginRight.pixels);
         //     this.height.pixels = this.height.pixels - (this.marginTop.pixels + this.marginBottom.pixels);
         // fix: fontsize
         if (this.fontSize.is_set) {
             switch (this.fontSize.unit) {
                 case 1:
-                    this.fontSize.pixels = this.width.pixels * this.fontSize.f_value / 100;
+                    this.fontSize.pixels =
+                        (this.width.pixels * this.fontSize.f_value) / 100;
                     break;
                 case 2:
                     this.fontSize.pixels = this.fontSize.f_value;
@@ -1213,26 +1466,32 @@ class EVG {
                     this.fontSize.pixels = this.fontSize.f_value;
                     break;
                 case 4:
-                    this.fontSize.pixels = this.height.pixels * this.fontSize.f_value / 100;
+                    this.fontSize.pixels =
+                        (this.height.pixels * this.fontSize.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
         if (this.borderRadius.is_set) {
             switch (this.borderRadius.unit) {
                 case 1:
-                    this.borderRadius.pixels = this.width.pixels * this.borderRadius.f_value / 100;
+                    this.borderRadius.pixels =
+                        (this.width.pixels * this.borderRadius.f_value) / 100;
                     break;
                 case 2:
-                    this.borderRadius.pixels = this.fontSize.pixels * this.borderRadius.f_value;
+                    this.borderRadius.pixels =
+                        this.fontSize.pixels * this.borderRadius.f_value;
                     break;
                 case 3:
                     this.borderRadius.pixels = this.borderRadius.f_value;
                     break;
                 case 4:
-                    this.borderRadius.pixels = this.height.pixels * this.borderRadius.f_value / 100;
+                    this.borderRadius.pixels =
+                        (this.height.pixels * this.borderRadius.f_value) / 100;
                     break;
-                default: break;
+                default:
+                    break;
             }
         }
     }
@@ -1251,17 +1510,19 @@ class EVG {
         var elem_h = this.default_layout(node, render_pos);
         node.calculated.render_height = elem_h;
         node.calculated.render_width =
-            node.inline.is_set && node.inline.b_value && node.calculated.width_override ?
-                node.calculated.width_override +
-                    node.borderWidth.pixels
-                //node.paddingLeft.pixels +
-                //node.paddingRight.pixels 
-                :
+            node.inline.is_set &&
+                node.inline.b_value &&
+                node.calculated.width_override
+                ? node.calculated.width_override + node.borderWidth.pixels
+                : //node.paddingLeft.pixels +
+                    //node.paddingRight.pixels
                     node.width.pixels;
-        node.calculated.height = elem_h + node.marginTop.pixels + node.marginBottom.pixels;
+        node.calculated.height =
+            elem_h + node.marginTop.pixels + node.marginBottom.pixels;
         node.calculated.width =
             node.calculated.render_width +
-                node.marginLeft.pixels + node.marginRight.pixels;
+                node.marginLeft.pixels +
+                node.marginRight.pixels;
         // not using absoute coords for now...
         if (node.left.is_set) {
             node.calculated.x = node.marginLeft.pixels + node.left.pixels;
@@ -1277,7 +1538,11 @@ class EVG {
         else {
             // FIX: bottom...
             if (node.bottom.is_set) {
-                node.calculated.y = node.marginTop.pixels + (parentNode.innerHeight.pixels - node.bottom.pixels - node.calculated.height);
+                node.calculated.y =
+                    node.marginTop.pixels +
+                        (parentNode.innerHeight.pixels -
+                            node.bottom.pixels -
+                            node.calculated.height);
                 node.calculated.absolute = true;
             }
             else {
@@ -1286,7 +1551,11 @@ class EVG {
         }
         if (!node.left.is_set && !node.top.is_set) {
             newPOS.x += node.calculated.width;
-            newPOS.y = render_start_y + elem_h + node.marginTop.pixels + node.marginBottom.pixels;
+            newPOS.y =
+                render_start_y +
+                    elem_h +
+                    node.marginTop.pixels +
+                    node.marginBottom.pixels;
         }
         return newPOS;
     }
@@ -1307,7 +1576,7 @@ class EVG {
         var current_y = child_render_pos.y;
         var current_x = child_render_pos.x;
         var current_row = [];
-        if (node.direction.is_set && (node.direction.s_value == "bottom-to-top")) {
+        if (node.direction.is_set && node.direction.s_value == "bottom-to-top") {
             for (var ii = 0; ii < node.items.length; ii++) {
                 var childNode = node.items[ii];
                 child_render_pos.y = current_y;
@@ -1316,10 +1585,13 @@ class EVG {
                 if (childNode.calculated.absolute) {
                     continue;
                 }
-                ;
-                childNode.calculated.y = current_y + (node.innerHeight.pixels - col_height - childNode.calculated.height);
+                childNode.calculated.y =
+                    current_y +
+                        (node.innerHeight.pixels - col_height - childNode.calculated.height);
                 col_height += childNode.calculated.height;
-                if (childNode.calculated.lineBreak || (col_height > node.innerHeight.pixels && (col_height - node.innerHeight.pixels > 0.5))) {
+                if (childNode.calculated.lineBreak ||
+                    (col_height > node.innerHeight.pixels &&
+                        col_height - node.innerHeight.pixels > 0.5)) {
                     child_heights += line_height;
                     current_x += row_width;
                     line_height = 0;
@@ -1328,7 +1600,11 @@ class EVG {
                     child_render_pos.x = current_x;
                     child_render_pos.y = node.paddingTop.pixels;
                     child_render_pos = childNode.calculateLayout(node, child_render_pos);
-                    childNode.calculated.y = current_y + (node.innerHeight.pixels - col_height - childNode.calculated.height);
+                    childNode.calculated.y =
+                        current_y +
+                            (node.innerHeight.pixels -
+                                col_height -
+                                childNode.calculated.height);
                     current_row = [];
                     current_row.push(childNode);
                     line_height = childNode.calculated.height;
@@ -1341,21 +1617,19 @@ class EVG {
                     current_row.push(childNode);
                 }
             }
-            ;
-            if (node.align.is_set && node.align.s_value == "right" || node.align.s_value == "center") {
+            if ((node.align.is_set && node.align.s_value == "right") ||
+                node.align.s_value == "center") {
                 if (current_row.length > 0) {
                     for (var i2 = 0; i2 < current_row.length; i2++) {
                         var row_item = current_row[i2];
-                        var deltaX = row_width - (row_item.calculated.width);
+                        var deltaX = row_width - row_item.calculated.width;
                         if (node.align.s_value == "center") {
                             deltaX = deltaX / 2;
                         } // vertical align center
                         row_item.calculated.x += deltaX;
                     }
-                    ;
                 }
             }
-            ;
         }
         else {
             for (var ii = 0; ii < node.items.length; ii++) {
@@ -1366,12 +1640,17 @@ class EVG {
                     continue;
                 }
                 row_width += childNode.calculated.width;
-                if (childNode.calculated.lineBreak || (row_width > node.innerWidth.pixels && (row_width - node.innerWidth.pixels > 0.5))) {
-                    if (node.align.is_set &&
-                        (node.align.s_value == "fill")) {
+                if (childNode.calculated.lineBreak ||
+                    (row_width > node.innerWidth.pixels &&
+                        row_width - node.innerWidth.pixels > 0.5)) {
+                    if (node.align.is_set && node.align.s_value == "fill") {
                         // distribute evenly
                         let lastItem = current_row[current_row.length - 1];
-                        var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + 0.5 * lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
+                        var deltaX = node.paddingLeft.pixels +
+                            node.innerWidth.pixels +
+                            0.5 * lastItem.marginLeft.pixels -
+                            lastItem.calculated.x -
+                            lastItem.calculated.width;
                         for (var i2 = 0; i2 < current_row.length; i2++) {
                             var row_item = current_row[i2];
                             const divider = current_row.length > 1 ? current_row.length - 1 : 1;
@@ -1379,12 +1658,15 @@ class EVG {
                         }
                     }
                     if (node.align.is_set &&
-                        (node.align.s_value == "right" ||
-                            node.align.s_value == "center")) {
+                        (node.align.s_value == "right" || node.align.s_value == "center")) {
                         // align right
                         let lastItem = current_row[current_row.length - 1];
-                        var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + 0.5 * lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
-                        if (node.align.is_set && (node.align.s_value == "center")) {
+                        var deltaX = node.paddingLeft.pixels +
+                            node.innerWidth.pixels +
+                            0.5 * lastItem.marginLeft.pixels -
+                            lastItem.calculated.x -
+                            lastItem.calculated.width;
+                        if (node.align.is_set && node.align.s_value == "center") {
                             deltaX = deltaX / 2;
                         } // align center
                         for (var i2 = 0; i2 < current_row.length; i2++) {
@@ -1393,12 +1675,15 @@ class EVG {
                         }
                     }
                     if (node.align.is_set &&
-                        (node.align.s_value == "right" ||
-                            node.align.s_value == "center")) {
+                        (node.align.s_value == "right" || node.align.s_value == "center")) {
                         // align right
                         let lastItem = current_row[current_row.length - 1];
-                        var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + 0.5 * lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
-                        if (node.align.is_set && (node.align.s_value == "center")) {
+                        var deltaX = node.paddingLeft.pixels +
+                            node.innerWidth.pixels +
+                            0.5 * lastItem.marginLeft.pixels -
+                            lastItem.calculated.x -
+                            lastItem.calculated.width;
+                        if (node.align.is_set && node.align.s_value == "center") {
                             deltaX = deltaX / 2;
                         } // align center
                         for (var i2 = 0; i2 < current_row.length; i2++) {
@@ -1406,17 +1691,18 @@ class EVG {
                             row_item.calculated.x += deltaX;
                         }
                     }
-                    if (node.verticalAlign.is_set && (node.verticalAlign.s_value == "bottom" || node.verticalAlign.s_value == "center")) {
+                    if (node.verticalAlign.is_set &&
+                        (node.verticalAlign.s_value == "bottom" ||
+                            node.verticalAlign.s_value == "center")) {
                         if (current_row.length > 0) {
                             for (var i2 = 0; i2 < current_row.length; i2++) {
                                 var row_item = current_row[i2];
-                                var deltaY = line_height - (row_item.calculated.height);
+                                var deltaY = line_height - row_item.calculated.height;
                                 if (node.verticalAlign.s_value == "center") {
                                     deltaY = deltaY / 2;
                                 } // vertical align center
                                 row_item.calculated.y += deltaY;
                             }
-                            ;
                         }
                     }
                     // FIX: height="fill"
@@ -1426,7 +1712,6 @@ class EVG {
                             row_item.calculated.render_height = line_height;
                         }
                     }
-                    ;
                     child_heights += line_height;
                     current_y += line_height;
                     line_height = 0;
@@ -1441,43 +1726,50 @@ class EVG {
                 }
                 else {
                     // FIX: do not add unit type 5
-                    if (childNode.calculated.height > line_height && (childNode.height.unit != 5)) {
+                    if (childNode.calculated.height > line_height &&
+                        childNode.height.unit != 5) {
                         line_height = childNode.calculated.height;
                     }
                     current_row.push(childNode);
-                    if (!node.calculated.width_override || (node.calculated.width_override < row_width)) {
-                        node.calculated.width_override = row_width + node.paddingLeft.pixels + node.paddingRight.pixels;
+                    if (!node.calculated.width_override ||
+                        node.calculated.width_override < row_width) {
+                        node.calculated.width_override =
+                            row_width + node.paddingLeft.pixels + node.paddingRight.pixels;
                     }
                 }
             }
-            ;
-            if (node.align.is_set && (node.align.s_value == "right" || node.align.s_value == "center")) {
+            if (node.align.is_set &&
+                (node.align.s_value == "right" || node.align.s_value == "center")) {
                 // align right
                 if (current_row.length > 0) {
                     let lastItem = current_row[current_row.length - 1];
-                    var deltaX = node.paddingLeft.pixels + node.innerWidth.pixels + lastItem.marginLeft.pixels - lastItem.calculated.x - lastItem.calculated.width;
-                    if (node.align.is_set && (node.align.s_value == "center")) {
+                    var deltaX = node.paddingLeft.pixels +
+                        node.innerWidth.pixels +
+                        lastItem.marginLeft.pixels -
+                        lastItem.calculated.x -
+                        lastItem.calculated.width;
+                    if (node.align.is_set && node.align.s_value == "center") {
                         deltaX = deltaX / 2;
                     } // align center
                     for (var i2 = 0; i2 < current_row.length; i2++) {
                         var row_item = current_row[i2];
                         row_item.calculated.x += deltaX;
                     }
-                    ;
                 }
             }
-            if (node.verticalAlign.is_set && (node.verticalAlign.s_value == "bottom" || node.verticalAlign.s_value == "center")) {
+            if (node.verticalAlign.is_set &&
+                (node.verticalAlign.s_value == "bottom" ||
+                    node.verticalAlign.s_value == "center")) {
                 if (current_row.length > 0) {
                     // console.log('verticalAlign with line height ', line_height)
                     for (var i2 = 0; i2 < current_row.length; i2++) {
                         var row_item = current_row[i2];
-                        var deltaY = line_height - (row_item.calculated.height);
+                        var deltaY = line_height - row_item.calculated.height;
                         if (node.verticalAlign.s_value == "center") {
                             deltaY = deltaY / 2;
                         } // vertical align center
                         row_item.calculated.y += deltaY;
                     }
-                    ;
                 }
             }
             // FIX: height="fill"
@@ -1487,7 +1779,6 @@ class EVG {
                     row_item.calculated.render_height = line_height;
                 }
             }
-            ;
         }
         if (line_height > 0) {
             child_heights = child_heights + line_height;
@@ -1495,7 +1786,7 @@ class EVG {
         if (!node.height.is_set) {
             elem_h += child_heights;
             const special = render_pos.renderer.hasCustomSize(node);
-            if (typeof (special) !== 'undefined') {
+            if (typeof special !== "undefined") {
                 // console.log('special width ', special.width)
                 elem_h += special.height;
                 node.calculated.width_override = special.width;

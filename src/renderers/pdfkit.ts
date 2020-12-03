@@ -1,353 +1,386 @@
-import {EVG} from '../layout/'
-import PDFDocument from 'pdfkit'
-import {EVGPathParser, PathCollector, PathScaler} from '../svg/path'
-const QRCode = require('qrcode')
+import { EVG } from "../layout/";
+import * as PDFDocument from "pdfkit";
+import { EVGPathParser, PathCollector, PathScaler } from "../svg/path";
+const QRCode = require("qrcode");
 
-let default_font = 'fonts/Open_Sans/OpenSans-Regular.ttf';
-const fs = require('fs')
+let default_font = "fonts/Open_Sans/OpenSans-Regular.ttf";
+const fs = require("fs");
 
-if(!fs.existsSync(default_font)) {
-  default_font = '../../fonts/Open_Sans/OpenSans-Regular.ttf'
+if (!fs.existsSync(default_font)) {
+  default_font = "../../fonts/Open_Sans/OpenSans-Regular.ttf";
 }
-if(!fs.existsSync(default_font)) {
-  default_font = __dirname+'/../../fonts/Open_Sans/OpenSans-Regular.ttf'
+if (!fs.existsSync(default_font)) {
+  default_font = __dirname + "/../../fonts/Open_Sans/OpenSans-Regular.ttf";
 }
- 
+
 export class Renderer {
+  width: number;
+  height: number;
+  doc: typeof PDFDocument;
+  opacity_now = 1.0;
+  text_color = "black";
+  font_family = default_font;
 
-  width : number
-  height : number
-  doc:PDFDocument 
-  opacity_now = 1.0
-  text_color = 'black'
-  font_family = default_font
+  static_header = null;
+  static_footer = null;
 
-  static_header = null
-  static_footer = null
-
-  constructor( width:number, height:number) {
-    this.doc = new PDFDocument({size:[width, height]})
-    this.height = height
-    this.width = width
+  constructor(width: number, height: number) {
+    this.doc = new PDFDocument({ size: [width, height] });
+    this.height = height;
+    this.width = width;
   }
 
-  hasCustomSize(item:EVG) : any {
-    if(item.tagName == 'Label') {
-      if(item.fontFamily.is_set) {
-        const font_file = item.findFont( item.fontFamily.s_value )
-        if(font_file) {
-          this.doc.font(font_file)
+  hasCustomSize(item: EVG): any {
+    if (item.tagName == "Label") {
+      if (item.fontFamily.is_set) {
+        const font_file = item.findFont(item.fontFamily.s_value);
+        if (font_file) {
+          this.doc.font(font_file);
         } else {
-          this.doc.font(default_font)
+          this.doc.font(default_font);
         }
       } else {
-        this.doc.font(default_font)
+        this.doc.font(default_font);
       }
-      if(item.fontSize.is_set) {
-        this.doc.fontSize(item.fontSize.pixels)
+      if (item.fontSize.is_set) {
+        this.doc.fontSize(item.fontSize.pixels);
       } else {
-        this.doc.fontSize(12)
+        this.doc.fontSize(12);
       }
       // TODO: render multiline text
       return {
-        width : this.doc.widthOfString(item.text.s_value),
-        height : item.fontSize.f_value || 12
-      }
-    }  
-  }
-  
-  async render( filename:string, item:EVG, headers?:any[] ) : Promise<any> {
-    const fs = require('fs')
-    const doc = this.doc
-    doc.pipe( fs.createWriteStream(filename) )
-    await this.renderItem( item, doc, headers, true  )
-    doc.save()
-    doc.end()
+        width: this.doc.widthOfString(item.text.s_value),
+        height: item.fontSize.f_value || 12,
+      };
+    }
   }
 
-  async renderToStream( inputStream:any, item:EVG, headers?:any[] ) : Promise<any> {
-    const fs = require('fs')
-    const doc = this.doc
-    doc.pipe( inputStream )
-    await this.renderItem( item, doc, headers, true  )
-    doc.save()
-    doc.end()
-  }  
+  async render(filename: string, item: EVG, headers?: any[]): Promise<any> {
+    const fs = require("fs");
+    const doc = this.doc;
+    doc.pipe(fs.createWriteStream(filename));
+    await this.renderItem(item, doc, headers, true);
+    doc.save();
+    doc.end();
+  }
 
-  setColors( ui:EVG, ctx:any) {
-    if( ui.color.is_set) {
-      this.text_color = ui.color.s_value
+  async renderToStream(
+    inputStream: any,
+    item: EVG,
+    headers?: any[]
+  ): Promise<any> {
+    const fs = require("fs");
+    const doc = this.doc;
+    doc.pipe(inputStream);
+    await this.renderItem(item, doc, headers, true);
+    doc.save();
+    doc.end();
+  }
+
+  setColors(ui: EVG, ctx: any) {
+    if (ui.color.is_set) {
+      this.text_color = ui.color.s_value;
     }
-    if( ui.backgroundColor.is_set) {
-      if(ui.opacity.is_set) {
-        ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value)
-        this.opacity_now = ui.opacity.f_value
-      } else {        
-        ctx.fillColor(ui.backgroundColor.s_value, this.opacity_now)
-      }
-    } else {
-      ctx.fillColor('white', 0)
-    }
-    if( ui.borderWidth.is_set && ui.borderColor.is_set) {
-      ctx.lineWidth(ui.borderWidth.pixels)
-      if(ui.opacity.is_set) {
-        ctx.strokeColor(ui.borderColor.s_value, ui.opacity.f_value)
+    if (ui.backgroundColor.is_set) {
+      if (ui.opacity.is_set) {
+        ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value);
+        this.opacity_now = ui.opacity.f_value;
       } else {
-        ctx.strokeColor(ui.borderColor.s_value, this.opacity_now)
+        ctx.fillColor(ui.backgroundColor.s_value, this.opacity_now);
       }
     } else {
-      ctx.strokeColor('white', 0).stroke()
+      ctx.fillColor("white", 0);
     }
-  }  
+    if (ui.borderWidth.is_set && ui.borderColor.is_set) {
+      ctx.lineWidth(ui.borderWidth.pixels);
+      if (ui.opacity.is_set) {
+        ctx.strokeColor(ui.borderColor.s_value, ui.opacity.f_value);
+      } else {
+        ctx.strokeColor(ui.borderColor.s_value, this.opacity_now);
+      }
+    } else {
+      ctx.strokeColor("white", 0).stroke();
+    }
+  }
 
-  async renderItem( item:EVG, ctx:any, headers?:any[], is_first?:boolean ) {
-    const old_opacity = this.opacity_now
-    const old_font = this.font_family
-    const old_color = this.text_color
-    if(item.opacity.is_set) {
-      this.opacity_now = item.opacity.f_value
+  async renderItem(item: EVG, ctx: any, headers?: any[], is_first?: boolean) {
+    const old_opacity = this.opacity_now;
+    const old_font = this.font_family;
+    const old_color = this.text_color;
+    if (item.opacity.is_set) {
+      this.opacity_now = item.opacity.f_value;
     }
-    ctx.fillOpacity(this.opacity_now)
-    ctx.opacity(this.opacity_now)    
-    if(item.rotate.is_set) {
-      // ctx.rotate(item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })      
-      ctx.rotate(item.rotate.f_value)      
+    ctx.fillOpacity(this.opacity_now);
+    ctx.opacity(this.opacity_now);
+    if (item.rotate.is_set) {
+      // ctx.rotate(item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })
+      ctx.rotate(item.rotate.f_value);
     }
-    if(item.scale.is_set && item.scale.f_value > 0.01 ) {
-      ctx.scale(item.scale.f_value)
+    if (item.scale.is_set && item.scale.f_value > 0.01) {
+      ctx.scale(item.scale.f_value);
     }
-    if(item.fontFamily.is_set) {
-      const font_file = item.findFont( item.fontFamily.s_value)
-      if(font_file) {
-        this.font_family = font_file
+    if (item.fontFamily.is_set) {
+      const font_file = item.findFont(item.fontFamily.s_value);
+      if (font_file) {
+        this.font_family = font_file;
       }
     }
-    this.setColors( item, ctx  )    
-    switch(item.tagName) {
-      case 'header' :
-      case 'footer' :
-      case 'div' :
-      case 'View' :
-        const r = new View(item)
-        await r.render(ctx)
-      break;
-      case 'Label' :
-        const label = new Label(item)
-        ctx.save()
-        ctx.fillOpacity(this.opacity_now)
-        ctx.fillColor(this.text_color)
-        await label.render(ctx, this)
-        ctx.restore()
-      break;      
-      case 'path' :
-        const path = new Path(item)
-        await path.render(ctx)
-      break;   
-      case 'img' :
-        const im = new Image(item)
-        await im.render(ctx)
-      break;   
-      case 'QRCode' :
-        const qr = new QR_Code(item)
-        await qr.render(ctx)
-      break; 
+    this.setColors(item, ctx);
+    switch (item.tagName) {
+      case "header":
+      case "footer":
+      case "div":
+      case "View":
+        const r = new View(item);
+        await r.render(ctx);
+        break;
+      case "Label":
+        const label = new Label(item);
+        ctx.save();
+        ctx.fillOpacity(this.opacity_now);
+        ctx.fillColor(this.text_color);
+        await label.render(ctx, this);
+        ctx.restore();
+        break;
+      case "path":
+        const path = new Path(item);
+        await path.render(ctx);
+        break;
+      case "img":
+        const im = new Image(item);
+        await im.render(ctx);
+        break;
+      case "QRCode":
+        const qr = new QR_Code(item);
+        await qr.render(ctx);
+        break;
     }
 
-    let page_y_pos = item.calculated.y
-    let page_item_cnt = 0
-    let top_margin = 0
-    let bottom_margin = 0
-    let y_adjust = 0
-   
-    if(item.header) this.static_header = item.header
-    if(item.footer) this.static_footer = item.footer
+    let page_y_pos = item.calculated.y;
+    let page_item_cnt = 0;
+    let top_margin = 0;
+    let bottom_margin = 0;
+    let y_adjust = 0;
 
-    const render_headers = async (item?:EVG) => {
-      if(headers || this.static_header || this.static_footer) {
-        const page_header = headers && headers[0] ? headers[0]() : this.static_header 
-        const page_footer = headers && headers[1] ? headers[1]() : this.static_footer 
-        if(page_header) {
-          page_header.calculate(this.width,this.height,this) 
-          await this.renderItem( page_header, ctx )
-          top_margin = page_header.calculated.render_height
+    if (item.header) this.static_header = item.header;
+    if (item.footer) this.static_footer = item.footer;
+
+    const render_headers = async (item?: EVG) => {
+      if (headers || this.static_header || this.static_footer) {
+        const page_header =
+          headers && headers[0] ? headers[0]() : this.static_header;
+        const page_footer =
+          headers && headers[1] ? headers[1]() : this.static_footer;
+        if (page_header) {
+          page_header.calculate(this.width, this.height, this);
+          await this.renderItem(page_header, ctx);
+          top_margin = page_header.calculated.render_height;
         }
-        if(page_footer) {
-          page_footer.calculate(this.width,this.height,this) 
-          ctx.translate( 0, this.height - page_footer.calculated.render_height)
-          await this.renderItem( page_footer, ctx )
-          ctx.translate( 0, - (this.height - page_footer.calculated.render_height))
-          bottom_margin = page_footer.calculated.render_height
+        if (page_footer) {
+          page_footer.calculate(this.width, this.height, this);
+          ctx.translate(0, this.height - page_footer.calculated.render_height);
+          await this.renderItem(page_footer, ctx);
+          ctx.translate(
+            0,
+            -(this.height - page_footer.calculated.render_height)
+          );
+          bottom_margin = page_footer.calculated.render_height;
         }
-        if(page_header) {
-          ctx.translate( 0, top_margin)
-        }   
+        if (page_header) {
+          ctx.translate(0, top_margin);
+        }
       }
-    }
-    if(is_first) await render_headers(item[0])
-    const total_margin = bottom_margin + top_margin
-    const vertical_area = this.height - total_margin
+    };
+    if (is_first) await render_headers(item[0]);
+    const total_margin = bottom_margin + top_margin;
+    const vertical_area = this.height - total_margin;
 
-    for( let child of item.items ) {
-      if( is_first && page_item_cnt > 0 && 
-          ( child.pageBreak.is_set || (
-            ( !child.left.is_set && !child.top.is_set) && 
-            ( (child.calculated.y + child.calculated.render_height - y_adjust) > vertical_area)))) {
-        ctx.addPage()
-        await render_headers(child)
-        page_y_pos += this.height
-        page_item_cnt = 0
-        y_adjust = child.calculated.y 
+    for (let child of item.items) {
+      if (
+        is_first &&
+        page_item_cnt > 0 &&
+        (child.pageBreak.is_set ||
+          (!child.left.is_set &&
+            !child.top.is_set &&
+            child.calculated.y + child.calculated.render_height - y_adjust >
+              vertical_area))
+      ) {
+        ctx.addPage();
+        await render_headers(child);
+        page_y_pos += this.height;
+        page_item_cnt = 0;
+        y_adjust = child.calculated.y;
       }
-      const dx = child.calculated.x
-      const dy = child.calculated.y
-      ctx.translate( dx, dy - y_adjust)
-      ctx.save()
-      await this.renderItem( child, ctx )
-      ctx.restore()
-      ctx.translate( -dx, -dy + y_adjust)
-      page_item_cnt++
+      const dx = child.calculated.x;
+      const dy = child.calculated.y;
+      ctx.translate(dx, dy - y_adjust);
+      ctx.save();
+      await this.renderItem(child, ctx);
+      ctx.restore();
+      ctx.translate(-dx, -dy + y_adjust);
+      page_item_cnt++;
     }
 
-    if(item.scale.is_set && item.scale.f_value > 0.01) {
-      ctx.scale(1/item.scale.f_value)
-    }    
-    if(item.rotate.is_set) {
-      // ctx.rotate( - item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })      
-      ctx.rotate( - item.rotate.f_value )
-    }    
-    this.opacity_now = old_opacity    
-    this.font_family = old_font
-    this.text_color = old_color
-  }  
+    if (item.scale.is_set && item.scale.f_value > 0.01) {
+      ctx.scale(1 / item.scale.f_value);
+    }
+    if (item.rotate.is_set) {
+      // ctx.rotate( - item.rotate.f_value, { origin: [item.calculated.render_width/2, item.calculated.render_height/2] })
+      ctx.rotate(-item.rotate.f_value);
+    }
+    this.opacity_now = old_opacity;
+    this.font_family = old_font;
+    this.text_color = old_color;
+  }
 }
 
 class Image {
-  ui:EVG  
-  constructor(ui:EVG) {
-    this.ui = ui
+  ui: EVG;
+  constructor(ui: EVG) {
+    this.ui = ui;
   }
-  initEngine () {}
+  initEngine() {}
   remove() {}
-  render(ctx:any ) {
+  render(ctx: any) {
     const ui = this.ui;
-    const box = ui.calculated
-    if(ui.imageUrl.is_set) {
-      ctx.fillOpacity(1)
-      ctx.opacity(1)          
-      ctx.image(ui.imageUrl.s_value,0,0, {width: box.render_width, height: box.render_height})
-    }   
+    const box = ui.calculated;
+    if (ui.imageUrl.is_set) {
+      ctx.fillOpacity(1);
+      ctx.opacity(1);
+      ctx.image(ui.imageUrl.s_value, 0, 0, {
+        width: box.render_width,
+        height: box.render_height,
+      });
+    }
   }
 }
 
 class QR_Code {
-  ui:EVG  
-  constructor(ui:EVG) {
-    this.ui = ui
+  ui: EVG;
+  constructor(ui: EVG) {
+    this.ui = ui;
   }
-  initEngine () {}
+  initEngine() {}
   remove() {}
-  async render(ctx:any ) {
+  async render(ctx: any) {
     const ui = this.ui;
-    const box = ui.calculated
-    if(ui.text.is_set) {
-      const url = await QRCode.toDataURL(ui.text.s_value)
-      ctx.fillOpacity(1)
-      ctx.opacity(1)          
-      ctx.image(url, 0, 0, {width: box.render_width, height: box.render_height})   
-    }   
+    const box = ui.calculated;
+    if (ui.text.is_set) {
+      const url = await QRCode.toDataURL(ui.text.s_value);
+      ctx.fillOpacity(1);
+      ctx.opacity(1);
+      ctx.image(url, 0, 0, {
+        width: box.render_width,
+        height: box.render_height,
+      });
+    }
   }
 }
 
-
 class View {
-  ui:EVG  
-  constructor(ui:EVG) {
-    this.ui = ui
+  ui: EVG;
+  constructor(ui: EVG) {
+    this.ui = ui;
   }
-  initEngine () {}
+  initEngine() {}
   remove() {}
-  render(ctx:any ) {
+  render(ctx: any) {
     const ui = this.ui;
-    const box = ui.calculated
-    if(ui.borderRadius.is_set) {
-      ctx.roundedRect(0,0, box.render_width, box.render_height, ui.borderRadius.pixels)
+    const box = ui.calculated;
+    if (ui.borderRadius.is_set) {
+      ctx.roundedRect(
+        0,
+        0,
+        box.render_width,
+        box.render_height,
+        ui.borderRadius.pixels
+      );
     } else {
-      ctx.rect(0,0, box.render_width, box.render_height)
+      ctx.rect(0, 0, box.render_width, box.render_height);
     }
 
     // overflow property is set hidden, create the clip path and path again...
-    if(ui.overflow.is_set) {
-      if(ui.overflow.s_value === 'hidden') {
+    if (ui.overflow.is_set) {
+      if (ui.overflow.s_value === "hidden") {
         // creates the clip path
-        ctx.clip()
+        ctx.clip();
         // needs to re-create the path
-        if(ui.borderRadius.is_set) {
-          ctx.roundedRect(0,0, box.render_width, box.render_height, ui.borderRadius.pixels)
+        if (ui.borderRadius.is_set) {
+          ctx.roundedRect(
+            0,
+            0,
+            box.render_width,
+            box.render_height,
+            ui.borderRadius.pixels
+          );
         } else {
-          ctx.rect(0,0, box.render_width, box.render_height)
-        }        
-      }      
+          ctx.rect(0, 0, box.render_width, box.render_height);
+        }
+      }
     }
     // overflow...
-    ctx.fillAndStroke()
+    ctx.fillAndStroke();
     // ctx.stroke()
   }
 }
 
 class Label {
-  ui:EVG  
-  constructor(ui:EVG) {
-    this.ui = ui
+  ui: EVG;
+  constructor(ui: EVG) {
+    this.ui = ui;
   }
-  initEngine () {}
+  initEngine() {}
   remove() {}
-  render( ctx:any, r:Renderer ) {
+  render(ctx: any, r: Renderer) {
     const ui = this.ui;
-    const box = ui.calculated
-    if(ui.fontFamily.is_set) {
-      const font_file = ui.findFont( ui.fontFamily.s_value)
-      if(font_file) {
-        ctx.font(font_file)
+    const box = ui.calculated;
+    if (ui.fontFamily.is_set) {
+      const font_file = ui.findFont(ui.fontFamily.s_value);
+      if (font_file) {
+        ctx.font(font_file);
       } else {
-        ctx.font(r.font_family)
+        ctx.font(r.font_family);
       }
     } else {
-      ctx.font(r.font_family)
+      ctx.font(r.font_family);
     }
-    if(ui.fontSize.is_set) {
-      ctx.fontSize(ui.fontSize.pixels)
+    if (ui.fontSize.is_set) {
+      ctx.fontSize(ui.fontSize.pixels);
     } else {
-      ctx.fontSize(12)
-    }   
-    ctx.text(ui.text.s_value, 0, -3,{
-      lineGap:0,
-      paragraphGap:0
-    })
+      ctx.fontSize(12);
+    }
+    ctx.text(ui.text.s_value, 0, -3, {
+      lineGap: 0,
+      paragraphGap: 0,
+    });
   }
 }
 
 class Path {
-  ui:EVG  
-  constructor(ui:EVG) {
-    this.ui = ui
+  ui: EVG;
+  constructor(ui: EVG) {
+    this.ui = ui;
   }
-  initEngine () {}
+  initEngine() {}
   remove() {}
-  render(ctx:any  ) {
-    const ui = this.ui
-    const parser = new EVGPathParser()
+  render(ctx: any) {
+    const ui = this.ui;
+    const parser = new EVGPathParser();
     const coll = new PathScaler();
     parser.parsePath(ui.svgPath.s_value, coll);
-    const svgStr = coll.getString( ui.calculated.render_width, ui.calculated.render_height )    
-    ctx.path( svgStr )
-    if(ui.overflow.is_set) {
-      if(ui.overflow.s_value === 'hidden') {
+    const svgStr = coll.getString(
+      ui.calculated.render_width,
+      ui.calculated.render_height
+    );
+    ctx.path(svgStr);
+    if (ui.overflow.is_set) {
+      if (ui.overflow.s_value === "hidden") {
         // creates the clip path
-        ctx.clip()
+        ctx.clip();
         // needs to re-create the path
-        ctx.path( svgStr )        
-      }      
-    }      
-    ctx.fill().stroke()    
+        ctx.path(svgStr);
+      }
+    }
+    ctx.fill().stroke();
   }
 }
