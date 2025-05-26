@@ -24,11 +24,52 @@ const create_footer_text = (str: string) => {
 };
 
 // install default fonts
-EVG.installFont("candal", __dirname + "/../../fonts/Candal/Candal.ttf");
-EVG.installFont(
-  "sans",
-  __dirname + "/../../fonts/Open_Sans/OpenSans-regular.ttf"
-);
+const path = require("path");
+const fs = require("fs");
+
+// Try multiple possible font paths to handle different installation scenarios
+function findFontPath(relativePath) {
+  const possiblePaths = [
+    path.join(__dirname, "../fonts/", relativePath), // From source
+    path.join(__dirname, "/../../../fonts/", relativePath), // From dist
+    path.join(process.cwd(), "/fonts/", relativePath), // Current directory
+    path.join(path.dirname(process.execPath), "/../fonts/", relativePath), // Global install path
+  ];
+
+  // Add specific global NPM install paths
+  if (process.env.APPDATA) {
+    // Windows
+    possiblePaths.push(
+      path.join(
+        process.env.APPDATA,
+        "npm/node_modules/evg/fonts/",
+        relativePath
+      )
+    );
+  } else if (process.env.HOME) {
+    // Linux/Mac
+    possiblePaths.push(
+      path.join(process.env.HOME, ".npm/node_modules/evg/fonts/", relativePath)
+    );
+  }
+
+  // Return the first path that exists
+  for (const fontPath of possiblePaths) {
+    try {
+      if (fs.existsSync(fontPath)) {
+        return fontPath;
+      }
+    } catch (e) {
+      // Continue trying other paths
+    }
+  }
+
+  console.warn(`Warning: Could not find font file ${relativePath}`);
+  return possiblePaths[0]; // Return the first path as fallback
+}
+
+EVG.installFont("candal", findFontPath("Candal/Candal.ttf"));
+EVG.installFont("sans", findFontPath("Open_Sans/OpenSans-Regular.ttf"));
 
 EVG.installComponent(
   "t",
@@ -40,13 +81,11 @@ EVG.installComponent(
 );
 
 const curr_dir = process.cwd();
-const fs = require("fs");
-const path = require("path");
 
-const walkSync = function(dir: string, fList?: string[]) {
+const walkSync = function (dir: string, fList?: string[]) {
   const files = fs.readdirSync(dir);
   let filelist = fList || [];
-  files.forEach(function(file: string) {
+  files.forEach(function (file: string) {
     if (fs.statSync(dir + file).isDirectory()) {
       filelist = walkSync(dir + file + "/", filelist);
     } else {

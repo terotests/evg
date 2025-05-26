@@ -1,10 +1,13 @@
-#!/usr/bin/env node
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -21,6 +24,19 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/layout/index.ts
+var index_exports = {};
+__export(index_exports, {
+  EVG: () => EVG,
+  UICalculated: () => UICalculated,
+  UIRenderPosition: () => UIRenderPosition,
+  register_component: () => register_component,
+  register_font: () => register_font,
+  register_renderer: () => register_renderer
+});
+module.exports = __toCommonJS(index_exports);
 
 // src/svg/path.ts
 var Vec2 = class _Vec2 {
@@ -221,7 +237,7 @@ var EVGPathParser = class {
     let sinrx = 0;
     let cosrx = 0;
     let fa = 0;
-    let fs4 = 0;
+    let fs3 = 0;
     let i_1 = 0;
     let ndivs = 0;
     let hda = 0;
@@ -233,7 +249,7 @@ var EVGPathParser = class {
     ry = Math.abs(args.t1);
     rotx = args.t2 / 180 * PI_VALUE;
     fa = Math.abs(args.t3) > 1e-5 ? 1 : 0;
-    fs4 = Math.abs(args.t4) > 1e-5 ? 1 : 0;
+    fs3 = Math.abs(args.t4) > 1e-5 ? 1 : 0;
     x1 = cpx;
     y1 = cpy;
     if (rel) {
@@ -269,7 +285,7 @@ var EVGPathParser = class {
     if (sb > 0) {
       s = Math.sqrt(sa / sb);
     }
-    if (fa == fs4) {
+    if (fa == fs3) {
       s = -1 * s;
     }
     cxp = s * rx * y1p / ry;
@@ -281,10 +297,10 @@ var EVGPathParser = class {
     const unitV = Vec2.CreateNew(1, 0);
     a1 = this.__vecang(unitV, u);
     da = this.__vecang(u, v);
-    if (fs4 == 0 && da > 0) {
+    if (fs3 == 0 && da > 0) {
       da = da - 2 * PI_VALUE;
     } else {
-      if (fs4 == 1 && da < 0) {
+      if (fs3 == 1 && da < 0) {
         da = 2 * PI_VALUE + da;
       }
     }
@@ -326,9 +342,9 @@ var EVGPathParser = class {
     const rv = Vec2.CreateNew(x2, y2);
     return rv;
   }
-  parsePath(path4, callback) {
+  parsePath(path3, callback) {
     this.i = 0;
-    this.buff = path4;
+    this.buff = path3;
     const s = this.buff;
     this.__len = s.length;
     let cmd = 76;
@@ -777,15 +793,15 @@ var Renderer = class {
     }
   }
   async render(filename, item, headers) {
-    const fs4 = require("fs");
+    const fs3 = require("fs");
     const doc = this.doc;
-    doc.pipe(fs4.createWriteStream(filename));
+    doc.pipe(fs3.createWriteStream(filename));
     await this.renderItem(item, doc, headers, true);
     doc.save();
     doc.end();
   }
   async renderToStream(inputStream, item, headers) {
-    const fs4 = require("fs");
+    const fs3 = require("fs");
     const doc = this.doc;
     doc.pipe(inputStream);
     await this.renderItem(item, doc, headers, true);
@@ -856,8 +872,8 @@ var Renderer = class {
         ctx.restore();
         break;
       case "path":
-        const path4 = new Path(item);
-        await path4.render(ctx);
+        const path3 = new Path(item);
+        await path3.render(ctx);
         break;
       case "img":
         const im = new Image(item);
@@ -1109,6 +1125,9 @@ var register_font = (name, fontFile) => {
 };
 var register_component = (name, component) => {
   UICompRegistry[name] = component;
+};
+var register_renderer = (name, component) => {
+  UIRenderers[name] = component;
 };
 var EVG = class _EVG {
   constructor(strJSON, context) {
@@ -1376,26 +1395,26 @@ var EVG = class _EVG {
       var type = 0;
       var value = 0;
       if (str.endsWith("%")) {
-        let fs4 = str.substr(0, str.length - 1);
-        value = parseFloat(fs4);
+        let fs3 = str.substr(0, str.length - 1);
+        value = parseFloat(fs3);
         type = 1;
         b_had = true;
       }
       if (str.endsWith("em")) {
-        let fs4 = str.substr(0, str.length - 2);
-        value = parseFloat(fs4);
+        let fs3 = str.substr(0, str.length - 2);
+        value = parseFloat(fs3);
         type = 2;
         b_had = true;
       }
       if (str.endsWith("px")) {
-        let fs4 = str.substr(0, str.length - 2);
-        value = parseFloat(fs4);
+        let fs3 = str.substr(0, str.length - 2);
+        value = parseFloat(fs3);
         type = 3;
         b_had = true;
       }
       if (str.endsWith("hp")) {
-        let fs4 = str.substr(0, str.length - 2);
-        value = parseFloat(fs4);
+        let fs3 = str.substr(0, str.length - 2);
+        value = parseFloat(fs3);
         type = 4;
         b_had = true;
       }
@@ -2683,109 +2702,13 @@ var EVG = class _EVG {
     return elem_h;
   }
 };
-
-// src/bin/evg.ts
-var argv = require("minimist")(process.argv.slice(2));
-if (argv._.length < 1) {
-  console.log(`
-USAGE: evg <infile> <outfile>  
-  `);
-  process.exit();
-}
-var path3 = require("path");
-var fs3 = require("fs");
-function findFontPath(relativePath) {
-  const possiblePaths = [
-    path3.join(__dirname, "../fonts/", relativePath),
-    // From source
-    path3.join(__dirname, "/../../../fonts/", relativePath),
-    // From dist
-    path3.join(process.cwd(), "/fonts/", relativePath),
-    // Current directory
-    path3.join(path3.dirname(process.execPath), "/../fonts/", relativePath)
-    // Global install path
-  ];
-  if (process.env.APPDATA) {
-    possiblePaths.push(
-      path3.join(
-        process.env.APPDATA,
-        "npm/node_modules/evg/fonts/",
-        relativePath
-      )
-    );
-  } else if (process.env.HOME) {
-    possiblePaths.push(
-      path3.join(process.env.HOME, ".npm/node_modules/evg/fonts/", relativePath)
-    );
-  }
-  for (const fontPath of possiblePaths) {
-    try {
-      if (fs3.existsSync(fontPath)) {
-        return fontPath;
-      }
-    } catch (e) {
-    }
-  }
-  console.warn(`Warning: Could not find font file ${relativePath}`);
-  return possiblePaths[0];
-}
-EVG.installFont("candal", findFontPath("Candal/Candal.ttf"));
-EVG.installFont("sans", findFontPath("Open_Sans/OpenSans-Regular.ttf"));
-EVG.installComponent(
-  "t",
-  `<Label font-family="sans" background-color="black" />`
-);
-EVG.installComponent(
-  "text",
-  `<Label font-family="sans" background-color="black" />`
-);
-var curr_dir = process.cwd();
-var walkSync = function(dir, fList) {
-  const files = fs3.readdirSync(dir);
-  let filelist = fList || [];
-  files.forEach(function(file) {
-    if (fs3.statSync(dir + file).isDirectory()) {
-      filelist = walkSync(dir + file + "/", filelist);
-    } else {
-      filelist.push(dir + file);
-    }
-  });
-  return filelist;
-};
-if (fs3.existsSync(curr_dir + "/components/")) {
-  const base_dir = curr_dir + "/components/";
-  const files = walkSync(base_dir);
-  for (let f of files) {
-    try {
-      const compname = path3.basename(f).split(".")[0];
-      const compdata = fs3.readFileSync(f, "utf8");
-      EVG.installComponent(compname, compdata);
-    } catch (e) {
-      console.log(e);
-    }
-  }
-}
-if (fs3.existsSync(curr_dir + "/fonts/")) {
-  const base_dir = curr_dir + "/fonts/";
-  const files = walkSync(base_dir);
-  for (let f of files) {
-    try {
-      const font_name = path3.basename(f).split(".")[0];
-      if (font_name != "OFL") {
-        EVG.installFont(font_name, f);
-      }
-    } catch (e) {
-      console.log(e);
-    }
-  }
-}
-try {
-  const infile = "./" + argv._[0];
-  const outfile = argv._[1] || "./" + path3.basename(infile).split(".")[0] + ".pdf";
-  const data = fs3.readFileSync(infile, "utf8");
-  const node = new EVG(data);
-  EVG.renderToFile(outfile, 595.28, 841.89, node);
-} catch (e) {
-  console.error(e);
-}
-//# sourceMappingURL=evg.js.map
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  EVG,
+  UICalculated,
+  UIRenderPosition,
+  register_component,
+  register_font,
+  register_renderer
+});
+//# sourceMappingURL=index.js.map
