@@ -417,7 +417,7 @@ export class EVG {
     this.items.push(childView);
     return this;
   }
-  convertStrToValue = function(str: string) {
+  convertStrToValue = function (str: string) {
     var b_had = false;
     var type = 0;
     var value = 0.0;

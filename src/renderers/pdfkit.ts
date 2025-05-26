@@ -1,31 +1,78 @@
 import { EVG } from "../layout/";
-import * as PDFDocument from "pdfkit";
 import { EVGPathParser, PathCollector, PathScaler } from "../svg/path";
+// Import PDFKit with a dynamic require to ensure it works in both ESM and CommonJS environments
+const PDFKit = require("pdfkit");
 const QRCode = require("qrcode");
-
-let default_font = "fonts/Open_Sans/OpenSans-Regular.ttf";
 const fs = require("fs");
+const path = require("path");
 
-if (!fs.existsSync(default_font)) {
-  default_font = "../../fonts/Open_Sans/OpenSans-Regular.ttf";
+// Try multiple possible font paths to handle different installation scenarios
+let fontPaths = [
+  "fonts/Open_Sans/OpenSans-Regular.ttf", // Local development
+  path.join(__dirname, "../fonts/Open_Sans/OpenSans-Regular.ttf"), // When imported as a dependency
+  path.join(process.cwd(), "fonts/Open_Sans/OpenSans-Regular.ttf"), // From current working directory
+  path.join(
+    path.dirname(process.execPath),
+    "fonts/Open_Sans/OpenSans-Regular.ttf"
+  ), // From executable path
+  path.join(
+    path.dirname(process.execPath),
+    "../fonts/Open_Sans/OpenSans-Regular.ttf"
+  ), // One level up from executable
+];
+
+// Add absolute path for global NPM installation
+if (process.env.APPDATA) {
+  // Windows
+  fontPaths.push(
+    path.join(
+      process.env.APPDATA,
+      "npm/node_modules/evg/fonts/Open_Sans/OpenSans-Regular.ttf"
+    )
+  );
+} else if (process.env.HOME) {
+  // Linux/Mac
+  fontPaths.push(
+    path.join(
+      process.env.HOME,
+      ".npm/node_modules/evg/fonts/Open_Sans/OpenSans-Regular.ttf"
+    )
+  );
 }
-if (!fs.existsSync(default_font)) {
-  default_font = __dirname + "/../../fonts/Open_Sans/OpenSans-Regular.ttf";
+
+let default_font = null;
+
+// Find the first path that exists
+for (const fontPath of fontPaths) {
+  try {
+    if (fs.existsSync(fontPath)) {
+      default_font = fontPath;
+      break;
+    }
+  } catch (e) {
+    // Continue trying other paths
+  }
+}
+
+// If no font path worked, use the first one (it will fail later with a clearer error)
+if (!default_font) {
+  console.warn("Warning: Could not find OpenSans-Regular.ttf font file");
+  default_font = fontPaths[0];
 }
 
 export class Renderer {
   width: number;
   height: number;
-  doc: typeof PDFDocument;
+  doc: any;
   opacity_now = 1.0;
   text_color = "black";
   font_family = default_font;
 
   static_header = null;
   static_footer = null;
-
   constructor(width: number, height: number) {
-    this.doc = new PDFDocument({ size: [width, height] });
+    // Create a new PDFKit document instance
+    this.doc = new PDFKit({ size: [width, height] });
     this.height = height;
     this.width = width;
   }
