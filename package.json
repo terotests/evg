@@ -1,6 +1,6 @@
 {
   "name": "evg",
-  "version": "1.0.39",
+  "version": "1.0.40",
   "description": "Elastic View Graphics",
   "main": "dist/index.js",
   "scripts": {
