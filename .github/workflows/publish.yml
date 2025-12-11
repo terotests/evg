@@ -10,18 +10,18 @@ on:
 jobs:
   check-version-and-publish:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # Need history to compare versions
+          fetch-depth: 2 # Need history to compare versions
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "18"
+          registry-url: "https://registry.npmjs.org"
 
       - name: Get current version
         id: current_version
