@@ -41,11 +41,66 @@ Before setting up the CI/CD pipeline, you need:
 
 ### Step 3: Generate an NPM Access Token
 
+> ⚠️ **Important (December 2024)**: NPM classic tokens are deprecated. You must use **Granular Access Tokens** or **OIDC Trusted Publishing**.
+
+#### Option A: Granular Access Token (Recommended for CI/CD)
+
 1. Log in to [npmjs.com](https://www.npmjs.com/)
-2. Click on your profile icon → **Access Tokens**
-3. Click **Generate New Token** → **Classic Token**
-4. Select **Automation** as the token type (this allows publishing from CI/CD)
-5. Copy the generated token (you won't be able to see it again!)
+2. Go to **Access Tokens**: https://www.npmjs.com/settings/~/tokens
+3. Click **Generate New Token** → **Granular Access Token**
+4. Configure the token:
+   - **Token name**: `evg-github-actions` (or similar descriptive name)
+   - **Expiration**: Set an appropriate expiration (max 90 days for write tokens)
+   - **Packages and scopes**: Select "Only select packages" and choose `evg`
+   - **Permissions**: Select **Read and write**
+   - **Organizations**: Leave as default unless needed
+5. **Important for CI/CD**: Enable **Bypass 2FA for automation** if you have 2FA enabled
+6. Click **Generate token**
+7. Copy the token immediately (you won't see it again!)
+
+#### Option B: Using CLI to Create Token
+
+```bash
+# Login first (creates a 2-hour session)
+npm login
+
+# Create a granular token for CI/CD
+npm token create --description "evg-github-actions" --cidr "" --publish
+```
+
+#### Option C: OIDC Trusted Publishing (Most Secure - No Token Needed)
+
+OIDC (OpenID Connect) allows GitHub Actions to publish without storing tokens. This is the most secure option.
+
+1. Go to https://www.npmjs.com/settings/~/tokens
+2. Click **Add new token** → **Granular Access Token**
+3. Instead of creating a token, look for **Trusted Publishing** / **OIDC** settings
+4. Link your GitHub repository to your NPM package
+
+Then update `.github/workflows/publish.yml` to use OIDC:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run build
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}  # Or use OIDC
+```
+
+> 📖 More info: https://docs.npmjs.com/generating-provenance-statements
 
 ### Step 4: Add NPM Token to GitHub Secrets
 
@@ -173,12 +228,24 @@ This usually means insufficient permissions:
 
 - Verify the `NPM_TOKEN` secret is correctly set
 - Check if the token has expired or been revoked
-- Ensure the token has **Automation** type permissions
+- **Classic tokens no longer work** - You must use Granular Access Tokens (see Step 3)
+- For Granular tokens, ensure:
+  - Token has **Read and write** permissions
+  - Token is scoped to the `evg` package (or all packages)
+  - **Bypass 2FA for automation** is enabled (if you have 2FA)
+  - Token has not expired (max 90 days for write tokens)
 
 ### Publish Failed: 403 Forbidden
 
 - Verify you have publishing rights to the `evg` package on NPM
-- Check if 2FA is required and the token type supports it
+- Check if 2FA is required and **Bypass 2FA for automation** is enabled on your token
+- For Granular tokens, verify the token has write access to the specific package
+
+### Token Expired
+
+Granular Access Tokens have a maximum expiration of 90 days for write permissions. Set a calendar reminder to:
+1. Generate a new token before expiration
+2. Update the `NPM_TOKEN` secret in GitHub
 
 ### Version Not Detected as Changed
 
@@ -207,6 +274,9 @@ npm publish
 
 ## Additional Resources
 
+- [NPM Granular Access Tokens](https://docs.npmjs.com/creating-and-viewing-access-tokens)
+- [NPM OIDC Trusted Publishing](https://docs.npmjs.com/generating-provenance-statements)
 - [NPM Publishing Documentation](https://docs.npmjs.com/cli/v9/commands/npm-publish)
 - [GitHub Actions Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 - [GitHub Actions Workflow Syntax](https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions)
+- [GitHub Actions OIDC](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
