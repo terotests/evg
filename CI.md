@@ -5,6 +5,7 @@ This document outlines how to set up the Continuous Integration and Deployment (
 ## Overview
 
 The CI/CD pipeline automatically publishes a new version of the EVG package to NPM when:
+
 1. A pull request is merged into the `master` (or `main`) branch
 2. The `version` field in `package.json` has been updated
 
@@ -62,7 +63,7 @@ If you have branch protection rules on `master`/`main`:
 1. Go to **Settings** → **Branches**
 2. Click **Edit** on your protection rule for `master`/`main`
 3. Ensure **Require status checks to pass before merging** includes your workflow (if desired)
-4. Note: The publish workflow runs *after* merge, so it doesn't block PRs
+4. Note: The publish workflow runs _after_ merge, so it doesn't block PRs
 
 ### Step 6: Verify Workflow File
 
@@ -78,6 +79,7 @@ Ensure the workflow file exists at `.github/workflows/publish.yml`. The workflow
 ## How to Release a New Version
 
 1. **Update version in `package.json`**:
+
    ```json
    {
      "name": "evg",
@@ -87,6 +89,7 @@ Ensure the workflow file exists at `.github/workflows/publish.yml`. The workflow
    ```
 
 2. **Commit and push your changes**:
+
    ```bash
    git add package.json
    git commit -m "Bump version to 1.0.39"
@@ -96,6 +99,7 @@ Ensure the workflow file exists at `.github/workflows/publish.yml`. The workflow
 3. **Create a Pull Request** to merge into `master`
 
 4. **Merge the Pull Request** - The CI/CD pipeline will automatically:
+
    - Detect the version change
    - Build the package
    - Publish to NPM
@@ -112,8 +116,8 @@ After completing the setup, you can verify everything is working:
 
 1. **Check Actions Tab**: Go to https://github.com/terotests/evg/actions
    - You should see the "Publish to NPM" workflow listed
-   
 2. **Test with a Version Bump**:
+
    - Create a test branch
    - Bump the version in `package.json`
    - Create a PR and merge to `master`
@@ -126,6 +130,7 @@ After completing the setup, you can verify everything is working:
 ### Version Detection
 
 The workflow compares versions by:
+
 1. Reading the current `package.json` version
 2. Checking out the previous commit's `package.json`
 3. Comparing the two versions
@@ -134,6 +139,7 @@ The workflow compares versions by:
 ### Build Process
 
 The build process uses:
+
 - **esbuild** for bundling TypeScript to JavaScript
 - Outputs two main files:
   - `dist/index.js` - Main library module
@@ -158,6 +164,7 @@ The build process uses:
 ### Workflow Fails: "Resource not accessible by integration"
 
 This usually means insufficient permissions:
+
 1. Go to **Settings** → **Actions** → **General** → **Workflow permissions**
 2. Select **Read and write permissions**
 3. Save and re-run the workflow
