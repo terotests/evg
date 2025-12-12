@@ -29,8 +29,8 @@ function loadLegacyModules(): boolean {
     Renderer = require("../renderers/pdfkit").Renderer;
     path = require("path");
     fs = require("fs");
-    DOMParser = require("xmldom").DOMParser;
-    XMLSerializer = require("xmldom").XMLSerializer;
+    DOMParser = require("@xmldom/xmldom").DOMParser;
+    XMLSerializer = require("@xmldom/xmldom").XMLSerializer;
     _legacyModulesLoaded = true;
     return true;
   } catch (e) {
