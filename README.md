@@ -11,19 +11,18 @@ npm i -g evg
 ```
 
 Example of markup:
+
 ```html
 <div>
   <div padding="20">
-    <QRCode text="https://github.com/terotests/evg" width="20%" height="20%"/>
-    <div width="80%" padding="20">
-    Here is your personal QR code
-    </div>
+    <QRCode text="https://github.com/terotests/evg" width="20%" height="20%" />
+    <div width="80%" padding="20">Here is your personal QR code</div>
   </div>
 </div>
 ```
 
 See `hello.xml` and `hello.pdf` to get started quickly.
- 
+
 The engine supports following commands (and more):
 
 - `div`, `img` and `path` for common layout elements
@@ -36,7 +35,7 @@ The engine supports following commands (and more):
 - `font-size`, `font-family` can be used to specify TTF fonts used (or `fonts/` dir for CLI)
 - horizontal align `align=center`, `align=left`, `align=right`
 - absolute positioning `top` and `left`, `bottom`, `right`
-- flag `overflow="hidden"` for View and Path elements 
+- flag `overflow="hidden"` for View and Path elements
 
 Extra features include:
 
@@ -50,41 +49,46 @@ Extra features include:
 ## Command line
 
 Running from command line
+
 ```
 evg hello.xml hello.pdf
 ```
 
 Subdirectories:
+
 - `fonts/` can include TTF files
-- `components/` can include XML components which are used in the file. 
+- `components/` can include XML components which are used in the file.
 
 Components can use `id="content"` to indicate place for child nodes.
 
 The .git reposity has example directory `testfiles/` where is example XML file.
 
-## Using as library 
+## Using as library
 
 Elastic View Graphics
 
 ```javascript
-import {EVG} from 'evg'
+import { EVG } from "evg";
 
 // you have to install some fonts...
-EVG.installFont('candal', '../evg/fonts/Candal/Candal.ttf')
+EVG.installFont("candal", "../evg/fonts/Candal/Candal.ttf");
 
 // create a text element component....
-EVG.installComponent('t', `<Label font-family="candal" background-color="blue" />`)
+EVG.installComponent(
+  "t",
+  `<Label font-family="candal" background-color="blue" />`
+);
 
 // create node and render it to PDF
 const node = new EVG(`<View>
   <t text="Hello World!"/>
 </View>
-`)
-EVG.renderToFile('./out.pdf', 600,800, node)
+`);
+EVG.renderToFile("./out.pdf", 600, 800, node);
 
-// or render to stream 
-const fs = require('fs')
-EVG.renderToStream(fs.createWriteStream('fileName.pdf'), 600,800, node)
+// or render to stream
+const fs = require("fs");
+EVG.renderToStream(fs.createWriteStream("fileName.pdf"), 600, 800, node);
 ```
 
 ## Creating own components using inline XML
@@ -96,10 +100,11 @@ To define your own custom `<h1>Hello</h1>` component as inline XML like this
 ```html
 <component id="h1">
   <div margin-top="10" margin-bottom="20" margin-left="20">
-    <div font-size="28" color="#666" id="content"/>
+    <div font-size="28" color="#666" id="content" />
   </div>
-</component> 
+</component>
 ```
+
 The `id="content"` marks the spot where component children are to be inserted.
 
 ## Architecture
@@ -118,12 +123,12 @@ The system is built around these key interfaces (defined in `src/core/interfaces
 
 ### Implementations
 
-| Interface | Node.js Implementation | Browser Implementation |
-|-----------|----------------------|----------------------|
-| IRenderer | `PDFRenderer` (PDFKit) | `CanvasRenderer` (Canvas 2D) |
-| IMeasurer | `PDFRenderer` | `CanvasRenderer` |
-| ISerializer | `XMLSerializer` (xmldom) | `XMLSerializer` (DOMParser) |
-| IFontProvider | `NodeFontProvider` | (custom implementation) |
+| Interface     | Node.js Implementation   | Browser Implementation       |
+| ------------- | ------------------------ | ---------------------------- |
+| IRenderer     | `PDFRenderer` (PDFKit)   | `CanvasRenderer` (Canvas 2D) |
+| IMeasurer     | `PDFRenderer`            | `CanvasRenderer`             |
+| ISerializer   | `XMLSerializer` (xmldom) | `XMLSerializer` (DOMParser)  |
+| IFontProvider | `NodeFontProvider`       | (custom implementation)      |
 
 ### Environment Classes
 
@@ -131,17 +136,17 @@ For convenience, EVG provides environment classes that bundle the appropriate im
 
 ```typescript
 // Node.js - using the NodeEnvironment
-import { NodeEnvironment } from 'evg/environment/node';
+import { NodeEnvironment } from "evg/environment/node";
 
 const env = NodeEnvironment.createPDF();
 env.parse('<View><Label text="Hello"/></View>');
-await env.renderToFile('output.pdf', 600, 800);
+await env.renderToFile("output.pdf", 600, 800);
 ```
 
 ```typescript
 // Browser - using EVGEnvironment with CanvasRenderer
-import { EVGEnvironment } from 'evg/environment';
-import { CanvasRenderer } from 'evg/renderers/CanvasRenderer';
+import { EVGEnvironment } from "evg/environment";
+import { CanvasRenderer } from "evg/renderers/CanvasRenderer";
 
 const renderer = new CanvasRenderer(canvas);
 const env = EVGEnvironment.create({ renderer });
@@ -192,14 +197,15 @@ This will start a Vite development server (typically at `http://localhost:5173/`
 ### Browser Usage
 
 The browser version uses:
+
 - **CanvasRenderer** - An `IRenderer` implementation that renders to HTML5 Canvas
 - **EVG class** - The same layout engine used in Node.js, now with dependency injection support
 
 ```typescript
-import { EVG } from 'evg/layout';
-import { CanvasRenderer } from 'evg/renderers/CanvasRenderer';
+import { EVG } from "evg/layout";
+import { CanvasRenderer } from "evg/renderers/CanvasRenderer";
 
-const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const renderer = new CanvasRenderer(canvas);
 
 const evg = new EVG(`<View width="400" height="300" background-color="#f0f0f0">
