@@ -28,21 +28,21 @@
   ],
   "dependencies": {
     "chai": "^4.1.2",
-    "jspdf": "^2.3.1",
-    "minimist": "^1.2.5",
+    "jspdf": "^3.0.4",
+    "minimist": "^1.2.8",
     "pdfkit": "^0.8.3",
     "qrcode": "^1.4.4",
-    "xmldom": "^0.6.0"
+    "@xmldom/xmldom": "^0.9.6"
   },
   "devDependencies": {
     "@types/expect": "^24.3.0",
     "@types/mocha": "^5.2.7",
-    "@types/node": "^10.17.48",
+    "@types/node": "^20.0.0",
     "@types/pdfkit": "^0.10.6",
     "esbuild": "^0.25.4",
-    "mocha": "^5.2.0",
-    "ts-mocha": "^8.0.0",
+    "mocha": "^11.7.5",
+    "ts-mocha": "^11.1.0",
     "typescript": "^4.1.2",
-    "vitest": "^1.6.0"
+    "vitest": "^4.0.15"
   }
 }
