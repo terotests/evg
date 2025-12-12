@@ -82,7 +82,7 @@ Then update `.github/workflows/publish.yml` to use OIDC:
 ```yaml
 permissions:
   contents: read
-  id-token: write  # Required for OIDC
+  id-token: write # Required for OIDC
 
 jobs:
   publish:
@@ -91,13 +91,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run build
       - run: npm publish --provenance --access public
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}  # Or use OIDC
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # Or use OIDC
 ```
 
 > 📖 More info: https://docs.npmjs.com/generating-provenance-statements
@@ -244,6 +244,7 @@ This usually means insufficient permissions:
 ### Token Expired
 
 Granular Access Tokens have a maximum expiration of 90 days for write permissions. Set a calendar reminder to:
+
 1. Generate a new token before expiration
 2. Update the `NPM_TOKEN` secret in GitHub
 
