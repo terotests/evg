@@ -1,7 +1,7 @@
 /**
  * XML Serializer for EVG
  *
- * Provides XML parsing and serialization using xmldom (Node.js).
+ * Provides XML parsing and serialization using @xmldom/xmldom (Node.js).
  * For browser environments, use BrowserXMLSerializer which uses native DOMParser.
  */
 
@@ -13,8 +13,8 @@ import {
   IComponentRegistry,
 } from "../core";
 
-// Import xmldom for Node.js environment
-const { DOMParser, XMLSerializer: XMLSerializerImpl } = require("xmldom");
+// Import @xmldom/xmldom for Node.js environment
+const { DOMParser, XMLSerializer: XMLSerializerImpl } = require("@xmldom/xmldom");
 
 /**
  * Attribute name mappings from XML to EVG properties
@@ -347,10 +347,21 @@ export class NodeXMLSerializer extends XMLSerializerBase {
   }
 
   /**
-   * Parse a value with unit (e.g., "100px", "50%", "2em")
+   * Parse a value with unit (e.g., "100px", "50%", "2em", "50hp")
    */
   private parseValueWithUnit(value: string): any | null {
-    const match = value.match(/^(-?\d*\.?\d+)(px|%|em|fill)?$/);
+    // Special case for "fill" keyword
+    if (value === "fill") {
+      return {
+        unit: 5, // Fill
+        is_set: true,
+        pixels: 0,
+        f_value: 100,
+        s_value: value,
+      };
+    }
+
+    const match = value.match(/^(-?\d*\.?\d+)(px|%|em|hp)?$/);
     if (!match) return null;
 
     const num = parseFloat(match[1]);
@@ -360,8 +371,8 @@ export class NodeXMLSerializer extends XMLSerializerBase {
       "%": 1,
       em: 2,
       px: 3,
-      vh: 4,
-      fill: 5,
+      hp: 4,
+      vh: 4, // Alternative name for height percentage
     };
 
     return {
