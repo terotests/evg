@@ -1,16 +1,49 @@
-// TODO: generic renderer
-import { Renderer } from "../renderers/pdfkit";
-import * as path from "path";
-import * as fs from "fs";
+// Dependency Injection Support
+// This module supports both legacy usage (direct imports) and DI-based usage
+// For browser support, use the DI-based approach with appropriate providers
 
-var DOMParser = require("xmldom").DOMParser;
-const XMLSerializer = require("xmldom").XMLSerializer;
+import type {
+  IRenderer,
+  IMeasurer,
+  ISerializer,
+  IFontProvider,
+  IComponentRegistry,
+} from "../core/interfaces";
+
+// Legacy imports for backward compatibility (Node.js only)
+// These are dynamically imported to allow browser usage
+let Renderer: any = null;
+let path: any = null;
+let fs: any = null;
+let DOMParser: any = null;
+let XMLSerializer: any = null;
+
+// Flag to track if legacy modules are available
+let _legacyModulesLoaded = false;
+
+// Lazy load legacy modules (Node.js only)
+function loadLegacyModules(): boolean {
+  if (_legacyModulesLoaded) return true;
+  try {
+    // Dynamic require for Node.js environment
+    Renderer = require("../renderers/pdfkit").Renderer;
+    path = require("path");
+    fs = require("fs");
+    DOMParser = require("xmldom").DOMParser;
+    XMLSerializer = require("xmldom").XMLSerializer;
+    _legacyModulesLoaded = true;
+    return true;
+  } catch (e) {
+    // Running in browser or modules not available
+    return false;
+  }
+}
 
 export class UIRenderPosition {
   x: number = 0;
   y: number = 0;
-  renderer: Renderer;
-  constructor(x: number, y: number, renderer: Renderer) {
+  renderer: IMeasurer;
+  constructor(x: number, y: number, renderer: IMeasurer) {
     this.x = x;
     this.y = y;
     this.renderer = renderer;
@@ -33,11 +66,64 @@ const UICompRegistry: { [key: string]: string } = {};
 const UIRenderers: { [key: string]: any } = {};
 const UIFonts: { [key: string]: string } = {};
 
+// Dependency Injection Providers (optional, for non-Node.js environments)
+let _fontProvider: IFontProvider | null = null;
+let _componentRegistry: IComponentRegistry | null = null;
+let _serializer: ISerializer | null = null;
+
+/**
+ * Set the font provider for EVG instances
+ * Use this in browser environments to provide custom font handling
+ */
+export function setFontProvider(provider: IFontProvider): void {
+  _fontProvider = provider;
+}
+
+/**
+ * Set the component registry for EVG instances
+ * Use this to provide custom component management
+ */
+export function setComponentRegistry(registry: IComponentRegistry): void {
+  _componentRegistry = registry;
+}
+
+/**
+ * Set the serializer for EVG parsing
+ * Use this to provide custom XML/JSON parsing
+ */
+export function setSerializer(serializer: ISerializer): void {
+  _serializer = serializer;
+}
+
+/**
+ * Get the current font provider (or null if using legacy global registry)
+ */
+export function getFontProvider(): IFontProvider | null {
+  return _fontProvider;
+}
+
+/**
+ * Get the current component registry (or null if using legacy global registry)
+ */
+export function getComponentRegistry(): IComponentRegistry | null {
+  return _componentRegistry;
+}
+
 export const register_font = (name: string, fontFile: string) => {
-  UIFonts[name] = fontFile;
+  // If font provider is set, use it; otherwise use legacy global registry
+  if (_fontProvider) {
+    _fontProvider.registerFont(name, fontFile);
+  } else {
+    UIFonts[name] = fontFile;
+  }
 };
 export const register_component = (name: string, component: string) => {
-  UICompRegistry[name] = component;
+  // If component registry is set, use it; otherwise use legacy global registry
+  if (_componentRegistry) {
+    _componentRegistry.register(name, component);
+  } else {
+    UICompRegistry[name] = component;
+  }
 };
 export const register_renderer = (name: string, component: any) => {
   UIRenderers[name] = component;
@@ -325,15 +411,23 @@ export class EVG {
   };
 
   static installShippedFonts() {
+    if (!loadLegacyModules()) {
+      console.warn(
+        "EVG.installShippedFonts() requires Node.js environment. Use IFontProvider in browser."
+      );
+      return;
+    }
     const rootPath = path.resolve(__dirname, "../../fonts");
-    fs.readdir(rootPath, (err, files) => {
-      files.forEach((pathName) => {
+    fs.readdir(rootPath, (err: any, files: string[]) => {
+      if (err || !files) return;
+      files.forEach((pathName: string) => {
         const fontPath = rootPath + "/" + pathName;
         if (fs.lstatSync(fontPath).isDirectory()) {
-          fs.readdir(fontPath, (err, files) => {
+          fs.readdir(fontPath, (err: any, files: string[]) => {
+            if (err || !files) return;
             files
-              .filter((f) => f.indexOf(".ttf") > 0)
-              .forEach((font) => {
+              .filter((f: string) => f.indexOf(".ttf") > 0)
+              .forEach((font: string) => {
                 EVG.installFont(
                   path.parse(font).name.toLocaleLowerCase(),
                   fontPath + "/" + font
@@ -361,6 +455,11 @@ export class EVG {
     header?: (item: EVG) => EVG,
     footer?: (item: EVG) => EVG
   ) {
+    if (!loadLegacyModules()) {
+      throw new Error(
+        "EVG.renderToStream() requires Node.js environment. Use IRenderer in browser."
+      );
+    }
     const renderer = new Renderer(width, height);
     item.calculate(width, height, renderer);
     renderer.renderToStream(inputStream, item, [header, footer]);
@@ -374,17 +473,30 @@ export class EVG {
     header?: (item: EVG) => EVG,
     footer?: (item: EVG) => EVG
   ) {
+    if (!loadLegacyModules()) {
+      throw new Error(
+        "EVG.renderToFile() requires Node.js environment. Use IRenderer in browser."
+      );
+    }
     const renderer = new Renderer(width, height);
     item.calculate(width, height, renderer);
     renderer.render(fileName, item, [header, footer]);
   }
 
-  findComponent(name: string) {
+  findComponent(name: string): string | undefined {
+    // Use component registry if available, otherwise use legacy global registry
+    if (_componentRegistry) {
+      return _componentRegistry.get(name);
+    }
     return UICompRegistry[name];
   }
 
-  findFont(name: string) {
-    return UIFonts[name];
+  findFont(name: string): string | ArrayBuffer | null {
+    // Use font provider if available, otherwise use legacy global registry
+    if (_fontProvider) {
+      return _fontProvider.getFont(name);
+    }
+    return UIFonts[name] || null;
   }
 
   findContent(listParam?: any[]) {
@@ -1035,7 +1147,21 @@ export class EVG {
         } else {
           if (childUI && childUI.tagName == "component") {
             // uiObj.header = childUI
-            const serializer = new XMLSerializer();
+            let serializer: any;
+            // Check for browser environment first
+            if (
+              typeof window !== "undefined" &&
+              typeof window.XMLSerializer !== "undefined"
+            ) {
+              serializer = new window.XMLSerializer();
+            } else if (loadLegacyModules() && XMLSerializer) {
+              serializer = new XMLSerializer();
+            } else {
+              console.warn(
+                "No XML serializer available for component registration"
+              );
+              continue;
+            }
             let compDef;
             for (let ii = 0; ii < childNode.childNodes.length; ii++) {
               if (childNode.childNodes[ii].nodeType == 1) {
@@ -1093,7 +1219,21 @@ export class EVG {
   }
 
   parseXML(xmlStr: string) {
-    var parser = new DOMParser();
+    let parser: any;
+    // Check for browser environment first
+    if (
+      typeof window !== "undefined" &&
+      typeof window.DOMParser !== "undefined"
+    ) {
+      parser = new window.DOMParser();
+    } else if (loadLegacyModules() && DOMParser) {
+      // Node.js environment with xmldom
+      parser = new DOMParser();
+    } else {
+      throw new Error(
+        "No XML parser available. In Node.js, install xmldom. In browser, DOMParser should be available."
+      );
+    }
     var xmlDoc = parser.parseFromString(xmlStr, "text/xml");
     return this.readXMLDoc(xmlDoc.childNodes[0], null);
   }
@@ -1120,8 +1260,11 @@ export class EVG {
     }
   }
 
-  adjustLayoutParams(node: EVG, renderer: Renderer) {
-    const special = renderer.hasCustomSize(node);
+  adjustLayoutParams(node: EVG, renderer: IMeasurer) {
+    // Use measureElement if available, otherwise fall back to hasCustomSize for legacy renderers
+    const special = renderer.measureElement
+      ? renderer.measureElement(this)
+      : (renderer as any).hasCustomSize?.(this);
     if (typeof special !== "undefined") {
       this.width.pixels = special.width;
       this.height.pixels = special.height;
@@ -1573,7 +1716,7 @@ export class EVG {
     }
   }
 
-  calculate(width: number, height: number, renderer: Renderer) {
+  calculate(width: number, height: number, renderer: IMeasurer) {
     const container = new EVG({});
     container.innerWidth.pixels = width;
     container.innerHeight.pixels = height;
@@ -1898,7 +2041,10 @@ export class EVG {
 
     if (!node.height.is_set) {
       elem_h += child_heights;
-      const special = render_pos.renderer.hasCustomSize(node);
+      // Use measureElement if available, otherwise fall back to hasCustomSize for legacy renderers
+      const special = render_pos.renderer.measureElement
+        ? render_pos.renderer.measureElement(node)
+        : (render_pos.renderer as any).hasCustomSize?.(node);
       if (typeof special !== "undefined") {
         // console.log('special width ', special.width)
         elem_h += special.height;

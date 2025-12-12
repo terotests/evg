@@ -1,10 +1,15 @@
 #!/usr/bin/env node
-var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -13,991 +18,983 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // src/svg/path.ts
-var Vec2 = class _Vec2 {
-  constructor() {
-    this.x = 0;
-    this.y = 0;
-  }
-  static CreateNew(i, j) {
-    const v = new _Vec2();
-    v.x = i;
-    v.y = j;
-    return v;
-  }
-};
-var PathExecutor = class {
-  constructor() {
-  }
-  ClosePath() {
-  }
-  Move(x, y) {
-    console.log("Move called with " + x + ", " + y);
-  }
-  Line(x, y) {
-    console.log("Line called with " + x + ", " + y);
-  }
-  Curve(x0, y0, x1, y1, x2, y2) {
-    console.log(
-      "Cubic bezier curve called with " + x0 + ", " + y0 + " " + x1 + ", " + y1 + " " + x2 + ", " + y2 + " "
-    );
-  }
-};
-var PathScaler = class extends PathExecutor {
-  constructor() {
-    super();
-    this.pathParts = [];
-    this.pathParts = [];
-  }
-  Move(x, y) {
-    this.pathParts.push(["M", x, y]);
-  }
-  Line(x, y) {
-    this.pathParts.push(["L", x, y]);
-  }
-  Curve(x0, y0, x1, y1, x2, y2) {
-    this.pathParts.push(["C", x0, y0, x1, y1, x2, y2]);
-  }
-  getString(width, height) {
-    let minx = 0, miny = 0, maxx = 0, maxy = 0;
-    this.pathParts.forEach((segment) => {
-      segment.forEach((value, i) => {
-        if (typeof value === "number") {
-          if (i > 0 && (i & 1) == 1) {
-            if (typeof minx === "undefined" || value < minx) minx = value;
-            if (typeof maxx === "undefined" || value > maxx) maxx = value;
-          }
-          if (i > 0 && (i & 1) === 0) {
-            if (typeof miny === "undefined" || value < miny) miny = value;
-            if (typeof maxy === "undefined" || value > maxy) maxy = value;
-          }
-        }
-      });
-    });
-    const orig_width = maxx - minx;
-    const orig_height = maxy - miny;
-    if (orig_width === 0 || orig_height === 0) {
-      return "";
-    }
-    let scale_amount_x = width / orig_width;
-    let scale_amount_y = height / orig_height;
-    if (width / height < orig_width / orig_height) {
-      scale_amount_y = scale_amount_x;
-    } else {
-      scale_amount_x = scale_amount_y;
-    }
-    return this.pathParts.map((segment) => {
-      return segment.map((value, i) => {
-        if (i === 0) return value;
-        if (typeof value === "number") {
-          if ((i & 1) == 1) {
-            return (value - minx) * scale_amount_x;
-          }
-          return (value - miny) * scale_amount_y;
-        }
-      });
-    }).join(" ");
-  }
-};
-var PathSegment = class {
-  constructor() {
-    this.t0 = 0;
-    this.t1 = 0;
-    this.t2 = 0;
-    this.t3 = 0;
-    this.t4 = 0;
-    this.t5 = 0;
-    this.t6 = 0;
-  }
-};
-var EVGPathParser = class {
-  constructor() {
-    this.i = 0;
-    this.__len = 0;
-    this.last_number = 0;
-    this.buff = "";
-  }
-  __sqr(v) {
-    return v * v;
-  }
-  __xformPoint(point, seg) {
-    const res = Vec2.CreateNew(
-      point.x * seg.t0 + point.y * seg.t2 + seg.t4,
-      point.x * seg.t1 + point.y * seg.t3 + seg.t5
-    );
-    return res;
-  }
-  __xformVec(point, seg) {
-    return Vec2.CreateNew(
-      point.x * seg.t0 + point.y * seg.t2,
-      point.x * seg.t1 + point.y * seg.t3
-    );
-  }
-  __vmag(point) {
-    return Math.sqrt(point.x * point.x + point.y * point.y);
-  }
-  __vecrat(u, v) {
-    return (u.x * v.x + u.y * v.y) / (this.__vmag(u) * this.__vmag(v));
-  }
-  __vecang(u, v) {
-    let r = this.__vecrat(u, v);
-    if (r < -1) {
-      r = -1;
-    }
-    if (r > 1) {
-      r = 1;
-    }
-    let res = 1;
-    if (u.x * v.y < u.y * v.x) {
-      res = -1;
-    }
-    return res * Math.acos(r);
-  }
-  scanNumber() {
-    const s = this.buff;
-    let fc = s.charCodeAt(this.i);
-    let c = fc;
-    let sp = 0;
-    let ep = 0;
-    fc = s.charCodeAt(this.i);
-    if (fc == 45 && s.charCodeAt(this.i + 1) >= 46 && s.charCodeAt(this.i + 1) <= 57 || fc >= 48 && fc <= 57) {
-      sp = this.i;
-      this.i = 1 + this.i;
-      c = s.charCodeAt(this.i);
-      while (this.i < this.__len && (c >= 48 && c <= 57 || c == 46 || this.i == sp && (c == 43 || c == 45))) {
-        this.i = 1 + this.i;
-        if (this.i >= this.__len) {
-          break;
-        }
-        c = s.charCodeAt(this.i);
+var Vec2, PathExecutor, PathScaler, PathSegment, EVGPathParser;
+var init_path = __esm({
+  "src/svg/path.ts"() {
+    Vec2 = class _Vec2 {
+      constructor() {
+        this.x = 0;
+        this.y = 0;
       }
-      ep = this.i;
-      this.last_number = isNaN(parseFloat(s.substring(sp, ep))) ? 0 : parseFloat(s.substring(sp, ep));
-      return true;
-    }
-    return false;
-  }
-  pathArcTo(callback, cp, args, rel) {
-    let rx = 0;
-    let ry = 0;
-    let rotx = 0;
-    let x1 = 0;
-    let y1 = 0;
-    let x2 = 0;
-    let y2 = 0;
-    let cx = 0;
-    let cy = 0;
-    let dx = 0;
-    let dy = 0;
-    let d = 0;
-    let x1p = 0;
-    let y1p = 0;
-    let cxp = 0;
-    let cyp = 0;
-    let s = 0;
-    let sa = 0;
-    let sb = 0;
-    let a1 = 0;
-    let da = 0;
-    let x = 0;
-    let y = 0;
-    let tanx = 0;
-    let tany = 0;
-    let a = 0;
-    let px = 0;
-    let py = 0;
-    let ptanx = 0;
-    let ptany = 0;
-    const t = new PathSegment();
-    let sinrx = 0;
-    let cosrx = 0;
-    let fa = 0;
-    let fs4 = 0;
-    let i_1 = 0;
-    let ndivs = 0;
-    let hda = 0;
-    let kappa = 0;
-    const PI_VALUE = Math.PI;
-    const cpx = cp.x;
-    const cpy = cp.y;
-    rx = Math.abs(args.t0);
-    ry = Math.abs(args.t1);
-    rotx = args.t2 / 180 * PI_VALUE;
-    fa = Math.abs(args.t3) > 1e-5 ? 1 : 0;
-    fs4 = Math.abs(args.t4) > 1e-5 ? 1 : 0;
-    x1 = cpx;
-    y1 = cpy;
-    if (rel) {
-      x2 = cpx + args.t5;
-      y2 = cpy + args.t6;
-    } else {
-      x2 = args.t5;
-      y2 = args.t6;
-    }
-    dx = x1 - x2;
-    dy = y1 - y2;
-    d = Math.sqrt(dx * dx + dy * dy);
-    if (d < 1e-5 || rx < 1e-5 || ry < 1e-5) {
-      callback.Line(x2, y2);
-      return Vec2.CreateNew(x2, y2);
-    }
-    sinrx = Math.sin(rotx);
-    cosrx = Math.cos(rotx);
-    x1p = cosrx * dx / 2 + sinrx * dy / 2;
-    y1p = -1 * sinrx * dx / 2 + cosrx * dy / 2;
-    d = x1p * x1p / (rx * rx) + y1p * y1p / (ry * ry);
-    if (d > 1) {
-      d = Math.sqrt(d);
-      rx = rx * d;
-      ry = ry * d;
-    }
-    s = 0;
-    sa = rx * rx * (ry * ry) - rx * rx * (y1p * y1p) - ry * ry * (x1p * x1p);
-    sb = rx * rx * (y1p * y1p) + ry * ry * (x1p * x1p);
-    if (sa < 0) {
-      sa = 0;
-    }
-    if (sb > 0) {
-      s = Math.sqrt(sa / sb);
-    }
-    if (fa == fs4) {
-      s = -1 * s;
-    }
-    cxp = s * rx * y1p / ry;
-    cyp = s * (-1 * ry) * x1p / rx;
-    cx = (x1 + x2) / 2 + (cosrx * cxp - sinrx * cyp);
-    cy = (y1 + y2) / 2 + (sinrx * cxp + cosrx * cyp);
-    const u = Vec2.CreateNew((x1p - cxp) / rx, (y1p - cyp) / ry);
-    const v = Vec2.CreateNew((-1 * x1p - cxp) / rx, (-1 * y1p - cyp) / ry);
-    const unitV = Vec2.CreateNew(1, 0);
-    a1 = this.__vecang(unitV, u);
-    da = this.__vecang(u, v);
-    if (fs4 == 0 && da > 0) {
-      da = da - 2 * PI_VALUE;
-    } else {
-      if (fs4 == 1 && da < 0) {
-        da = 2 * PI_VALUE + da;
+      static CreateNew(i, j) {
+        const v = new _Vec2();
+        v.x = i;
+        v.y = j;
+        return v;
       }
-    }
-    t.t0 = cosrx;
-    t.t1 = sinrx;
-    t.t2 = -1 * sinrx;
-    t.t3 = cosrx;
-    t.t4 = cx;
-    t.t5 = cy;
-    ndivs = Math.floor(Math.abs(da) / (PI_VALUE * 0.5) + 1);
-    hda = da / ndivs / 2;
-    kappa = Math.abs(4 / 3 * (1 - Math.cos(hda)) / Math.sin(hda));
-    if (da < 0) {
-      kappa = -1 * kappa;
-    }
-    i_1 = 0;
-    while (i_1 <= ndivs) {
-      a = a1 + da * i_1 / ndivs;
-      dx = Math.cos(a);
-      dy = Math.sin(a);
-      const trans = this.__xformPoint(Vec2.CreateNew(dx * rx, dy * ry), t);
-      x = trans.x;
-      y = trans.y;
-      const v_trans = this.__xformVec(
-        Vec2.CreateNew(-1 * dy * rx * kappa, dx * ry * kappa),
-        t
-      );
-      tanx = v_trans.x;
-      tany = v_trans.y;
-      if (i_1 > 0) {
-        callback.Curve(px + ptanx, py + ptany, x - tanx, y - tany, x, y);
+    };
+    PathExecutor = class {
+      constructor() {
       }
-      px = x;
-      py = y;
-      ptanx = tanx;
-      ptany = tany;
-      i_1 = i_1 + 1;
-    }
-    const rv = Vec2.CreateNew(x2, y2);
-    return rv;
-  }
-  parsePath(path4, callback) {
-    this.i = 0;
-    this.buff = path4;
-    const s = this.buff;
-    this.__len = s.length;
-    let cmd = 76;
-    const args = new PathSegment();
-    let require_args = 2;
-    let arg_cnt = 0;
-    const QPx = new PathSegment();
-    const QPy = new PathSegment();
-    const CPx = new PathSegment();
-    const CPy = new PathSegment();
-    let cx = 0;
-    let cy = 0;
-    let cx2 = 0;
-    let cy2 = 0;
-    let last_i = -1;
-    let is_first = true;
-    let first_x = 0, first_y = 0;
-    while (this.i < this.__len) {
-      if (last_i == this.i) {
-        this.i = this.i + 1;
+      ClosePath() {
       }
-      last_i = this.i;
-      const c = s.charCodeAt(this.i);
-      if (c === 90 || c === 122) {
-        callback.Line(first_x, first_y);
-        callback.ClosePath();
-        arg_cnt = 0;
-        cx = first_x;
-        cy = first_y;
-        cx2 = first_x;
-        cy2 = first_y;
-        is_first = true;
-        continue;
+      Move(x, y) {
+        console.log("Move called with " + x + ", " + y);
       }
-      if (c == 86 || c == 118 || c == 72 || c == 104) {
-        cmd = c;
-        require_args = 1;
-        arg_cnt = 0;
-        continue;
+      Line(x, y) {
+        console.log("Line called with " + x + ", " + y);
       }
-      if (c == 109 || c == 77 || c == 76 || c == 108 || c == 116 || c == 84) {
-        cmd = c;
-        require_args = 2;
-        arg_cnt = 0;
-        continue;
+      Curve(x0, y0, x1, y1, x2, y2) {
+        console.log(
+          "Cubic bezier curve called with " + x0 + ", " + y0 + " " + x1 + ", " + y1 + " " + x2 + ", " + y2 + " "
+        );
       }
-      if (c == 113 || c == 81 || c == 83 || c == 115) {
-        cmd = c;
-        require_args = 4;
-        arg_cnt = 0;
-        continue;
+    };
+    PathScaler = class extends PathExecutor {
+      constructor() {
+        super();
+        this.pathParts = [];
+        this.pathParts = [];
       }
-      if (c == 99 || c == 67) {
-        cmd = c;
-        require_args = 6;
-        arg_cnt = 0;
-        continue;
+      Move(x, y) {
+        this.pathParts.push(["M", x, y]);
       }
-      if (c == 97 || c == 65) {
-        cmd = c;
-        require_args = 7;
-        arg_cnt = 0;
-        continue;
+      Line(x, y) {
+        this.pathParts.push(["L", x, y]);
       }
-      if (this.scanNumber()) {
-        switch (arg_cnt) {
-          case 0:
-            args.t0 = this.last_number;
-            break;
-          case 1:
-            args.t1 = this.last_number;
-            break;
-          case 2:
-            args.t2 = this.last_number;
-            break;
-          case 3:
-            args.t3 = this.last_number;
-            break;
-          case 4:
-            args.t4 = this.last_number;
-            break;
-          case 5:
-            args.t5 = this.last_number;
-            break;
-          case 6:
-            args.t6 = this.last_number;
-            break;
-          default:
-            break;
-        }
-        arg_cnt = arg_cnt + 1;
-        if (arg_cnt >= require_args) {
-          switch (cmd) {
-            // "m"
-            case 109:
-              if (is_first) {
-                first_x = cx + args.t0;
-                first_y = cy + args.t1;
+      Curve(x0, y0, x1, y1, x2, y2) {
+        this.pathParts.push(["C", x0, y0, x1, y1, x2, y2]);
+      }
+      getString(width, height) {
+        let minx = 0, miny = 0, maxx = 0, maxy = 0;
+        this.pathParts.forEach((segment) => {
+          segment.forEach((value, i) => {
+            if (typeof value === "number") {
+              if (i > 0 && (i & 1) == 1) {
+                if (typeof minx === "undefined" || value < minx) minx = value;
+                if (typeof maxx === "undefined" || value > maxx) maxx = value;
               }
-              callback.Move(cx + args.t0, cy + args.t1);
-              cx = args.t0;
-              cy = args.t1;
-              cmd = 76;
-              require_args = 2;
-              cx2 = cx;
-              cy2 = cy;
-              break;
-            // "M"
-            case 77:
-              if (is_first) {
-                first_x = args.t0;
-                first_y = args.t1;
+              if (i > 0 && (i & 1) === 0) {
+                if (typeof miny === "undefined" || value < miny) miny = value;
+                if (typeof maxy === "undefined" || value > maxy) maxy = value;
               }
-              callback.Move(args.t0, args.t1);
-              cx = args.t0;
-              cy = args.t1;
-              cmd = 76;
-              require_args = 2;
-              cx2 = cx;
-              cy2 = cy;
-              break;
-            // "z"
-            case 122:
-              callback.Line(first_x, first_y);
-              callback.ClosePath();
-              arg_cnt = 0;
-              cx = first_x;
-              cy = first_y;
-              cx2 = first_x;
-              cy2 = first_y;
-              break;
-            // "Z"
-            case 90:
-              console.log("------ path z segment -----");
-              console.log(args);
-              console.log("arg_cnt", arg_cnt);
-              console.log("require_args", require_args);
-              callback.Line(first_x, first_y);
-              callback.ClosePath();
-              arg_cnt = 0;
-              cx = first_x;
-              cy = first_y;
-              cx2 = first_x;
-              cy2 = first_y;
-              break;
-            // "l"
-            case 108:
-              callback.Line(cx + args.t0, cy + args.t1);
-              cx = cx + args.t0;
-              cy = cy + args.t1;
-              cx2 = cx;
-              cy2 = cy;
-              break;
-            case 76:
-              callback.Line(args.t0, args.t1);
-              cx = args.t0;
-              cy = args.t1;
-              cx2 = cx;
-              cy2 = cy;
-              break;
-            case 104:
-              callback.Line(cx + args.t0, cy);
-              cx = cx + args.t0;
-              cx2 = cx;
-              break;
-            case 72:
-              callback.Line(args.t0, cy);
-              cx = args.t0;
-              cx2 = cx;
-              break;
-            case 118:
-              callback.Line(cx, cy + args.t0);
-              cy = cy + args.t0;
-              cy2 = cy;
-              break;
-            case 86:
-              callback.Line(cx, args.t0);
-              cy = args.t0;
-              cy2 = cy;
-              break;
-            case 99:
-              callback.Curve(
-                cx + args.t0,
-                cy + args.t1,
-                cx + args.t2,
-                cy + args.t3,
-                cx + args.t4,
-                cy + args.t5
-              );
-              cx2 = cx + args.t2;
-              cy2 = cy + args.t3;
-              cx = cx + args.t4;
-              cy = cy + args.t5;
-              break;
-            case 67:
-              callback.Curve(
-                args.t0,
-                args.t1,
-                args.t2,
-                args.t3,
-                args.t4,
-                args.t5
-              );
-              cx2 = args.t2;
-              cy2 = args.t3;
-              cx = args.t4;
-              cy = args.t5;
-              break;
-            //
-            case 115:
-              callback.Curve(
-                cx + cx - cx2,
-                cy + cy - cy2,
-                cx + args.t0,
-                cy + args.t1,
-                cx + args.t2,
-                cy + args.t3
-              );
-              cx2 = cx + args.t0;
-              cy2 = cy + args.t1;
-              cx = cx + args.t2;
-              cy = cy + args.t3;
-              break;
-            // "S"
-            case 83:
-              callback.Curve(
-                cx + cx - cx2,
-                cy + cy - cy2,
-                args.t0,
-                args.t1,
-                args.t2,
-                args.t3
-              );
-              cx2 = args.t0;
-              cy2 = args.t1;
-              cx = args.t2;
-              cy = args.t3;
-              break;
-            // "q"
-            case 113:
-              QPx.t0 = cx;
-              QPy.t0 = cy;
-              QPx.t1 = cx + args.t0;
-              QPy.t1 = cy + args.t1;
-              QPx.t2 = cx + args.t2;
-              QPy.t2 = cy + args.t3;
-              CPx.t0 = QPx.t0;
-              CPy.t0 = QPy.t0;
-              CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
-              CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
-              CPx.t2 = QPx.t2 + 2 / 3 * (QPx.t1 - QPx.t2);
-              CPy.t2 = QPy.t2 + 2 / 3 * (QPy.t1 - QPy.t2);
-              CPx.t3 = QPx.t2;
-              CPy.t3 = QPy.t2;
-              callback.Curve(CPx.t1, CPy.t1, CPx.t2, CPy.t2, CPx.t3, CPy.t3);
-              cx2 = CPx.t2;
-              cy2 = CPy.t2;
-              cx = CPx.t3;
-              cy = CPy.t3;
-              break;
-            // "Q"
-            case 81:
-              QPx.t0 = cx;
-              QPy.t0 = cy;
-              QPx.t1 = args.t0;
-              QPy.t1 = args.t1;
-              QPx.t2 = args.t2;
-              QPy.t2 = args.t3;
-              CPx.t0 = QPx.t0;
-              CPy.t0 = QPy.t0;
-              CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
-              CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
-              CPx.t2 = QPx.t2 + 2 / 3 * (QPx.t1 - QPx.t2);
-              CPy.t2 = QPy.t2 + 2 / 3 * (QPy.t1 - QPy.t2);
-              CPx.t3 = QPx.t2;
-              CPy.t3 = QPy.t2;
-              callback.Curve(CPx.t1, CPy.t1, CPx.t2, CPy.t2, CPx.t3, CPy.t3);
-              cx2 = CPx.t1;
-              cy2 = CPy.t1;
-              cx = CPx.t2;
-              cy = CPy.t3;
-              break;
-            case 84:
-              QPx.t0 = cx;
-              QPy.t0 = cy;
-              QPx.t1 = 2 * cx - cx2;
-              QPy.t1 = 2 * cy - cy2;
-              QPx.t2 = args.t0;
-              QPy.t2 = args.t1;
-              CPx.t0 = QPx.t0;
-              CPy.t0 = QPy.t0;
-              CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
-              CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
-              CPx.t2 = QPx.t2;
-              CPy.t2 = QPy.t2;
-              callback.Curve(CPx.t0, CPy.t0, CPx.t1, CPy.t1, CPx.t2, CPy.t2);
-              cx2 = CPx.t1;
-              cy2 = CPy.t1;
-              cx = CPx.t2;
-              cy = CPy.t3;
-              break;
-            case 116:
-              QPx.t0 = cx;
-              QPy.t0 = cy;
-              QPx.t1 = 2 * cx - cx2;
-              QPy.t1 = 2 * cy - cy2;
-              QPx.t2 = cx + args.t0;
-              QPy.t2 = cy + args.t1;
-              CPx.t0 = QPx.t0;
-              CPy.t0 = QPy.t0;
-              CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
-              CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
-              CPx.t2 = QPx.t2;
-              CPy.t2 = QPy.t2;
-              callback.Curve(CPx.t0, CPy.t0, CPx.t1, CPy.t1, CPx.t2, CPy.t2);
-              cx2 = CPx.t1;
-              cy2 = CPy.t1;
-              cx = CPx.t2;
-              cy = CPy.t3;
-              break;
-            case 97:
-              const res = this.pathArcTo(
-                callback,
-                Vec2.CreateNew(cx, cy),
-                args,
-                true
-              );
-              cx = res.x;
-              cy = res.y;
-              cx2 = cx;
-              cy2 = cy;
-              break;
-            case 65:
-              const res_1 = this.pathArcTo(
-                callback,
-                Vec2.CreateNew(cx, cy),
-                args,
-                false
-              );
-              cx = res_1.x;
-              cy = res_1.y;
-              cx2 = cx;
-              cy2 = cy;
-              break;
-            default:
-              if (arg_cnt >= 2) {
-                cx = args.t0;
-                cy = args.t1;
-                cx2 = cx;
-                cy2 = cy;
-              }
-              break;
-          }
-          arg_cnt = 0;
-          is_first = false;
+            }
+          });
+        });
+        const orig_width = maxx - minx;
+        const orig_height = maxy - miny;
+        if (orig_width === 0 || orig_height === 0) {
+          return "";
         }
-      }
-    }
-  }
-};
-
-// src/renderers/pdfkit.ts
-var PDFKit = require("pdfkit");
-var QRCode = require("qrcode");
-var fs = require("fs");
-var path = require("path");
-var fontPaths = [
-  "fonts/Open_Sans/OpenSans-Regular.ttf",
-  // Local development
-  path.join(__dirname, "../fonts/Open_Sans/OpenSans-Regular.ttf"),
-  // When imported as a dependency
-  path.join(process.cwd(), "fonts/Open_Sans/OpenSans-Regular.ttf"),
-  // From current working directory
-  path.join(
-    path.dirname(process.execPath),
-    "fonts/Open_Sans/OpenSans-Regular.ttf"
-  ),
-  // From executable path
-  path.join(
-    path.dirname(process.execPath),
-    "../fonts/Open_Sans/OpenSans-Regular.ttf"
-  )
-  // One level up from executable
-];
-if (process.env.APPDATA) {
-  fontPaths.push(
-    path.join(
-      process.env.APPDATA,
-      "npm/node_modules/evg/fonts/Open_Sans/OpenSans-Regular.ttf"
-    )
-  );
-} else if (process.env.HOME) {
-  fontPaths.push(
-    path.join(
-      process.env.HOME,
-      ".npm/node_modules/evg/fonts/Open_Sans/OpenSans-Regular.ttf"
-    )
-  );
-}
-var default_font = null;
-for (const fontPath of fontPaths) {
-  try {
-    if (fs.existsSync(fontPath)) {
-      default_font = fontPath;
-      break;
-    }
-  } catch (e) {
-  }
-}
-if (!default_font) {
-  console.warn("Warning: Could not find OpenSans-Regular.ttf font file");
-  default_font = fontPaths[0];
-}
-var Renderer = class {
-  constructor(width, height) {
-    this.opacity_now = 1;
-    this.text_color = "black";
-    this.font_family = default_font;
-    this.static_header = null;
-    this.static_footer = null;
-    this.doc = new PDFKit({ size: [width, height] });
-    this.height = height;
-    this.width = width;
-  }
-  hasCustomSize(item) {
-    if (item.tagName == "Label") {
-      if (item.fontFamily.is_set) {
-        const font_file = item.findFont(item.fontFamily.s_value);
-        if (font_file) {
-          this.doc.font(font_file);
+        let scale_amount_x = width / orig_width;
+        let scale_amount_y = height / orig_height;
+        if (width / height < orig_width / orig_height) {
+          scale_amount_y = scale_amount_x;
         } else {
-          this.doc.font(default_font);
+          scale_amount_x = scale_amount_y;
         }
-      } else {
-        this.doc.font(default_font);
+        return this.pathParts.map((segment) => {
+          return segment.map((value, i) => {
+            if (i === 0) return value;
+            if (typeof value === "number") {
+              if ((i & 1) == 1) {
+                return (value - minx) * scale_amount_x;
+              }
+              return (value - miny) * scale_amount_y;
+            }
+          });
+        }).join(" ");
       }
-      if (item.fontSize.is_set) {
-        this.doc.fontSize(item.fontSize.pixels);
-      } else {
-        this.doc.fontSize(12);
+    };
+    PathSegment = class {
+      constructor() {
+        this.t0 = 0;
+        this.t1 = 0;
+        this.t2 = 0;
+        this.t3 = 0;
+        this.t4 = 0;
+        this.t5 = 0;
+        this.t6 = 0;
       }
-      return {
-        width: this.doc.widthOfString(item.text.s_value),
-        height: item.fontSize.f_value || 12
-      };
-    }
-  }
-  async render(filename, item, headers) {
-    const fs4 = require("fs");
-    const doc = this.doc;
-    doc.pipe(fs4.createWriteStream(filename));
-    await this.renderItem(item, doc, headers, true);
-    doc.save();
-    doc.end();
-  }
-  async renderToStream(inputStream, item, headers) {
-    const fs4 = require("fs");
-    const doc = this.doc;
-    doc.pipe(inputStream);
-    await this.renderItem(item, doc, headers, true);
-    doc.save();
-    doc.end();
-  }
-  setColors(ui, ctx) {
-    if (ui.color.is_set) {
-      this.text_color = ui.color.s_value;
-    }
-    if (ui.backgroundColor.is_set) {
-      if (ui.opacity.is_set) {
-        ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value);
-        this.opacity_now = ui.opacity.f_value;
-      } else {
-        ctx.fillColor(ui.backgroundColor.s_value, this.opacity_now);
+    };
+    EVGPathParser = class {
+      constructor() {
+        this.i = 0;
+        this.__len = 0;
+        this.last_number = 0;
+        this.buff = "";
       }
-    } else {
-      ctx.fillColor("white", 0);
-    }
-    if (ui.borderWidth.is_set && ui.borderColor.is_set) {
-      ctx.lineWidth(ui.borderWidth.pixels);
-      if (ui.opacity.is_set) {
-        ctx.strokeColor(ui.borderColor.s_value, ui.opacity.f_value);
-      } else {
-        ctx.strokeColor(ui.borderColor.s_value, this.opacity_now);
+      __sqr(v) {
+        return v * v;
       }
-    } else {
-      ctx.strokeColor("white", 0).stroke();
-    }
-  }
-  async renderItem(item, ctx, headers, is_first) {
-    const old_opacity = this.opacity_now;
-    const old_font = this.font_family;
-    const old_color = this.text_color;
-    if (item.opacity.is_set) {
-      this.opacity_now = item.opacity.f_value;
-    }
-    ctx.fillOpacity(this.opacity_now);
-    ctx.opacity(this.opacity_now);
-    if (item.rotate.is_set) {
-      ctx.rotate(item.rotate.f_value);
-    }
-    if (item.scale.is_set && item.scale.f_value > 0.01) {
-      ctx.scale(item.scale.f_value);
-    }
-    if (item.fontFamily.is_set) {
-      const font_file = item.findFont(item.fontFamily.s_value);
-      if (font_file) {
-        this.font_family = font_file;
+      __xformPoint(point, seg) {
+        const res = Vec2.CreateNew(
+          point.x * seg.t0 + point.y * seg.t2 + seg.t4,
+          point.x * seg.t1 + point.y * seg.t3 + seg.t5
+        );
+        return res;
       }
-    }
-    this.setColors(item, ctx);
-    switch (item.tagName) {
-      case "header":
-      case "footer":
-      case "div":
-      case "View":
-        const r = new View(item);
-        await r.render(ctx);
-        break;
-      case "Label":
-        const label = new Label(item);
-        ctx.save();
-        ctx.fillOpacity(this.opacity_now);
-        ctx.fillColor(this.text_color);
-        await label.render(ctx, this);
-        ctx.restore();
-        break;
-      case "path":
-        const path4 = new Path(item);
-        await path4.render(ctx);
-        break;
-      case "img":
-        const im = new Image(item);
-        await im.render(ctx);
-        break;
-      case "QRCode":
-        const qr = new QR_Code(item);
-        await qr.render(ctx);
-        break;
-    }
-    let page_y_pos = item.calculated.y;
-    let page_item_cnt = 0;
-    let top_margin = 0;
-    let bottom_margin = 0;
-    let y_adjust = 0;
-    if (item.header) this.static_header = item.header;
-    if (item.footer) this.static_footer = item.footer;
-    const render_headers = async (item2) => {
-      if (headers || this.static_header || this.static_footer) {
-        const page_header = headers && headers[0] ? headers[0]() : this.static_header;
-        const page_footer = headers && headers[1] ? headers[1]() : this.static_footer;
-        if (page_header) {
-          page_header.calculate(this.width, this.height, this);
-          await this.renderItem(page_header, ctx);
-          top_margin = page_header.calculated.render_height;
+      __xformVec(point, seg) {
+        return Vec2.CreateNew(
+          point.x * seg.t0 + point.y * seg.t2,
+          point.x * seg.t1 + point.y * seg.t3
+        );
+      }
+      __vmag(point) {
+        return Math.sqrt(point.x * point.x + point.y * point.y);
+      }
+      __vecrat(u, v) {
+        return (u.x * v.x + u.y * v.y) / (this.__vmag(u) * this.__vmag(v));
+      }
+      __vecang(u, v) {
+        let r = this.__vecrat(u, v);
+        if (r < -1) {
+          r = -1;
         }
-        if (page_footer) {
-          page_footer.calculate(this.width, this.height, this);
-          ctx.translate(0, this.height - page_footer.calculated.render_height);
-          await this.renderItem(page_footer, ctx);
-          ctx.translate(
-            0,
-            -(this.height - page_footer.calculated.render_height)
+        if (r > 1) {
+          r = 1;
+        }
+        let res = 1;
+        if (u.x * v.y < u.y * v.x) {
+          res = -1;
+        }
+        return res * Math.acos(r);
+      }
+      scanNumber() {
+        const s = this.buff;
+        let fc = s.charCodeAt(this.i);
+        let c = fc;
+        let sp = 0;
+        let ep = 0;
+        fc = s.charCodeAt(this.i);
+        if (fc == 45 && s.charCodeAt(this.i + 1) >= 46 && s.charCodeAt(this.i + 1) <= 57 || fc >= 48 && fc <= 57) {
+          sp = this.i;
+          this.i = 1 + this.i;
+          c = s.charCodeAt(this.i);
+          while (this.i < this.__len && (c >= 48 && c <= 57 || c == 46 || this.i == sp && (c == 43 || c == 45))) {
+            this.i = 1 + this.i;
+            if (this.i >= this.__len) {
+              break;
+            }
+            c = s.charCodeAt(this.i);
+          }
+          ep = this.i;
+          this.last_number = isNaN(parseFloat(s.substring(sp, ep))) ? 0 : parseFloat(s.substring(sp, ep));
+          return true;
+        }
+        return false;
+      }
+      pathArcTo(callback, cp, args, rel) {
+        let rx = 0;
+        let ry = 0;
+        let rotx = 0;
+        let x1 = 0;
+        let y1 = 0;
+        let x2 = 0;
+        let y2 = 0;
+        let cx = 0;
+        let cy = 0;
+        let dx = 0;
+        let dy = 0;
+        let d = 0;
+        let x1p = 0;
+        let y1p = 0;
+        let cxp = 0;
+        let cyp = 0;
+        let s = 0;
+        let sa = 0;
+        let sb = 0;
+        let a1 = 0;
+        let da = 0;
+        let x = 0;
+        let y = 0;
+        let tanx = 0;
+        let tany = 0;
+        let a = 0;
+        let px = 0;
+        let py = 0;
+        let ptanx = 0;
+        let ptany = 0;
+        const t = new PathSegment();
+        let sinrx = 0;
+        let cosrx = 0;
+        let fa = 0;
+        let fs4 = 0;
+        let i_1 = 0;
+        let ndivs = 0;
+        let hda = 0;
+        let kappa = 0;
+        const PI_VALUE = Math.PI;
+        const cpx = cp.x;
+        const cpy = cp.y;
+        rx = Math.abs(args.t0);
+        ry = Math.abs(args.t1);
+        rotx = args.t2 / 180 * PI_VALUE;
+        fa = Math.abs(args.t3) > 1e-5 ? 1 : 0;
+        fs4 = Math.abs(args.t4) > 1e-5 ? 1 : 0;
+        x1 = cpx;
+        y1 = cpy;
+        if (rel) {
+          x2 = cpx + args.t5;
+          y2 = cpy + args.t6;
+        } else {
+          x2 = args.t5;
+          y2 = args.t6;
+        }
+        dx = x1 - x2;
+        dy = y1 - y2;
+        d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 1e-5 || rx < 1e-5 || ry < 1e-5) {
+          callback.Line(x2, y2);
+          return Vec2.CreateNew(x2, y2);
+        }
+        sinrx = Math.sin(rotx);
+        cosrx = Math.cos(rotx);
+        x1p = cosrx * dx / 2 + sinrx * dy / 2;
+        y1p = -1 * sinrx * dx / 2 + cosrx * dy / 2;
+        d = x1p * x1p / (rx * rx) + y1p * y1p / (ry * ry);
+        if (d > 1) {
+          d = Math.sqrt(d);
+          rx = rx * d;
+          ry = ry * d;
+        }
+        s = 0;
+        sa = rx * rx * (ry * ry) - rx * rx * (y1p * y1p) - ry * ry * (x1p * x1p);
+        sb = rx * rx * (y1p * y1p) + ry * ry * (x1p * x1p);
+        if (sa < 0) {
+          sa = 0;
+        }
+        if (sb > 0) {
+          s = Math.sqrt(sa / sb);
+        }
+        if (fa == fs4) {
+          s = -1 * s;
+        }
+        cxp = s * rx * y1p / ry;
+        cyp = s * (-1 * ry) * x1p / rx;
+        cx = (x1 + x2) / 2 + (cosrx * cxp - sinrx * cyp);
+        cy = (y1 + y2) / 2 + (sinrx * cxp + cosrx * cyp);
+        const u = Vec2.CreateNew((x1p - cxp) / rx, (y1p - cyp) / ry);
+        const v = Vec2.CreateNew((-1 * x1p - cxp) / rx, (-1 * y1p - cyp) / ry);
+        const unitV = Vec2.CreateNew(1, 0);
+        a1 = this.__vecang(unitV, u);
+        da = this.__vecang(u, v);
+        if (fs4 == 0 && da > 0) {
+          da = da - 2 * PI_VALUE;
+        } else {
+          if (fs4 == 1 && da < 0) {
+            da = 2 * PI_VALUE + da;
+          }
+        }
+        t.t0 = cosrx;
+        t.t1 = sinrx;
+        t.t2 = -1 * sinrx;
+        t.t3 = cosrx;
+        t.t4 = cx;
+        t.t5 = cy;
+        ndivs = Math.floor(Math.abs(da) / (PI_VALUE * 0.5) + 1);
+        hda = da / ndivs / 2;
+        kappa = Math.abs(4 / 3 * (1 - Math.cos(hda)) / Math.sin(hda));
+        if (da < 0) {
+          kappa = -1 * kappa;
+        }
+        i_1 = 0;
+        while (i_1 <= ndivs) {
+          a = a1 + da * i_1 / ndivs;
+          dx = Math.cos(a);
+          dy = Math.sin(a);
+          const trans = this.__xformPoint(Vec2.CreateNew(dx * rx, dy * ry), t);
+          x = trans.x;
+          y = trans.y;
+          const v_trans = this.__xformVec(
+            Vec2.CreateNew(-1 * dy * rx * kappa, dx * ry * kappa),
+            t
           );
-          bottom_margin = page_footer.calculated.render_height;
+          tanx = v_trans.x;
+          tany = v_trans.y;
+          if (i_1 > 0) {
+            callback.Curve(px + ptanx, py + ptany, x - tanx, y - tany, x, y);
+          }
+          px = x;
+          py = y;
+          ptanx = tanx;
+          ptany = tany;
+          i_1 = i_1 + 1;
         }
-        if (page_header) {
-          ctx.translate(0, top_margin);
+        const rv = Vec2.CreateNew(x2, y2);
+        return rv;
+      }
+      parsePath(path4, callback) {
+        this.i = 0;
+        this.buff = path4;
+        const s = this.buff;
+        this.__len = s.length;
+        let cmd = 76;
+        const args = new PathSegment();
+        let require_args = 2;
+        let arg_cnt = 0;
+        const QPx = new PathSegment();
+        const QPy = new PathSegment();
+        const CPx = new PathSegment();
+        const CPy = new PathSegment();
+        let cx = 0;
+        let cy = 0;
+        let cx2 = 0;
+        let cy2 = 0;
+        let last_i = -1;
+        let is_first = true;
+        let first_x = 0, first_y = 0;
+        while (this.i < this.__len) {
+          if (last_i == this.i) {
+            this.i = this.i + 1;
+          }
+          last_i = this.i;
+          const c = s.charCodeAt(this.i);
+          if (c === 90 || c === 122) {
+            callback.Line(first_x, first_y);
+            callback.ClosePath();
+            arg_cnt = 0;
+            cx = first_x;
+            cy = first_y;
+            cx2 = first_x;
+            cy2 = first_y;
+            is_first = true;
+            continue;
+          }
+          if (c == 86 || c == 118 || c == 72 || c == 104) {
+            cmd = c;
+            require_args = 1;
+            arg_cnt = 0;
+            continue;
+          }
+          if (c == 109 || c == 77 || c == 76 || c == 108 || c == 116 || c == 84) {
+            cmd = c;
+            require_args = 2;
+            arg_cnt = 0;
+            continue;
+          }
+          if (c == 113 || c == 81 || c == 83 || c == 115) {
+            cmd = c;
+            require_args = 4;
+            arg_cnt = 0;
+            continue;
+          }
+          if (c == 99 || c == 67) {
+            cmd = c;
+            require_args = 6;
+            arg_cnt = 0;
+            continue;
+          }
+          if (c == 97 || c == 65) {
+            cmd = c;
+            require_args = 7;
+            arg_cnt = 0;
+            continue;
+          }
+          if (this.scanNumber()) {
+            switch (arg_cnt) {
+              case 0:
+                args.t0 = this.last_number;
+                break;
+              case 1:
+                args.t1 = this.last_number;
+                break;
+              case 2:
+                args.t2 = this.last_number;
+                break;
+              case 3:
+                args.t3 = this.last_number;
+                break;
+              case 4:
+                args.t4 = this.last_number;
+                break;
+              case 5:
+                args.t5 = this.last_number;
+                break;
+              case 6:
+                args.t6 = this.last_number;
+                break;
+              default:
+                break;
+            }
+            arg_cnt = arg_cnt + 1;
+            if (arg_cnt >= require_args) {
+              switch (cmd) {
+                // "m"
+                case 109:
+                  if (is_first) {
+                    first_x = cx + args.t0;
+                    first_y = cy + args.t1;
+                  }
+                  callback.Move(cx + args.t0, cy + args.t1);
+                  cx = args.t0;
+                  cy = args.t1;
+                  cmd = 76;
+                  require_args = 2;
+                  cx2 = cx;
+                  cy2 = cy;
+                  break;
+                // "M"
+                case 77:
+                  if (is_first) {
+                    first_x = args.t0;
+                    first_y = args.t1;
+                  }
+                  callback.Move(args.t0, args.t1);
+                  cx = args.t0;
+                  cy = args.t1;
+                  cmd = 76;
+                  require_args = 2;
+                  cx2 = cx;
+                  cy2 = cy;
+                  break;
+                // "z"
+                case 122:
+                  callback.Line(first_x, first_y);
+                  callback.ClosePath();
+                  arg_cnt = 0;
+                  cx = first_x;
+                  cy = first_y;
+                  cx2 = first_x;
+                  cy2 = first_y;
+                  break;
+                // "Z"
+                case 90:
+                  console.log("------ path z segment -----");
+                  console.log(args);
+                  console.log("arg_cnt", arg_cnt);
+                  console.log("require_args", require_args);
+                  callback.Line(first_x, first_y);
+                  callback.ClosePath();
+                  arg_cnt = 0;
+                  cx = first_x;
+                  cy = first_y;
+                  cx2 = first_x;
+                  cy2 = first_y;
+                  break;
+                // "l"
+                case 108:
+                  callback.Line(cx + args.t0, cy + args.t1);
+                  cx = cx + args.t0;
+                  cy = cy + args.t1;
+                  cx2 = cx;
+                  cy2 = cy;
+                  break;
+                case 76:
+                  callback.Line(args.t0, args.t1);
+                  cx = args.t0;
+                  cy = args.t1;
+                  cx2 = cx;
+                  cy2 = cy;
+                  break;
+                case 104:
+                  callback.Line(cx + args.t0, cy);
+                  cx = cx + args.t0;
+                  cx2 = cx;
+                  break;
+                case 72:
+                  callback.Line(args.t0, cy);
+                  cx = args.t0;
+                  cx2 = cx;
+                  break;
+                case 118:
+                  callback.Line(cx, cy + args.t0);
+                  cy = cy + args.t0;
+                  cy2 = cy;
+                  break;
+                case 86:
+                  callback.Line(cx, args.t0);
+                  cy = args.t0;
+                  cy2 = cy;
+                  break;
+                case 99:
+                  callback.Curve(
+                    cx + args.t0,
+                    cy + args.t1,
+                    cx + args.t2,
+                    cy + args.t3,
+                    cx + args.t4,
+                    cy + args.t5
+                  );
+                  cx2 = cx + args.t2;
+                  cy2 = cy + args.t3;
+                  cx = cx + args.t4;
+                  cy = cy + args.t5;
+                  break;
+                case 67:
+                  callback.Curve(
+                    args.t0,
+                    args.t1,
+                    args.t2,
+                    args.t3,
+                    args.t4,
+                    args.t5
+                  );
+                  cx2 = args.t2;
+                  cy2 = args.t3;
+                  cx = args.t4;
+                  cy = args.t5;
+                  break;
+                //
+                case 115:
+                  callback.Curve(
+                    cx + cx - cx2,
+                    cy + cy - cy2,
+                    cx + args.t0,
+                    cy + args.t1,
+                    cx + args.t2,
+                    cy + args.t3
+                  );
+                  cx2 = cx + args.t0;
+                  cy2 = cy + args.t1;
+                  cx = cx + args.t2;
+                  cy = cy + args.t3;
+                  break;
+                // "S"
+                case 83:
+                  callback.Curve(
+                    cx + cx - cx2,
+                    cy + cy - cy2,
+                    args.t0,
+                    args.t1,
+                    args.t2,
+                    args.t3
+                  );
+                  cx2 = args.t0;
+                  cy2 = args.t1;
+                  cx = args.t2;
+                  cy = args.t3;
+                  break;
+                // "q"
+                case 113:
+                  QPx.t0 = cx;
+                  QPy.t0 = cy;
+                  QPx.t1 = cx + args.t0;
+                  QPy.t1 = cy + args.t1;
+                  QPx.t2 = cx + args.t2;
+                  QPy.t2 = cy + args.t3;
+                  CPx.t0 = QPx.t0;
+                  CPy.t0 = QPy.t0;
+                  CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
+                  CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
+                  CPx.t2 = QPx.t2 + 2 / 3 * (QPx.t1 - QPx.t2);
+                  CPy.t2 = QPy.t2 + 2 / 3 * (QPy.t1 - QPy.t2);
+                  CPx.t3 = QPx.t2;
+                  CPy.t3 = QPy.t2;
+                  callback.Curve(CPx.t1, CPy.t1, CPx.t2, CPy.t2, CPx.t3, CPy.t3);
+                  cx2 = CPx.t2;
+                  cy2 = CPy.t2;
+                  cx = CPx.t3;
+                  cy = CPy.t3;
+                  break;
+                // "Q"
+                case 81:
+                  QPx.t0 = cx;
+                  QPy.t0 = cy;
+                  QPx.t1 = args.t0;
+                  QPy.t1 = args.t1;
+                  QPx.t2 = args.t2;
+                  QPy.t2 = args.t3;
+                  CPx.t0 = QPx.t0;
+                  CPy.t0 = QPy.t0;
+                  CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
+                  CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
+                  CPx.t2 = QPx.t2 + 2 / 3 * (QPx.t1 - QPx.t2);
+                  CPy.t2 = QPy.t2 + 2 / 3 * (QPy.t1 - QPy.t2);
+                  CPx.t3 = QPx.t2;
+                  CPy.t3 = QPy.t2;
+                  callback.Curve(CPx.t1, CPy.t1, CPx.t2, CPy.t2, CPx.t3, CPy.t3);
+                  cx2 = CPx.t1;
+                  cy2 = CPy.t1;
+                  cx = CPx.t2;
+                  cy = CPy.t3;
+                  break;
+                case 84:
+                  QPx.t0 = cx;
+                  QPy.t0 = cy;
+                  QPx.t1 = 2 * cx - cx2;
+                  QPy.t1 = 2 * cy - cy2;
+                  QPx.t2 = args.t0;
+                  QPy.t2 = args.t1;
+                  CPx.t0 = QPx.t0;
+                  CPy.t0 = QPy.t0;
+                  CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
+                  CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
+                  CPx.t2 = QPx.t2;
+                  CPy.t2 = QPy.t2;
+                  callback.Curve(CPx.t0, CPy.t0, CPx.t1, CPy.t1, CPx.t2, CPy.t2);
+                  cx2 = CPx.t1;
+                  cy2 = CPy.t1;
+                  cx = CPx.t2;
+                  cy = CPy.t3;
+                  break;
+                case 116:
+                  QPx.t0 = cx;
+                  QPy.t0 = cy;
+                  QPx.t1 = 2 * cx - cx2;
+                  QPy.t1 = 2 * cy - cy2;
+                  QPx.t2 = cx + args.t0;
+                  QPy.t2 = cy + args.t1;
+                  CPx.t0 = QPx.t0;
+                  CPy.t0 = QPy.t0;
+                  CPx.t1 = QPx.t0 + 2 / 3 * (QPx.t1 - QPx.t0);
+                  CPy.t1 = QPy.t0 + 2 / 3 * (QPy.t1 - QPy.t0);
+                  CPx.t2 = QPx.t2;
+                  CPy.t2 = QPy.t2;
+                  callback.Curve(CPx.t0, CPy.t0, CPx.t1, CPy.t1, CPx.t2, CPy.t2);
+                  cx2 = CPx.t1;
+                  cy2 = CPy.t1;
+                  cx = CPx.t2;
+                  cy = CPy.t3;
+                  break;
+                case 97:
+                  const res = this.pathArcTo(
+                    callback,
+                    Vec2.CreateNew(cx, cy),
+                    args,
+                    true
+                  );
+                  cx = res.x;
+                  cy = res.y;
+                  cx2 = cx;
+                  cy2 = cy;
+                  break;
+                case 65:
+                  const res_1 = this.pathArcTo(
+                    callback,
+                    Vec2.CreateNew(cx, cy),
+                    args,
+                    false
+                  );
+                  cx = res_1.x;
+                  cy = res_1.y;
+                  cx2 = cx;
+                  cy2 = cy;
+                  break;
+                default:
+                  if (arg_cnt >= 2) {
+                    cx = args.t0;
+                    cy = args.t1;
+                    cx2 = cx;
+                    cy2 = cy;
+                  }
+                  break;
+              }
+              arg_cnt = 0;
+              is_first = false;
+            }
+          }
         }
       }
     };
-    if (is_first) await render_headers(item[0]);
-    const total_margin = bottom_margin + top_margin;
-    const vertical_area = this.height - total_margin;
-    for (let child of item.items) {
-      if (is_first && page_item_cnt > 0 && (child.pageBreak.is_set || !child.left.is_set && !child.top.is_set && child.calculated.y + child.calculated.render_height - y_adjust > vertical_area)) {
-        ctx.addPage();
-        await render_headers(child);
-        page_y_pos += this.height;
-        page_item_cnt = 0;
-        y_adjust = child.calculated.y;
-      }
-      const dx = child.calculated.x;
-      const dy = child.calculated.y;
-      ctx.translate(dx, dy - y_adjust);
-      ctx.save();
-      await this.renderItem(child, ctx);
-      ctx.restore();
-      ctx.translate(-dx, -dy + y_adjust);
-      page_item_cnt++;
-    }
-    if (item.scale.is_set && item.scale.f_value > 0.01) {
-      ctx.scale(1 / item.scale.f_value);
-    }
-    if (item.rotate.is_set) {
-      ctx.rotate(-item.rotate.f_value);
-    }
-    this.opacity_now = old_opacity;
-    this.font_family = old_font;
-    this.text_color = old_color;
   }
-};
-var Image = class {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  initEngine() {
-  }
-  remove() {
-  }
-  render(ctx) {
-    const ui = this.ui;
-    const box = ui.calculated;
-    if (ui.imageUrl.is_set) {
-      ctx.fillOpacity(1);
-      ctx.opacity(1);
-      ctx.image(ui.imageUrl.s_value, 0, 0, {
-        width: box.render_width,
-        height: box.render_height
-      });
-    }
-  }
-};
-var QR_Code = class {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  initEngine() {
-  }
-  remove() {
-  }
-  async render(ctx) {
-    const ui = this.ui;
-    const box = ui.calculated;
-    if (ui.text.is_set) {
-      const url = await QRCode.toDataURL(ui.text.s_value);
-      ctx.fillOpacity(1);
-      ctx.opacity(1);
-      ctx.image(url, 0, 0, {
-        width: box.render_width,
-        height: box.render_height
-      });
-    }
-  }
-};
-var View = class {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  initEngine() {
-  }
-  remove() {
-  }
-  render(ctx) {
-    const ui = this.ui;
-    const box = ui.calculated;
-    if (ui.borderRadius.is_set) {
-      ctx.roundedRect(
-        0,
-        0,
-        box.render_width,
-        box.render_height,
-        ui.borderRadius.pixels
+});
+
+// src/renderers/pdfkit.ts
+var pdfkit_exports = {};
+__export(pdfkit_exports, {
+  Renderer: () => Renderer
+});
+var PDFKit, QRCode, fs, path, fontPaths, default_font, Renderer, Image, QR_Code, View, Label, Path;
+var init_pdfkit = __esm({
+  "src/renderers/pdfkit.ts"() {
+    init_path();
+    PDFKit = require("pdfkit");
+    QRCode = require("qrcode");
+    fs = require("fs");
+    path = require("path");
+    fontPaths = [
+      "fonts/Open_Sans/OpenSans-Regular.ttf",
+      // Local development
+      path.join(__dirname, "../fonts/Open_Sans/OpenSans-Regular.ttf"),
+      // When imported as a dependency
+      path.join(process.cwd(), "fonts/Open_Sans/OpenSans-Regular.ttf"),
+      // From current working directory
+      path.join(
+        path.dirname(process.execPath),
+        "fonts/Open_Sans/OpenSans-Regular.ttf"
+      ),
+      // From executable path
+      path.join(
+        path.dirname(process.execPath),
+        "../fonts/Open_Sans/OpenSans-Regular.ttf"
+      )
+      // One level up from executable
+    ];
+    if (process.env.APPDATA) {
+      fontPaths.push(
+        path.join(
+          process.env.APPDATA,
+          "npm/node_modules/evg/fonts/Open_Sans/OpenSans-Regular.ttf"
+        )
       );
-    } else {
-      ctx.rect(0, 0, box.render_width, box.render_height);
+    } else if (process.env.HOME) {
+      fontPaths.push(
+        path.join(
+          process.env.HOME,
+          ".npm/node_modules/evg/fonts/Open_Sans/OpenSans-Regular.ttf"
+        )
+      );
     }
-    if (ui.overflow.is_set) {
-      if (ui.overflow.s_value === "hidden") {
-        ctx.clip();
+    default_font = null;
+    for (const fontPath of fontPaths) {
+      try {
+        if (fs.existsSync(fontPath)) {
+          default_font = fontPath;
+          break;
+        }
+      } catch (e) {
+      }
+    }
+    if (!default_font) {
+      console.warn("Warning: Could not find OpenSans-Regular.ttf font file");
+      default_font = fontPaths[0];
+    }
+    Renderer = class {
+      constructor(width, height) {
+        this.opacity_now = 1;
+        this.text_color = "black";
+        this.font_family = default_font;
+        this.static_header = null;
+        this.static_footer = null;
+        this.doc = new PDFKit({ size: [width, height] });
+        this.height = height;
+        this.width = width;
+      }
+      hasCustomSize(item) {
+        if (item.tagName == "Label") {
+          if (item.fontFamily.is_set) {
+            const font_file = item.findFont(item.fontFamily.s_value);
+            if (font_file) {
+              this.doc.font(font_file);
+            } else {
+              this.doc.font(default_font);
+            }
+          } else {
+            this.doc.font(default_font);
+          }
+          if (item.fontSize.is_set) {
+            this.doc.fontSize(item.fontSize.pixels);
+          } else {
+            this.doc.fontSize(12);
+          }
+          return {
+            width: this.doc.widthOfString(item.text.s_value),
+            height: item.fontSize.f_value || 12
+          };
+        }
+      }
+      async render(filename, item, headers) {
+        const fs4 = require("fs");
+        const doc = this.doc;
+        doc.pipe(fs4.createWriteStream(filename));
+        await this.renderItem(item, doc, headers, true);
+        doc.save();
+        doc.end();
+      }
+      async renderToStream(inputStream, item, headers) {
+        const fs4 = require("fs");
+        const doc = this.doc;
+        doc.pipe(inputStream);
+        await this.renderItem(item, doc, headers, true);
+        doc.save();
+        doc.end();
+      }
+      setColors(ui, ctx) {
+        if (ui.color.is_set) {
+          this.text_color = ui.color.s_value;
+        }
+        if (ui.backgroundColor.is_set) {
+          if (ui.opacity.is_set) {
+            ctx.fillColor(ui.backgroundColor.s_value, ui.opacity.f_value);
+            this.opacity_now = ui.opacity.f_value;
+          } else {
+            ctx.fillColor(ui.backgroundColor.s_value, this.opacity_now);
+          }
+        } else {
+          ctx.fillColor("white", 0);
+        }
+        if (ui.borderWidth.is_set && ui.borderColor.is_set) {
+          ctx.lineWidth(ui.borderWidth.pixels);
+          if (ui.opacity.is_set) {
+            ctx.strokeColor(ui.borderColor.s_value, ui.opacity.f_value);
+          } else {
+            ctx.strokeColor(ui.borderColor.s_value, this.opacity_now);
+          }
+        } else {
+          ctx.strokeColor("white", 0).stroke();
+        }
+      }
+      async renderItem(item, ctx, headers, is_first) {
+        const old_opacity = this.opacity_now;
+        const old_font = this.font_family;
+        const old_color = this.text_color;
+        if (item.opacity.is_set) {
+          this.opacity_now = item.opacity.f_value;
+        }
+        ctx.fillOpacity(this.opacity_now);
+        ctx.opacity(this.opacity_now);
+        if (item.rotate.is_set) {
+          ctx.rotate(item.rotate.f_value);
+        }
+        if (item.scale.is_set && item.scale.f_value > 0.01) {
+          ctx.scale(item.scale.f_value);
+        }
+        if (item.fontFamily.is_set) {
+          const font_file = item.findFont(item.fontFamily.s_value);
+          if (font_file) {
+            this.font_family = font_file;
+          }
+        }
+        this.setColors(item, ctx);
+        switch (item.tagName) {
+          case "header":
+          case "footer":
+          case "div":
+          case "View":
+            const r = new View(item);
+            await r.render(ctx);
+            break;
+          case "Label":
+            const label = new Label(item);
+            ctx.save();
+            ctx.fillOpacity(this.opacity_now);
+            ctx.fillColor(this.text_color);
+            await label.render(ctx, this);
+            ctx.restore();
+            break;
+          case "path":
+            const path4 = new Path(item);
+            await path4.render(ctx);
+            break;
+          case "img":
+            const im = new Image(item);
+            await im.render(ctx);
+            break;
+          case "QRCode":
+            const qr = new QR_Code(item);
+            await qr.render(ctx);
+            break;
+        }
+        let page_y_pos = item.calculated.y;
+        let page_item_cnt = 0;
+        let top_margin = 0;
+        let bottom_margin = 0;
+        let y_adjust = 0;
+        if (item.header) this.static_header = item.header;
+        if (item.footer) this.static_footer = item.footer;
+        const render_headers = async (item2) => {
+          if (headers || this.static_header || this.static_footer) {
+            const page_header = headers && headers[0] ? headers[0]() : this.static_header;
+            const page_footer = headers && headers[1] ? headers[1]() : this.static_footer;
+            if (page_header) {
+              page_header.calculate(this.width, this.height, this);
+              await this.renderItem(page_header, ctx);
+              top_margin = page_header.calculated.render_height;
+            }
+            if (page_footer) {
+              page_footer.calculate(this.width, this.height, this);
+              ctx.translate(0, this.height - page_footer.calculated.render_height);
+              await this.renderItem(page_footer, ctx);
+              ctx.translate(
+                0,
+                -(this.height - page_footer.calculated.render_height)
+              );
+              bottom_margin = page_footer.calculated.render_height;
+            }
+            if (page_header) {
+              ctx.translate(0, top_margin);
+            }
+          }
+        };
+        if (is_first) await render_headers(item[0]);
+        const total_margin = bottom_margin + top_margin;
+        const vertical_area = this.height - total_margin;
+        for (let child of item.items) {
+          if (is_first && page_item_cnt > 0 && (child.pageBreak.is_set || !child.left.is_set && !child.top.is_set && child.calculated.y + child.calculated.render_height - y_adjust > vertical_area)) {
+            ctx.addPage();
+            await render_headers(child);
+            page_y_pos += this.height;
+            page_item_cnt = 0;
+            y_adjust = child.calculated.y;
+          }
+          const dx = child.calculated.x;
+          const dy = child.calculated.y;
+          ctx.translate(dx, dy - y_adjust);
+          ctx.save();
+          await this.renderItem(child, ctx);
+          ctx.restore();
+          ctx.translate(-dx, -dy + y_adjust);
+          page_item_cnt++;
+        }
+        if (item.scale.is_set && item.scale.f_value > 0.01) {
+          ctx.scale(1 / item.scale.f_value);
+        }
+        if (item.rotate.is_set) {
+          ctx.rotate(-item.rotate.f_value);
+        }
+        this.opacity_now = old_opacity;
+        this.font_family = old_font;
+        this.text_color = old_color;
+      }
+    };
+    Image = class {
+      constructor(ui) {
+        this.ui = ui;
+      }
+      initEngine() {
+      }
+      remove() {
+      }
+      render(ctx) {
+        const ui = this.ui;
+        const box = ui.calculated;
+        if (ui.imageUrl.is_set) {
+          ctx.fillOpacity(1);
+          ctx.opacity(1);
+          ctx.image(ui.imageUrl.s_value, 0, 0, {
+            width: box.render_width,
+            height: box.render_height
+          });
+        }
+      }
+    };
+    QR_Code = class {
+      constructor(ui) {
+        this.ui = ui;
+      }
+      initEngine() {
+      }
+      remove() {
+      }
+      async render(ctx) {
+        const ui = this.ui;
+        const box = ui.calculated;
+        if (ui.text.is_set) {
+          const url = await QRCode.toDataURL(ui.text.s_value);
+          ctx.fillOpacity(1);
+          ctx.opacity(1);
+          ctx.image(url, 0, 0, {
+            width: box.render_width,
+            height: box.render_height
+          });
+        }
+      }
+    };
+    View = class {
+      constructor(ui) {
+        this.ui = ui;
+      }
+      initEngine() {
+      }
+      remove() {
+      }
+      render(ctx) {
+        const ui = this.ui;
+        const box = ui.calculated;
         if (ui.borderRadius.is_set) {
           ctx.roundedRect(
             0,
@@ -1009,76 +1006,108 @@ var View = class {
         } else {
           ctx.rect(0, 0, box.render_width, box.render_height);
         }
+        if (ui.overflow.is_set) {
+          if (ui.overflow.s_value === "hidden") {
+            ctx.clip();
+            if (ui.borderRadius.is_set) {
+              ctx.roundedRect(
+                0,
+                0,
+                box.render_width,
+                box.render_height,
+                ui.borderRadius.pixels
+              );
+            } else {
+              ctx.rect(0, 0, box.render_width, box.render_height);
+            }
+          }
+        }
+        ctx.fillAndStroke();
       }
-    }
-    ctx.fillAndStroke();
-  }
-};
-var Label = class {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  initEngine() {
-  }
-  remove() {
-  }
-  render(ctx, r) {
-    const ui = this.ui;
-    const box = ui.calculated;
-    if (ui.fontFamily.is_set) {
-      const font_file = ui.findFont(ui.fontFamily.s_value);
-      if (font_file) {
-        ctx.font(font_file);
-      } else {
-        ctx.font(r.font_family);
+    };
+    Label = class {
+      constructor(ui) {
+        this.ui = ui;
       }
-    } else {
-      ctx.font(r.font_family);
-    }
-    if (ui.fontSize.is_set) {
-      ctx.fontSize(ui.fontSize.pixels);
-    } else {
-      ctx.fontSize(12);
-    }
-    ctx.text(ui.text.s_value, 0, -3, {
-      lineGap: 0,
-      paragraphGap: 0
-    });
-  }
-};
-var Path = class {
-  constructor(ui) {
-    this.ui = ui;
-  }
-  initEngine() {
-  }
-  remove() {
-  }
-  render(ctx) {
-    const ui = this.ui;
-    const parser = new EVGPathParser();
-    const coll = new PathScaler();
-    parser.parsePath(ui.svgPath.s_value, coll);
-    const svgStr = coll.getString(
-      ui.calculated.render_width,
-      ui.calculated.render_height
-    );
-    ctx.path(svgStr);
-    if (ui.overflow.is_set) {
-      if (ui.overflow.s_value === "hidden") {
-        ctx.clip();
+      initEngine() {
+      }
+      remove() {
+      }
+      render(ctx, r) {
+        const ui = this.ui;
+        const box = ui.calculated;
+        if (ui.fontFamily.is_set) {
+          const font_file = ui.findFont(ui.fontFamily.s_value);
+          if (font_file) {
+            ctx.font(font_file);
+          } else {
+            ctx.font(r.font_family);
+          }
+        } else {
+          ctx.font(r.font_family);
+        }
+        if (ui.fontSize.is_set) {
+          ctx.fontSize(ui.fontSize.pixels);
+        } else {
+          ctx.fontSize(12);
+        }
+        ctx.text(ui.text.s_value, 0, -3, {
+          lineGap: 0,
+          paragraphGap: 0
+        });
+      }
+    };
+    Path = class {
+      constructor(ui) {
+        this.ui = ui;
+      }
+      initEngine() {
+      }
+      remove() {
+      }
+      render(ctx) {
+        const ui = this.ui;
+        const parser = new EVGPathParser();
+        const coll = new PathScaler();
+        parser.parsePath(ui.svgPath.s_value, coll);
+        const svgStr = coll.getString(
+          ui.calculated.render_width,
+          ui.calculated.render_height
+        );
         ctx.path(svgStr);
+        if (ui.overflow.is_set) {
+          if (ui.overflow.s_value === "hidden") {
+            ctx.clip();
+            ctx.path(svgStr);
+          }
+        }
+        ctx.fill().stroke();
       }
-    }
-    ctx.fill().stroke();
+    };
   }
-};
+});
 
 // src/layout/index.ts
-var path2 = __toESM(require("path"));
-var fs2 = __toESM(require("fs"));
-var DOMParser = require("xmldom").DOMParser;
-var XMLSerializer = require("xmldom").XMLSerializer;
+var Renderer2 = null;
+var path2 = null;
+var fs2 = null;
+var DOMParser = null;
+var XMLSerializer = null;
+var _legacyModulesLoaded = false;
+function loadLegacyModules() {
+  if (_legacyModulesLoaded) return true;
+  try {
+    Renderer2 = (init_pdfkit(), __toCommonJS(pdfkit_exports)).Renderer;
+    path2 = require("path");
+    fs2 = require("fs");
+    DOMParser = require("xmldom").DOMParser;
+    XMLSerializer = require("xmldom").XMLSerializer;
+    _legacyModulesLoaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 var UIRenderPosition = class {
   constructor(x, y, renderer) {
     this.x = 0;
@@ -1104,11 +1133,21 @@ var UICalculated = class {
 var UICompRegistry = {};
 var UIRenderers = {};
 var UIFonts = {};
+var _fontProvider = null;
+var _componentRegistry = null;
 var register_font = (name, fontFile) => {
-  UIFonts[name] = fontFile;
+  if (_fontProvider) {
+    _fontProvider.registerFont(name, fontFile);
+  } else {
+    UIFonts[name] = fontFile;
+  }
 };
 var register_component = (name, component) => {
-  UICompRegistry[name] = component;
+  if (_componentRegistry) {
+    _componentRegistry.register(name, component);
+  } else {
+    UICompRegistry[name] = component;
+  }
 };
 var EVG = class _EVG {
   constructor(strJSON, context) {
@@ -1432,12 +1471,20 @@ var EVG = class _EVG {
     }
   }
   static installShippedFonts() {
+    if (!loadLegacyModules()) {
+      console.warn(
+        "EVG.installShippedFonts() requires Node.js environment. Use IFontProvider in browser."
+      );
+      return;
+    }
     const rootPath = path2.resolve(__dirname, "../../fonts");
     fs2.readdir(rootPath, (err, files) => {
+      if (err || !files) return;
       files.forEach((pathName) => {
         const fontPath = rootPath + "/" + pathName;
         if (fs2.lstatSync(fontPath).isDirectory()) {
           fs2.readdir(fontPath, (err2, files2) => {
+            if (err2 || !files2) return;
             files2.filter((f) => f.indexOf(".ttf") > 0).forEach((font) => {
               _EVG.installFont(
                 path2.parse(font).name.toLocaleLowerCase(),
@@ -1456,20 +1503,36 @@ var EVG = class _EVG {
     register_component(name, componentData);
   }
   static async renderToStream(inputStream, width, height, item, header, footer) {
-    const renderer = new Renderer(width, height);
+    if (!loadLegacyModules()) {
+      throw new Error(
+        "EVG.renderToStream() requires Node.js environment. Use IRenderer in browser."
+      );
+    }
+    const renderer = new Renderer2(width, height);
     item.calculate(width, height, renderer);
     renderer.renderToStream(inputStream, item, [header, footer]);
   }
   static async renderToFile(fileName, width, height, item, header, footer) {
-    const renderer = new Renderer(width, height);
+    if (!loadLegacyModules()) {
+      throw new Error(
+        "EVG.renderToFile() requires Node.js environment. Use IRenderer in browser."
+      );
+    }
+    const renderer = new Renderer2(width, height);
     item.calculate(width, height, renderer);
     renderer.render(fileName, item, [header, footer]);
   }
   findComponent(name) {
+    if (_componentRegistry) {
+      return _componentRegistry.get(name);
+    }
     return UICompRegistry[name];
   }
   findFont(name) {
-    return UIFonts[name];
+    if (_fontProvider) {
+      return _fontProvider.getFont(name);
+    }
+    return UIFonts[name] || null;
   }
   findContent(listParam) {
     const list = listParam || [];
@@ -2013,7 +2076,15 @@ var EVG = class _EVG {
           }
         } else {
           if (childUI && childUI.tagName == "component") {
-            const serializer = new XMLSerializer();
+            let serializer;
+            if (typeof window !== "undefined" && typeof window.XMLSerializer !== "undefined") {
+              serializer = new window.XMLSerializer();
+            } else if (loadLegacyModules() && XMLSerializer) {
+              serializer = new XMLSerializer();
+            } else {
+              console.warn("No XML serializer available for component registration");
+              continue;
+            }
             let compDef;
             for (let ii2 = 0; ii2 < childNode.childNodes.length; ii2++) {
               if (childNode.childNodes[ii2].nodeType == 1) {
@@ -2055,12 +2126,22 @@ var EVG = class _EVG {
     }
   }
   parseXML(xmlStr) {
-    var parser = new DOMParser();
+    let parser;
+    if (typeof window !== "undefined" && typeof window.DOMParser !== "undefined") {
+      parser = new window.DOMParser();
+    } else if (loadLegacyModules() && DOMParser) {
+      parser = new DOMParser();
+    } else {
+      throw new Error(
+        "No XML parser available. In Node.js, install xmldom. In browser, DOMParser should be available."
+      );
+    }
     var xmlDoc = parser.parseFromString(xmlStr, "text/xml");
     return this.readXMLDoc(xmlDoc.childNodes[0], null);
   }
   adjustLayoutParams(node, renderer) {
-    const special = renderer.hasCustomSize(node);
+    var _a;
+    const special = renderer.measureElement ? renderer.measureElement(this) : (_a = renderer.hasCustomSize) == null ? void 0 : _a.call(renderer, this);
     if (typeof special !== "undefined") {
       this.width.pixels = special.width;
       this.height.pixels = special.height;
@@ -2490,6 +2571,7 @@ var EVG = class _EVG {
     return newPOS;
   }
   default_layout(node, render_pos) {
+    var _a, _b;
     if (node.lineBreak.b_value) {
       node.calculated.lineBreak = true;
     }
@@ -2670,7 +2752,7 @@ var EVG = class _EVG {
     }
     if (!node.height.is_set) {
       elem_h += child_heights;
-      const special = render_pos.renderer.hasCustomSize(node);
+      const special = render_pos.renderer.measureElement ? render_pos.renderer.measureElement(node) : (_b = (_a = render_pos.renderer).hasCustomSize) == null ? void 0 : _b.call(_a, node);
       if (typeof special !== "undefined") {
         elem_h += special.height;
         node.calculated.width_override = special.width;

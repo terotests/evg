@@ -13,6 +13,18 @@ Refactor `src/layout/index.ts` to remove direct dependencies on:
 
 Instead, use dependency injection and interfaces to allow different environments (Node.js, browser, etc.) to provide their own implementations.
 
+## Progress
+
+- [x] **Phase 1**: Define Interfaces (`src/core/interfaces.ts`, `src/core/types.ts`)
+- [x] **Phase 2**: Create Abstract Base Classes (`ComponentRegistry`, `AbstractFontProvider`, `AbstractRenderer`, `AbstractSerializer`)
+- [x] **Phase 3**: Refactor PDFKit Renderer (`src/renderers/PDFRenderer.ts` implementing `IRenderer`)
+- [x] **Phase 4**: Extract XML Serializer (`src/serializers/XMLSerializer.ts` with Node/Browser variants)
+- [x] **Phase 5**: Create Font Provider (`src/providers/NodeFontProvider.ts` with shipped font discovery)
+- [x] **Phase 6**: Refactor EVG Class (dependency injection support, lazy-loaded Node.js modules)
+- [x] **Phase 7**: Create Environment Factory (`src/environment/index.ts`, `src/environment/node.ts`)
+- [ ] **Phase 8**: Unit Testing
+- [ ] **Phase 9**: Browser Demo Application
+
 ## Current Problems
 
 1. **Tight coupling**: `EVG` class directly imports `Renderer` from pdfkit
@@ -323,11 +335,174 @@ src/
 - [ ] Update `src/bin/evg.ts` to use new environment
 - [ ] Update build configuration
 
-### Phase 8: Documentation & Tests
+### Phase 8: Unit Tests for Core Functionality
+
+- [ ] Create `test/core/` directory for core unit tests
+- [ ] Test XML string → EVG node tree conversion
+- [ ] Test EVG node tree → XML string serialization (round-trip)
+- [ ] Test JSON string → EVG node conversion
+- [ ] Test layout parameter parsing (width, height, percentages, pixels, em, etc.)
+- [ ] Test layout calculations without renderer dependency
+- [ ] Test component registration and instantiation
+- [ ] Test font registration lookup
+- [ ] Test inheritance of styles (fontSize, fontFamily, color)
+
+#### Test Cases for EVG Parsing
+
+```typescript
+// test/core/test_parsing.ts
+
+describe("EVG XML Parsing", () => {
+  describe("Basic Element Parsing", () => {
+    it("should parse empty View element", () => {
+      const xml = "<View />";
+      const evg = parseEVG(xml);
+      expect(evg.tagName).to.equal("View");
+      expect(evg.items.length).to.equal(0);
+    });
+
+    it("should parse View with attributes", () => {
+      const xml = '<View width="100" height="50" background-color="red" />';
+      const evg = parseEVG(xml);
+      expect(evg.width.pixels).to.equal(100);
+      expect(evg.height.pixels).to.equal(50);
+      expect(evg.backgroundColor.s_value).to.equal("red");
+    });
+
+    it("should parse nested elements", () => {
+      const xml = `
+        <View width="100%">
+          <View width="50%" />
+          <Label text="Hello" />
+        </View>
+      `;
+      const evg = parseEVG(xml);
+      expect(evg.items.length).to.equal(2);
+      expect(evg.items[0].tagName).to.equal("View");
+      expect(evg.items[1].tagName).to.equal("Label");
+    });
+  });
+
+  describe("Unit Parsing", () => {
+    it("should parse pixel values", () => {
+      const evg = parseEVG('<View width="100px" />');
+      expect(evg.width.unit).to.equal(3); // pixels
+      expect(evg.width.f_value).to.equal(100);
+    });
+
+    it("should parse percentage values", () => {
+      const evg = parseEVG('<View width="50%" />');
+      expect(evg.width.unit).to.equal(1); // percentage
+      expect(evg.width.f_value).to.equal(50);
+    });
+
+    it("should parse em values", () => {
+      const evg = parseEVG('<View width="2em" />');
+      expect(evg.width.unit).to.equal(2); // em
+      expect(evg.width.f_value).to.equal(2);
+    });
+
+    it("should parse fill value", () => {
+      const evg = parseEVG('<View width="fill" />');
+      expect(evg.width.unit).to.equal(5); // fill
+    });
+  });
+
+  describe("Style Inheritance", () => {
+    it("should inherit fontSize from parent", () => {
+      const xml = `
+        <View font-size="20">
+          <Label text="Child" />
+        </View>
+      `;
+      const evg = parseEVG(xml);
+      // After inheritance processing
+      expect(evg.items[0].fontSize.f_value).to.equal(20);
+    });
+
+    it("should inherit fontFamily from parent", () => {
+      const xml = `
+        <View font-family="OpenSans">
+          <Label text="Child" />
+        </View>
+      `;
+      const evg = parseEVG(xml);
+      expect(evg.items[0].fontFamily.s_value).to.equal("OpenSans");
+    });
+
+    it("should not override explicitly set child values", () => {
+      const xml = `
+        <View font-size="20">
+          <Label text="Child" font-size="14" />
+        </View>
+      `;
+      const evg = parseEVG(xml);
+      expect(evg.items[0].fontSize.f_value).to.equal(14);
+    });
+  });
+
+  describe("Text Content Parsing", () => {
+    it("should parse inline text as Label nodes", () => {
+      const xml = "<View>Hello World</View>";
+      const evg = parseEVG(xml);
+      expect(evg.items.length).to.equal(2); // "Hello" and "World"
+      expect(evg.items[0].tagName).to.equal("Label");
+      expect(evg.items[0].text.s_value).to.equal("Hello ");
+    });
+  });
+
+  describe("Component Parsing", () => {
+    it("should expand registered components", () => {
+      registerComponent(
+        "Button",
+        '<View background-color="blue"><content/></View>'
+      );
+      const xml = '<Button><Label text="Click me"/></Button>';
+      const evg = parseEVG(xml);
+      expect(evg.backgroundColor.s_value).to.equal("blue");
+      expect(evg.items[0].text.s_value).to.equal("Click me");
+    });
+  });
+});
+
+describe("EVG Serialization", () => {
+  it("should serialize EVG back to XML (round-trip)", () => {
+    const original =
+      '<View width="100" height="50"><Label text="Test"/></View>';
+    const evg = parseEVG(original);
+    const serialized = serializeEVG(evg);
+    const reparsed = parseEVG(serialized);
+
+    expect(reparsed.width.pixels).to.equal(evg.width.pixels);
+    expect(reparsed.height.pixels).to.equal(evg.height.pixels);
+    expect(reparsed.items[0].text.s_value).to.equal(evg.items[0].text.s_value);
+  });
+});
+
+describe("Layout Calculations", () => {
+  it("should calculate pixel dimensions from percentages", () => {
+    const xml = '<View width="50%" height="25%" />';
+    const evg = parseEVG(xml);
+
+    // Create mock measurer
+    const mockMeasurer: IMeasurer = {
+      measureText: () => ({ width: 0, height: 0 }),
+    };
+
+    // Calculate with parent dimensions 400x200
+    evg.calculate(400, 200, mockMeasurer);
+
+    expect(evg.width.pixels).to.equal(200); // 50% of 400
+    expect(evg.height.pixels).to.equal(50); // 25% of 200
+  });
+});
+```
+
+### Phase 9: Documentation & Examples
 
 - [ ] Update README with new architecture
 - [ ] Add examples for custom renderer/serializer
-- [ ] Update tests for new structure
+- [ ] Document all interfaces
 
 ## Example Usage After Refactoring
 
@@ -566,3 +741,181 @@ The demo app should cover these test scenarios:
 - **Phase 9: 4-6 hours (browser demo app)**
 
 **Total: ~14-19 hours of work**
+
+---
+
+## Phase 6 Implementation Summary
+
+Phase 6 has been completed with the following changes to `src/layout/index.ts`:
+
+### Changes Made
+
+1. **Lazy-loaded Node.js modules**:
+
+   - `Renderer`, `path`, `fs`, `DOMParser`, and `XMLSerializer` are now dynamically imported only when needed
+   - This allows the EVG class to be imported in browser environments without errors
+
+2. **Dependency Injection Support**:
+
+   - Added `setFontProvider(provider: IFontProvider)` - inject custom font handling
+   - Added `setComponentRegistry(registry: IComponentRegistry)` - inject custom component management
+   - Added `setSerializer(serializer: ISerializer)` - inject custom XML/JSON parsing
+   - Added corresponding getter functions: `getFontProvider()`, `getComponentRegistry()`
+
+3. **Interface-based Types**:
+
+   - `UIRenderPosition.renderer` now uses `IMeasurer` interface instead of concrete `Renderer` type
+   - `calculate()` method accepts `IMeasurer` instead of `Renderer`
+   - `adjustLayoutParams()` method accepts `IMeasurer` instead of `Renderer`
+
+4. **Backward Compatible API**:
+
+   - All existing static methods (`renderToFile`, `renderToStream`, `installShippedFonts`) still work in Node.js
+   - Legacy global registries (`UIFonts`, `UICompRegistry`) are still used when no DI providers are set
+   - `register_font()` and `register_component()` now route to DI providers when available
+
+5. **Browser-compatible XML Parsing**:
+
+   - `parseXML()` now checks for `window.DOMParser` (browser) before falling back to `xmldom` (Node.js)
+   - Component serialization uses `window.XMLSerializer` when available
+
+6. **IMeasurer.measureElement**:
+   - Added optional `measureElement?(element: any)` method to `IMeasurer` interface
+   - `PDFRenderer` implements this method for measuring Label elements
+   - Layout code uses `measureElement` when available, falling back to `hasCustomSize` for legacy renderers
+
+### New Exports from `src/layout/index.ts`
+
+```typescript
+// Dependency injection setters
+export function setFontProvider(provider: IFontProvider): void;
+export function setComponentRegistry(registry: IComponentRegistry): void;
+export function setSerializer(serializer: ISerializer): void;
+
+// Dependency injection getters
+export function getFontProvider(): IFontProvider | null;
+export function getComponentRegistry(): IComponentRegistry | null;
+```
+
+### Usage Examples
+
+#### Node.js (Legacy - unchanged)
+
+```typescript
+import { EVG } from "evg";
+EVG.installShippedFonts();
+const doc = new EVG('<View width="100" height="100"/>');
+await EVG.renderToFile("output.pdf", 800, 600, doc);
+```
+
+#### Node.js (with DI)
+
+```typescript
+import { EVG, setFontProvider, setComponentRegistry } from "evg/layout";
+import { NodeFontProvider } from "evg/providers";
+import { ComponentRegistry } from "evg/core";
+
+setFontProvider(new NodeFontProvider());
+setComponentRegistry(new ComponentRegistry());
+
+const doc = new EVG('<View width="100" height="100"/>');
+// ... render with custom renderer
+```
+
+#### Browser (future)
+
+```typescript
+import { EVG, setFontProvider, setSerializer } from "evg/layout";
+import { BrowserFontProvider } from "evg/providers";
+import { BrowserXMLSerializer } from "evg/serializers";
+
+setFontProvider(new BrowserFontProvider());
+setSerializer(new BrowserXMLSerializer());
+
+const doc = new EVG('<View width="100" height="100"/>');
+// ... render with CanvasRenderer or SVGRenderer
+```
+
+### Test Results
+
+- All 84 tests pass (22 core + 20 renderer + 25 serializer + 17 provider)
+- Build successful with TypeScript declarations generated
+
+---
+
+## Phase 7 Implementation Summary
+
+Phase 7 has been completed with the creation of the Environment Factory pattern.
+
+### New Files Created
+
+1. **`src/environment/index.ts`** - Base `EVGEnvironment` class
+2. **`src/environment/node.ts`** - Node.js specific `NodeEnvironment` class
+3. **`src/environment/EVGEnvironment.test.ts`** - Tests for base environment (20 tests)
+4. **`src/environment/NodeEnvironment.test.ts`** - Tests for Node environment (8 tests)
+
+### EVGEnvironment Class
+
+The base `EVGEnvironment` class provides:
+
+- **Configuration**: Bundles renderer, serializer, font provider, and component registry
+- **Font Management**: `registerFont()`, `getFont()`, `listFonts()`, `installShippedFonts()`
+- **Component Management**: `registerComponent()`, `getComponent()`, `hasComponent()`, `listComponents()`
+- **Parsing**: `parse()`, `serialize()`, `canParse()`
+- **Layout**: `calculateLayout()`
+- **Rendering**: `render()`, `endDocument()`
+- **Factory Methods**: `createNodePDF()`, `createMinimal()`, `create()`
+
+### NodeEnvironment Class
+
+The `NodeEnvironment` class extends `EVGEnvironment` with Node.js specific features:
+
+- **File Rendering**: `renderToFile(filename, evg, options)`
+- **Stream Rendering**: `renderToStream(stream, evg, options)`
+- **Buffer Rendering**: `renderToBuffer(evg, options)`
+- **Factory Methods**: `createPDF()`, `createWithRenderer()`
+
+### Usage Examples
+
+#### Quick Start (Node.js PDF)
+
+```typescript
+import { NodeEnvironment } from "evg/environment/node";
+
+// Create PDF environment with all defaults
+const env = await NodeEnvironment.createPDF();
+
+// Parse and render
+const doc = env.parse('<View width="100%"><Label text="Hello World"/></View>');
+await env.renderToFile("output.pdf", doc);
+```
+
+#### Custom Configuration
+
+```typescript
+import { EVGEnvironment } from "evg/environment";
+import { PDFRenderer } from "evg/renderers";
+import { NodeFontProvider } from "evg/providers";
+import { NodeXMLSerializer } from "evg/serializers";
+
+const env = EVGEnvironment.create({
+  renderer: new PDFRenderer(),
+  serializer: new NodeXMLSerializer(),
+  fontProvider: new NodeFontProvider(),
+  defaultWidth: 800,
+  defaultHeight: 600,
+});
+
+// Register custom fonts and components
+env.registerFont("MyFont", "/path/to/font.ttf");
+env.registerComponent("Button", '<View background-color="blue"/>');
+
+// Parse and render
+const doc = env.parse("<View><Button/></View>");
+env.render(doc);
+```
+
+### Test Results
+
+- **112 tests passing** (22 core + 20 EVGEnvironment + 8 NodeEnvironment + 20 renderer + 25 serializer + 17 provider)
+- Build successful
