@@ -28,7 +28,7 @@ This is the **required** workflow that must pass before merging.
 **Jobs:**
 
 #### 1. Test Job
-- Runs on multiple Node.js versions (18.x, 20.x, 22.x)
+- Runs on multiple Node.js versions (20.x, 22.x)
 - Ensures compatibility across different Node.js versions
 - Runs unit tests
 - Checks for high-severity vulnerabilities
@@ -52,7 +52,7 @@ To enforce these checks before merging, configure branch protection rules on Git
    - ✅ Require branches to be up to date before merging
    - Select status checks:
      - `test` (from CI workflow)
-     - `test (18.x)`, `test (20.x)`, `test (22.x)` (from Test workflow)
+     - `test (20.x)`, `test (22.x)` (from Test workflow)
    - ✅ Require pull request reviews before merging (recommended)
    - ✅ Dismiss stale pull request approvals when new commits are pushed
 
@@ -99,9 +99,10 @@ Current test coverage:
 
 ### Node Version Compatibility Issues
 
-The project requires Node.js 18.x or higher due to:
+The project requires Node.js 20.x or higher due to:
 - `@types/node@^20.0.0` for vitest compatibility
 - Modern TypeScript features
+- Vitest 4.x requires Node.js 20.x+ (ESM compatibility issues with Node 18.x)
 
 ### Audit Failures
 
