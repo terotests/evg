@@ -1,5 +1,8 @@
 # ⚡ EVG ⚡
 
+[![CI](https://github.com/terotests/evg/actions/workflows/ci.yml/badge.svg)](https://github.com/terotests/evg/actions/workflows/ci.yml)
+[![Tests](https://github.com/terotests/evg/actions/workflows/test.yml/badge.svg)](https://github.com/terotests/evg/actions/workflows/test.yml)
+
 ## THUNDERSTRUCK EDITION 2.0
 
 Layout engine to create vector graphics (like PDF) using JavaScript and XML based declarative markup.
