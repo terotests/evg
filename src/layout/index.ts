@@ -8,6 +8,7 @@ import type {
   ISerializer,
   IFontProvider,
   IComponentRegistry,
+  FontSource,
 } from "../core/interfaces";
 
 // Legacy imports for backward compatibility (Node.js only)
@@ -491,7 +492,7 @@ export class EVG {
     return UICompRegistry[name];
   }
 
-  findFont(name: string): string | ArrayBuffer | null {
+  findFont(name: string): FontSource | null {
     // Use font provider if available, otherwise use legacy global registry
     if (_fontProvider) {
       return _fontProvider.getFont(name);

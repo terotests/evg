@@ -13,6 +13,7 @@ import type {
   IFontProvider,
   IComponentRegistry,
   IEVG,
+  FontSource,
 } from "../core/interfaces";
 import { ComponentRegistry } from "../core/ComponentRegistry";
 
@@ -171,7 +172,7 @@ export class EVGEnvironment {
   /**
    * Get a registered font
    */
-  getFont(name: string): string | ArrayBuffer | null {
+  getFont(name: string): FontSource | null {
     return this._fontProvider?.getFont(name) ?? null;
   }
 
