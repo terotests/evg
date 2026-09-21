@@ -23,7 +23,8 @@
     "test:watch": "vitest",
     "build": "node build.js",
     "prepublishOnly": "npm run build",
-    "storm:test": "node scripts/storm-ranger-test.mjs"
+    "storm:test": "node scripts/storm-ranger-test.mjs",
+    "storm:adopt": "node scripts/check-adopt.mjs"
   },
   "repository": {
     "type": "git",

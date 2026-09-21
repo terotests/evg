@@ -92,6 +92,8 @@ await Storm.renderToFile("./storm.pdf", 400, 200, storm);
 | `examples/` | XML and Storm JSON samples |
 | `dist/` | published NPM bundle |
 
-Ranger still vendors a copy under `lib/evg` so its gallery CI keeps
-compiling offline. That copy is not the place to land new engine work —
-see `lib/evg/CANONICAL.md` in the Ranger repo.
+Ranger gallery packages import this tree (`deps/evg/storm` after
+`scripts/fetch-evg.sh`). Engine unit tests run here (`npm run storm:test`);
+Ranger CI keeps only gallery-side EVG checks (toolbar, a11y, UI conformance).
+
+New engine work lands in this repository, not in Ranger.
