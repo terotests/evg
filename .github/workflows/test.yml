@@ -99,7 +99,7 @@ jobs:
   coverage:
     name: Test Coverage
     runs-on: ubuntu-latest
-    if: github.event_name == "pull_request"
+    if: github.event_name == 'pull_request'
 
     steps:
       - name: Checkout code
