@@ -62,6 +62,30 @@ jobs:
       - name: Build
         run: npm run build
 
+  docs:
+    name: Docs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: docs/site/package-lock.json
+
+      - name: Install documentation dependencies
+        working-directory: docs/site
+        run: npm ci
+
+      - name: Build the documentation site
+        working-directory: docs/site
+        run: npm run build
+        env:
+          EVG_COMMIT: ${{ github.sha }}
+          ASTRO_TELEMETRY_DISABLED: "1"
+
   # Stable required-check name for branch protection. Prefer this over
   # matrix-specific names like `Run Unit Tests (20.x)` or a bare `test`.
   test-gate:

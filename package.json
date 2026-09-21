@@ -24,7 +24,10 @@
     "build": "node build.js",
     "prepublishOnly": "npm run build",
     "storm:test": "node scripts/storm-ranger-test.mjs",
-    "storm:adopt": "node scripts/check-adopt.mjs"
+    "storm:adopt": "node scripts/check-adopt.mjs",
+    "docs:dev": "npm --prefix docs/site run dev",
+    "docs:build": "npm --prefix docs/site run build",
+    "docs:check": "npm --prefix docs/site run check"
   },
   "repository": {
     "type": "git",
