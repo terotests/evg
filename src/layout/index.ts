@@ -9,6 +9,7 @@ import type {
   IFontProvider,
   IComponentRegistry,
 } from "../core/interfaces";
+import { stormToXml } from "../storm/xml";
 
 // Legacy imports for backward compatibility (Node.js only)
 // These are dynamically imported to allow browser usage
@@ -22,19 +23,45 @@ let XMLSerializer: any = null;
 let _legacyModulesLoaded = false;
 
 // Lazy load legacy modules (Node.js only)
+function loadXmlDom(): { DOMParser: any; XMLSerializer: any } | null {
+  try {
+    const xmldom = require("@xmldom/xmldom");
+    return {
+      DOMParser: xmldom.DOMParser,
+      XMLSerializer: xmldom.XMLSerializer,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function xmlParser(): any {
+  if (
+    typeof window !== "undefined" &&
+    typeof window.DOMParser !== "undefined"
+  ) {
+    return new window.DOMParser();
+  }
+  const xmldom = loadXmlDom();
+  if (xmldom) return new xmldom.DOMParser();
+  return null;
+}
+
+// Lazy load legacy modules (Node.js only) — PDF renderer, fs, fonts
 function loadLegacyModules(): boolean {
   if (_legacyModulesLoaded) return true;
   try {
-    // Dynamic require for Node.js environment
     Renderer = require("../renderers/pdfkit").Renderer;
     path = require("path");
     fs = require("fs");
-    DOMParser = require("@xmldom/xmldom").DOMParser;
-    XMLSerializer = require("@xmldom/xmldom").XMLSerializer;
+    const xmldom = loadXmlDom();
+    if (xmldom) {
+      DOMParser = xmldom.DOMParser;
+      XMLSerializer = xmldom.XMLSerializer;
+    }
     _legacyModulesLoaded = true;
     return true;
   } catch (e) {
-    // Running in browser or modules not available
     return false;
   }
 }
@@ -1219,19 +1246,10 @@ export class EVG {
   }
 
   parseXML(xmlStr: string) {
-    let parser: any;
-    // Check for browser environment first
-    if (
-      typeof window !== "undefined" &&
-      typeof window.DOMParser !== "undefined"
-    ) {
-      parser = new window.DOMParser();
-    } else if (loadLegacyModules() && DOMParser) {
-      // Node.js environment with xmldom
-      parser = new DOMParser();
-    } else {
+    const parser = xmlParser();
+    if (!parser) {
       throw new Error(
-        "No XML parser available. In Node.js, install xmldom. In browser, DOMParser should be available."
+        "No XML parser available. In Node.js, install @xmldom/xmldom. In browser, DOMParser should be available."
       );
     }
     var xmlDoc = parser.parseFromString(xmlStr, "text/xml");
@@ -1253,6 +1271,12 @@ export class EVG {
           return;
         }
         var jsonDict = JSON.parse(s);
+        // Storm 3.0 documents (`{"evg":1,"root":…}`) render through the
+        // existing XML parser so PDF / Canvas stay on the Thunderstruck path.
+        if (jsonDict && jsonDict.evg === 1 && jsonDict.root) {
+          this.parseXML(stormToXml(jsonDict));
+          return;
+        }
         this.readParams(jsonDict);
       }
     } catch (e) {

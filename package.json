@@ -1,13 +1,29 @@
 {
   "name": "evg",
-  "version": "2.0.0",
-  "description": "Elastic View Graphics ⚡ THUNDERSTRUCK EDITION ⚡",
+  "version": "3.0.0",
+  "description": "Elastic View Graphics — Thunderstruck 2.x TypeScript API and Storm 3.0 Ranger layout engine",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./storm": {
+      "types": "./dist/storm.d.ts",
+      "default": "./dist/storm/index.js"
+    },
+    "./layout": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
     "build": "node build.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "storm:test": "node scripts/storm-ranger-test.mjs"
   },
   "repository": {
     "type": "git",
@@ -23,7 +39,22 @@
   },
   "homepage": "https://github.com/terotests/evg#readme",
   "files": [
-    "dist/**/*"
+    "dist/**/*",
+    "storm/**/*",
+    "image/**/*",
+    "zip/**/*",
+    "LICENSE",
+    "README.md",
+    "STORM.md"
+  ],
+  "keywords": [
+    "evg",
+    "layout",
+    "pdf",
+    "vector",
+    "ranger",
+    "css",
+    "flexbox"
   ],
   "dependencies": {
     "jspdf": "^3.0.4",
