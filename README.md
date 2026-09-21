@@ -69,8 +69,8 @@ Sibling checkout: `"evg": { "path": "../evg/storm" }`. The `image` and
 
 Ranger's gallery still compiles against a vendor copy until Storm is on
 `master` here; then it can `rgrc install` this git dependency. Engine
-unit tests run here (`npm run storm:test`) when a Ranger compiler is
-available.
+unit tests run here (`npm run storm:test`) and are a merge gate on
+`master` (`test-gate` / `Storm engine (Ranger)` in GitHub Actions).
 
 ---
 

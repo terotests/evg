@@ -111,14 +111,22 @@ jobs:
 5. Paste your NPM access token as the value
 6. Click **Add secret**
 
-### Step 5: Verify Branch Protection (Optional but Recommended)
+### Step 5: Protect `master` so Storm cannot be skipped
 
-If you have branch protection rules on `master`/`main`:
+PRs already run Storm, but GitHub will still merge a red engine suite
+unless the check is **required**. The in-repo gate is `test-gate` (Storm
+engine + vitest + build). `Run Unit Tests (20.x)` / `(22.x)` also `needs`
+Storm, so those historical names cannot go green while the engine is red.
 
-1. Go to **Settings** → **Branches**
-2. Click **Edit** on your protection rule for `master`/`main`
-3. Ensure **Require status checks to pass before merging** includes your workflow (if desired)
-4. Note: The publish workflow runs _after_ merge, so it doesn't block PRs
+1. Go to **Settings** → **Rules** → **Rulesets** (or **Settings** → **Branches**)
+2. Add or edit a rule for `master` / `main`
+3. Enable **Require status checks to pass** and select at least:
+   - `test-gate`
+   - `Storm engine (Ranger)`
+4. Turn off admin bypass for these checks
+5. Note: The publish workflow runs _after_ merge, so it doesn't block PRs
+
+Details: [`.github/CI.md`](.github/CI.md).
 
 ### Step 6: Verify Workflow File
 

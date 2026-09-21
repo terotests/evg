@@ -10,14 +10,12 @@ This repository uses GitHub Actions to automatically test and validate changes b
 - Push to `master` or `main` branch
 - Pull requests targeting `master` or `main` branch
 
-**Steps:**
-1. Checkout code
-2. Setup Node.js 20.x
-3. Install dependencies with `npm ci`
-4. Run all unit tests with `npm test`
-5. Build the project with `npm run build`
+**Jobs:**
+1. **Storm engine (Ranger)** — checks out `terotests/Ranger` `master`, then runs `npm run storm:test`. That is the Ranger-compiled EVG unit suite (layout, flex, overlay, reconcile, …) plus the JS host checks. A missing compiler fails the job; the suites are not skipped.
+2. **test** — vitest + build. `needs` Storm, so this check is skipped (and cannot satisfy branch protection) if the engine suite is red.
+3. **test-gate** — stable required-check name. Fails unless Storm and `test` both succeeded.
 
-This is the **required** workflow that must pass before merging.
+`test-gate` is the check to require on `master`. Requiring only vitest used to let Storm regressions merge.
 
 ### Test Workflow (`.github/workflows/test.yml`)
 
@@ -27,42 +25,56 @@ This is the **required** workflow that must pass before merging.
 
 **Jobs:**
 
-#### 1. Test Job
+#### Storm engine (Ranger)
+Same suite as CI, so the historically required `Run Unit Tests (20.x)` / `(22.x)` checks cannot go green while the engine is red. Those jobs `needs` Storm.
+
+#### Test Job
 - Runs on multiple Node.js versions (20.x, 22.x)
 - Ensures compatibility across different Node.js versions
 - Runs unit tests
 - Checks for high-severity vulnerabilities
 
-#### 2. Lint Job
+#### Lint Job
 - Checks TypeScript compilation
 - Ensures code quality
 
-#### 3. Coverage Job (PR only)
+#### Coverage Job (PR only)
 - Runs tests with coverage
 - Posts coverage summary as PR comment
 
 ## Setting Up Branch Protection
 
-To enforce these checks before merging, configure branch protection rules on GitHub:
+GitHub will not block a merge unless these checks are **required**. In-repo jobs fail closed; the Settings tick is what stops a human clicking Merge on a red PR.
 
-1. Go to **Settings** → **Branches**
-2. Add a branch protection rule for `master` (or `main`)
+1. Go to **Settings** → **Rules** → **Rulesets** (or **Settings** → **Branches**)
+2. Add a rule for `master` (and `main` if you use it)
 3. Enable:
-   - ✅ Require status checks to pass before merging
+   - ✅ Require a pull request before merging
+   - ✅ Require status checks to pass
    - ✅ Require branches to be up to date before merging
    - Select status checks:
-     - `test` (from CI workflow)
-     - `test (20.x)`, `test (22.x)` (from Test workflow)
-   - ✅ Require pull request reviews before merging (recommended)
+     - **`test-gate`** (the one to require — Storm engine + vitest + build)
+     - `Storm engine (Ranger)` (optional extra; already folded into `test-gate` and into `Run Unit Tests`)
+     - `test`
+     - `Run Unit Tests (20.x)`, `Run Unit Tests (22.x)`
+   - ✅ Do not allow bypassing the above settings (including administrators), or Storm can be skipped by a force merge
    - ✅ Dismiss stale pull request approvals when new commits are pushed
+
+Do **not** require only `Code Quality` or `Test Coverage`. Those jobs do not run the engine suite (`Code Quality` even continues on TypeScript errors).
 
 ## Local Testing
 
 Before pushing, ensure your changes pass locally:
 
 ```bash
-# Run tests
+# Thunderstruck TypeScript tests
 npm test
+
+# Storm engine: JS host checks always; .rgr suites when Ranger is present
+npm run storm:test
+
+# With an explicit compiler checkout
+RANGER_ROOT=/path/to/Ranger npm run storm:test
 
 # Run tests in watch mode during development
 npm run test:watch
@@ -71,7 +83,11 @@ npm run test:watch
 npm run build
 ```
 
+`npm run storm:test` without Ranger skips the `.rgr` suites locally so the NPM package can be developed on its own. GitHub Actions never skips them.
+
 ## Test Suite
+
+### Thunderstruck (vitest)
 
 Current test coverage:
 - **9 test files**
@@ -89,6 +105,10 @@ Current test coverage:
 - `src/providers/NodeFontProvider.test.ts` - Font management
 - `src/renderers/PDFRenderer.test.ts` - PDF rendering
 
+### Storm engine (`npm run storm:test`)
+
+Ranger-compiled suites under `storm/` (JSON, timing, reconcile, invalidate, style cache, component, viewport units, flex, box shorthand, style state, focus, style vars, overlay, fixed, connector, popover, RTL, ruler, host measurer/tree, patch, bitmap tracer, effects) plus JS host checks (adopt, gestures, stroke, view policy, shift, a11y paint). These are the EVG unit tests that used to live only in Ranger CI.
+
 ## Troubleshooting
 
 ### CI Fails but Tests Pass Locally
@@ -96,6 +116,7 @@ Current test coverage:
 1. Ensure you're using Node.js 20.x locally
 2. Run `npm ci` instead of `npm install` to get exact dependency versions
 3. Check that all files are committed (especially in `dist/` after build)
+4. If `storm:test` fails in CI, clone Ranger and set `RANGER_ROOT` — CI does not skip those suites
 
 ### Node Version Compatibility Issues
 
@@ -106,7 +127,7 @@ The project requires Node.js 20.x or higher due to:
 
 ### Audit Failures
 
-The workflow includes `npm audit --audit-level=high` but allows it to fail (`continue-on-error: true`). 
+The workflow includes `npm audit --audit-level=high` but allows it to fail (`continue-on-error: true`).
 Critical security issues should be addressed, but won't block merging.
 
 ## Maintenance
