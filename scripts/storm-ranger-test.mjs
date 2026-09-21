@@ -6,6 +6,10 @@
  *
  * Host checks that are plain JavaScript always run.
  *
+ * In CI (or with REQUIRE_RANGER=1) a missing compiler is a hard failure —
+ * otherwise a misconfigured job would skip every .rgr suite and still go
+ * green, which is how engine regressions would reach master.
+ *
  *   npm run storm:test
  */
 import fs from "fs";
@@ -18,8 +22,13 @@ const STORM = path.join(ROOT, "storm");
 
 function rangerRoot() {
   const fromEnv = process.env.RANGER_ROOT;
-  if (fromEnv && fs.existsSync(path.join(fromEnv, "bin/output.js"))) {
-    return path.resolve(fromEnv);
+  if (fromEnv) {
+    // Explicit: do not fall through to a sibling checkout if CI pointed at a
+    // missing compiler. That would skip the failure the job is meant to catch.
+    if (fs.existsSync(path.join(fromEnv, "bin/output.js"))) {
+      return path.resolve(fromEnv);
+    }
+    return null;
   }
   const candidates = [
     path.resolve(ROOT, "../ranger"),
@@ -84,10 +93,27 @@ const RGR_SUITES = [
   "EVGEffectTest.rgr",
 ];
 
+function rangerRequired() {
+  if (process.env.REQUIRE_RANGER === "1") return true;
+  if (process.env.RANGER_ROOT) return true;
+  // GitHub Actions and most other CI set CI=true. A local `npm run storm:test`
+  // without a compiler still skips the .rgr suites so the TS package can be
+  // developed on its own.
+  if (process.env.CI === "true") return true;
+  return false;
+}
+
 const ranger = rangerRoot();
 if (!ranger) {
-  if (process.env.RANGER_ROOT) {
-    console.error("RANGER_ROOT is set but bin/output.js was not found at", process.env.RANGER_ROOT);
+  if (rangerRequired()) {
+    console.error(
+      "Ranger compiler is required to run Storm engine tests " +
+        "(CI / REQUIRE_RANGER / RANGER_ROOT).\n" +
+        "Set RANGER_ROOT to a Ranger 3.x checkout that contains bin/output.js,\n" +
+        "or clone https://github.com/terotests/Ranger next to this repo.\n" +
+        "Looked at RANGER_ROOT=" +
+        (process.env.RANGER_ROOT || "(unset)"),
+    );
     process.exit(1);
   }
   console.log(

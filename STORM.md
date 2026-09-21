@@ -98,8 +98,10 @@ gallery `ranger.json` files can name this package as a git dependency
 (`subdir: "storm"`) and `rgrc install` fetches it — no extra checkout
 script.
 
-Engine unit tests already run here (`npm run storm:test`) when a Ranger
-compiler is on `RANGER_ROOT`. Testdrive is the first Ranger app that
-imports Storm as `pkg:evg` from a sibling checkout.
+Engine unit tests run here (`npm run storm:test`) and must pass before
+merge to `master`: CI checks out Ranger, compiles the `.rgr` suites, and
+`test-gate` stays red if they fail or if the compiler is missing.
+Testdrive is the first Ranger app that imports Storm as `pkg:evg` from a
+sibling checkout.
 
 New engine work lands in this repository, not in Ranger.
