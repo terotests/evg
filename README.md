@@ -5,6 +5,10 @@
 
 **3.0 Storm** — Ranger 3.x layout engine, still a TypeScript NPM module.
 
+Documentation: **<https://terotests.github.io/evg/>** (syntax, CSS subset,
+layouts, properties, shaders). Same Astro Starlight engine as the
+[Ranger language docs](https://terotests.github.io/Ranger/docs/).
+
 Thunderstruck 2.x (`import { EVG } from "evg"`, `evg hello.xml hello.pdf`)
 is unchanged. Storm 3.0 is the Ranger-native engine that used to live in
 the Ranger repo: flex, grid, a CSS subset, a display list, and hosts for
@@ -69,8 +73,8 @@ Sibling checkout: `"evg": { "path": "../evg/storm" }`. The `image` and
 
 Ranger's gallery still compiles against a vendor copy until Storm is on
 `master` here; then it can `rgrc install` this git dependency. Engine
-unit tests run here (`npm run storm:test`) when a Ranger compiler is
-available.
+unit tests run here (`npm run storm:test`) and are a merge gate on
+`master` (`test-gate` / `Storm engine (Ranger)` in GitHub Actions).
 
 ---
 
