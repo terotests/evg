@@ -3,15 +3,82 @@
 [![CI](https://github.com/terotests/evg/actions/workflows/ci.yml/badge.svg)](https://github.com/terotests/evg/actions/workflows/ci.yml)
 [![Tests](https://github.com/terotests/evg/actions/workflows/test.yml/badge.svg)](https://github.com/terotests/evg/actions/workflows/test.yml)
 
+**3.0 Storm** — Ranger 3.x layout engine, still a TypeScript NPM module.
+
+Thunderstruck 2.x (`import { EVG } from "evg"`, `evg hello.xml hello.pdf`)
+is unchanged. Storm 3.0 is the Ranger-native engine that used to live in
+the Ranger repo: flex, grid, a CSS subset, a display list, and hosts for
+PDF / GL / SVG / native. See [`STORM.md`](STORM.md) for the dual-package
+layout and [`storm/README.md`](storm/README.md) for the engine itself.
+
+```
+npm i -g evg
+evg hello.xml hello.pdf
+evg examples/storm-hello.evg.json storm.pdf
+```
+
+## Using as a TypeScript library
+
+Elastic View Graphics — the Thunderstruck API, still the default:
+
+```javascript
+import { EVG, Storm } from "evg";
+
+EVG.installFont("candal", "../evg/fonts/Candal/Candal.ttf");
+
+EVG.installComponent(
+  "t",
+  `<Label font-family="candal" background-color="blue" />`
+);
+
+const node = new EVG(`<View>
+  <t text="Hello World!"/>
+</View>
+`);
+EVG.renderToFile("./out.pdf", 600, 800, node);
+
+const storm = Storm.parse(`<div width="400px" padding="20px">
+  <span font-size="24px" text="Hello Storm"/>
+</div>`);
+await Storm.renderToFile("./storm.pdf", 400, 200, storm);
+```
+
+`new EVG(xml)` still parses the original markup. `new EVG(stormJson)`
+accepts a Storm document (`{"evg":1,"root":…}`) and renders it through
+the same PDF path.
+
+## Using from Ranger 3.x
+
+```json
+"dependencies": {
+  "evg": {
+    "git": "https://github.com/terotests/evg.git",
+    "rev": "<commit>",
+    "subdir": "storm"
+  }
+}
+```
+
+```ranger
+Import "pkg:evg/EVGElement.rgr"
+Import "pkg:evg/EVGLayout.rgr"
+```
+
+Sibling checkout: `"evg": { "path": "../evg/storm" }`. The `image` and
+`zip` packages sit next to `storm/` and come along as path dependencies.
+
+Ranger's gallery still compiles against a vendor copy until Storm is on
+`master` here; then it can `rgrc install` this git dependency. Engine
+unit tests run here (`npm run storm:test`) when a Ranger compiler is
+available.
+
+---
+
 ## THUNDERSTRUCK EDITION 2.0
 
 Layout engine to create vector graphics (like PDF) using JavaScript and XML based declarative markup.
 
 **Now with browser support! ⚡**
-
-```s
-npm i -g evg
-```
 
 Example of markup:
 
@@ -33,7 +100,7 @@ The engine supports following commands (and more):
 - `border-width`, `border-radius`
 - basic `padding`, `margin`, `margin-top` etc. supported
 - units `px`, `%` (%of available width) or `hp` (% of height)
-- width, height as `50%` or `50` or `50px`, `
+- width, height as `50%` or `50` or `50px`
 - text can be added like `<div>Hello World</div>`
 - `font-size`, `font-family` can be used to specify TTF fonts used (or `fonts/` dir for CLI)
 - horizontal align `align=center`, `align=left`, `align=right`
@@ -64,35 +131,7 @@ Subdirectories:
 
 Components can use `id="content"` to indicate place for child nodes.
 
-The .git reposity has example directory `testfiles/` where is example XML file.
-
-## Using as library
-
-Elastic View Graphics
-
-```javascript
-import { EVG } from "evg";
-
-// you have to install some fonts...
-EVG.installFont("candal", "../evg/fonts/Candal/Candal.ttf");
-
-// create a text element component....
-EVG.installComponent(
-  "t",
-  `<Label font-family="candal" background-color="blue" />`
-);
-
-// create node and render it to PDF
-const node = new EVG(`<View>
-  <t text="Hello World!"/>
-</View>
-`);
-EVG.renderToFile("./out.pdf", 600, 800, node);
-
-// or render to stream
-const fs = require("fs");
-EVG.renderToStream(fs.createWriteStream("fileName.pdf"), 600, 800, node);
-```
+The .git repository has example directory `testfiles/` where is example XML file.
 
 ## Creating own components using inline XML
 
@@ -168,8 +207,9 @@ src/
 ├── environment/    # Environment bundles for different platforms
 │   ├── index.ts    # EVGEnvironment base class
 │   └── node.ts     # NodeEnvironment for Node.js
-├── layout/         # EVG layout engine (platform-agnostic)
+├── layout/         # Thunderstruck layout engine
 │   └── index.ts
+├── storm/          # Storm JSON ↔ XML / v2 EVG bridge
 ├── renderers/      # IRenderer implementations
 │   ├── PDFRenderer.ts
 │   └── CanvasRenderer.ts
@@ -177,6 +217,10 @@ src/
 │   └── XMLSerializer.ts
 └── providers/      # Provider implementations
     └── NodeFontProvider.ts
+
+storm/              # EVG 3.0 Ranger sources (pkg:evg)
+image/              # JPEG / PNG codecs (pkg:image)
+zip/                # DEFLATE (pkg:zip)
 ```
 
 ## Browser Demo
@@ -219,7 +263,6 @@ const evg = new EVG(`<View width="400" height="300" background-color="#f0f0f0">
 
 renderer.beginDocument(400, 300);
 evg.calculate(400, 300, renderer);
-// Render the EVG tree to canvas...
 ```
 
 ## License

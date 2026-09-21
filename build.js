@@ -5,9 +5,9 @@ const path = require("path");
 // Configuration
 const BUILD_DIR = "dist";
 const ENTRY_POINTS = [
-  // Only two main entry points
-  { input: "src/bin/evg.ts", output: "bin/evg.js" }, // CLI tool
-  { input: "src/layout/index.ts", output: "index.js" }, // Main module
+  { input: "src/bin/evg.ts", output: "bin/evg.js" },
+  { input: "src/index.ts", output: "index.js" },
+  { input: "src/storm/index.ts", output: "storm/index.js" },
 ];
 
 // Clean and recreate build directory
@@ -106,11 +106,55 @@ export class EVG {
     add(childView: any): EVG | undefined;
     calculate(width: number, height: number, renderer?: any): EVG;
     static fromXML(xmlData: string): EVG;
-    // ... other methods and properties
 }
+
+export const EVG_STORM_VERSION: "3.0.0";
+export const EVG_EDITION: "Storm";
+
+export interface StormNode {
+    tag: string;
+    id?: string;
+    key?: string;
+    text?: string;
+    role?: string;
+    label?: string;
+    hidden?: boolean;
+    checked?: number;
+    props?: Record<string, string>;
+    children?: StormNode[];
+}
+
+export interface StormDocument {
+    evg: 1;
+    css?: string;
+    root: StormNode;
+}
+
+export function isStormDocument(value: unknown): value is StormDocument;
+export function parseStorm(input: string, css?: string): StormDocument;
+export function stormToXml(doc: StormDocument): string;
+export function parseStormJson(input: string | StormDocument): StormDocument;
+export function stormToJson(doc: StormDocument, pretty?: boolean): string;
+export function fromLegacyEVG(node: EVG, css?: string): StormDocument;
+export function toLegacyEVG(doc: StormDocument): EVG;
+
+export const Storm: {
+    parse(input: string, css?: string): StormDocument;
+    parseJson(input: string | StormDocument): StormDocument;
+    toJson(doc: StormDocument, pretty?: boolean): string;
+    toXml(doc: StormDocument): string;
+    fromLegacyEVG(node: EVG, css?: string): StormDocument;
+    toLegacyEVG(doc: StormDocument): EVG;
+    renderToFile(fileName: string, width: number, height: number, doc: StormDocument | string): Promise<void>;
+};
 `;
 
     fs.writeFileSync("dist/index.d.ts", declarationContent);
+    fs.writeFileSync(
+      "dist/storm.d.ts",
+      `export * from "./index";
+`
+    );
     console.log("TypeScript declarations generated successfully.");
   } catch (error) {
     console.error("Failed to generate TypeScript declarations:", error);
@@ -165,7 +209,8 @@ function copyAdditionalFiles() {
         if (
           fs.statSync(itemPath).isDirectory() &&
           item !== "bin" &&
-          item !== "fonts"
+          item !== "fonts" &&
+          item !== "storm"
         ) {
           fs.rmSync(itemPath, { recursive: true, force: true });
           console.log(`Removed unnecessary directory: ${item}`);

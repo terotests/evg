@@ -1,0 +1,10 @@
+{
+  "name": "evg",
+  "version": "3.0.0",
+  "entry": "EVG.rgr",
+  "license": "MIT",
+  "description": "EVG 3.0 Storm — Ranger layout engine",
+  "dependencies": {
+    "image": { "path": "../image" }
+  }
+}

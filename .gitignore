@@ -5,9 +5,11 @@ node_modules/
 # folder files
 data_folder/
 
-# Image files
+# Image files (allow Storm engine screenshots and tracer sample)
 *.jpg
 *.png
+!storm/web/tracer/sample.png
+!storm/inspect/shots/*.png
 
 # MacOS
 .DS_Store
@@ -15,3 +17,7 @@ data_folder/
 
 # TypeScript compiled .map files
 *.map
+
+# Ranger compiler output
+storm/bin/*
+!storm/bin/.gitignore

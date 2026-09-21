@@ -36,5 +36,44 @@ export class EVG {
     add(childView: any): EVG | undefined;
     calculate(width: number, height: number, renderer?: any): EVG;
     static fromXML(xmlData: string): EVG;
-    // ... other methods and properties
 }
+
+export const EVG_STORM_VERSION: "3.0.0";
+export const EVG_EDITION: "Storm";
+
+export interface StormNode {
+    tag: string;
+    id?: string;
+    key?: string;
+    text?: string;
+    role?: string;
+    label?: string;
+    hidden?: boolean;
+    checked?: number;
+    props?: Record<string, string>;
+    children?: StormNode[];
+}
+
+export interface StormDocument {
+    evg: 1;
+    css?: string;
+    root: StormNode;
+}
+
+export function isStormDocument(value: unknown): value is StormDocument;
+export function parseStorm(input: string, css?: string): StormDocument;
+export function stormToXml(doc: StormDocument): string;
+export function parseStormJson(input: string | StormDocument): StormDocument;
+export function stormToJson(doc: StormDocument, pretty?: boolean): string;
+export function fromLegacyEVG(node: EVG, css?: string): StormDocument;
+export function toLegacyEVG(doc: StormDocument): EVG;
+
+export const Storm: {
+    parse(input: string, css?: string): StormDocument;
+    parseJson(input: string | StormDocument): StormDocument;
+    toJson(doc: StormDocument, pretty?: boolean): string;
+    toXml(doc: StormDocument): string;
+    fromLegacyEVG(node: EVG, css?: string): StormDocument;
+    toLegacyEVG(doc: StormDocument): EVG;
+    renderToFile(fileName: string, width: number, height: number, doc: StormDocument | string): Promise<void>;
+};
