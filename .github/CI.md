@@ -14,8 +14,14 @@ This repository uses GitHub Actions to automatically test and validate changes b
 1. **Storm engine (Ranger)** — checks out `terotests/Ranger` `master`, then runs `npm run storm:test`. That is the Ranger-compiled EVG unit suite (layout, flex, overlay, reconcile, …) plus the JS host checks. A missing compiler fails the job; the suites are not skipped.
 2. **test** — vitest + build. `needs` Storm, so this check is skipped (and cannot satisfy branch protection) if the engine suite is red.
 3. **test-gate** — stable required-check name. Fails unless Storm and `test` both succeeded.
+4. **Docs site** — builds the Astro Starlight documentation (`docs/site`). Publish is a separate workflow.
 
 `test-gate` is the check to require on `master`. Requiring only vitest used to let Storm regressions merge.
+
+### Documentation (`.github/workflows/deploy-pages.yml`)
+
+Pushes to `master` that touch `docs/` publish <https://terotests.github.io/evg/>.
+Pages **Source** must be **GitHub Actions**. See [`docs/README.md`](../docs/README.md).
 
 ### Test Workflow (`.github/workflows/test.yml`)
 
@@ -81,6 +87,9 @@ npm run test:watch
 
 # Build the project
 npm run build
+
+# Documentation site (Astro + Starlight)
+npm run docs:build
 ```
 
 `npm run storm:test` without Ranger skips the `.rgr` suites locally so the NPM package can be developed on its own. GitHub Actions never skips them.

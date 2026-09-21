@@ -21,3 +21,8 @@ data_folder/
 # Ranger compiler output
 storm/bin/*
 !storm/bin/.gitignore
+
+# Documentation site
+docs/site/node_modules/
+docs/site/dist/
+docs/site/.astro/

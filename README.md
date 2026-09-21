@@ -5,6 +5,10 @@
 
 **3.0 Storm** — Ranger 3.x layout engine, still a TypeScript NPM module.
 
+Documentation: **<https://terotests.github.io/evg/>** (syntax, CSS subset,
+layouts, properties, shaders). Same Astro Starlight engine as the
+[Ranger language docs](https://terotests.github.io/Ranger/docs/).
+
 Thunderstruck 2.x (`import { EVG } from "evg"`, `evg hello.xml hello.pdf`)
 is unchanged. Storm 3.0 is the Ranger-native engine that used to live in
 the Ranger repo: flex, grid, a CSS subset, a display list, and hosts for

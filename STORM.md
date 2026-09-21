@@ -19,6 +19,10 @@ The Thunderstruck `EVG` class is unchanged: `new EVG(xml)`,
 documents (`{"evg":1,"root":…}`) are accepted by that constructor too —
 they are lowered to XML and rendered through the existing PDF path.
 
+Usage documentation (syntax, CSS subset, layouts, shaders) is at
+<https://terotests.github.io/evg/>. The site uses the same Astro Starlight
+engine as the [Ranger language docs](https://terotests.github.io/Ranger/docs/).
+
 ## Ranger 3.x
 
 A Ranger application depends on this git repository, not on

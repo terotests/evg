@@ -1,0 +1,18 @@
+---
+/**
+ * The default Starlight footer, plus the identity of the build.
+ */
+import Default from "@astrojs/starlight/components/Footer.astro";
+
+const version = import.meta.env.EVG_VERSION ?? "";
+const commit = (import.meta.env.EVG_COMMIT ?? "").slice(0, 7);
+---
+
+<Default><slot /></Default>
+
+<p class="ranger-build">
+  EVG {version}
+  {commit && <> · commit {commit}</>}
+  {" · "}
+  <a href="https://terotests.github.io/Ranger/docs/">Ranger language documentation</a>
+</p>
