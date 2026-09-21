@@ -92,8 +92,14 @@ await Storm.renderToFile("./storm.pdf", 400, 200, storm);
 | `examples/` | XML and Storm JSON samples |
 | `dist/` | published NPM bundle |
 
-Ranger gallery packages import this tree (`deps/evg/storm` after
-`scripts/fetch-evg.sh`). Engine unit tests run here (`npm run storm:test`);
-Ranger CI keeps only gallery-side EVG checks (toolbar, a11y, UI conformance).
+Ranger's gallery still path-depends on its vendor copy of this tree
+(`lib/evg`) until Storm is on this repository's `master`. After that,
+gallery `ranger.json` files can name this package as a git dependency
+(`subdir: "storm"`) and `rgrc install` fetches it — no extra checkout
+script.
+
+Engine unit tests already run here (`npm run storm:test`) when a Ranger
+compiler is on `RANGER_ROOT`. Testdrive is the first Ranger app that
+imports Storm as `pkg:evg` from a sibling checkout.
 
 New engine work lands in this repository, not in Ranger.

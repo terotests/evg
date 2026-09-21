@@ -67,10 +67,10 @@ Import "pkg:evg/EVGLayout.rgr"
 Sibling checkout: `"evg": { "path": "../evg/storm" }`. The `image` and
 `zip` packages sit next to `storm/` and come along as path dependencies.
 
-Ranger's gallery uses the same package: `scripts/fetch-evg.sh` checks this
-repo out to `Ranger/deps/evg`, and gallery `ranger.json` files name
-`"evg": { "path": "../../deps/evg/storm" }`. Engine unit tests run here
-(`npm run storm:test`); Ranger CI does not re-run them.
+Ranger's gallery still compiles against a vendor copy until Storm is on
+`master` here; then it can `rgrc install` this git dependency. Engine
+unit tests run here (`npm run storm:test`) when a Ranger compiler is
+available.
 
 ---
 
