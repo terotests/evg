@@ -71,9 +71,10 @@ Import "pkg:evg/EVGLayout.rgr"
 Sibling checkout: `"evg": { "path": "../evg/storm" }`. The `image` and
 `zip` packages sit next to `storm/` and come along as path dependencies.
 
-Ranger's gallery still compiles against a vendor copy until Storm is on
-`master` here; then it can `rgrc install` this git dependency. Engine
-unit tests run here (`npm run storm:test`) and are a merge gate on
+Ranger's gallery depends on this repository as a git package
+(`rgrc install`); `storm/ORIGIN.sha` is the Ranger commit the engine was
+last synced from. Engine unit tests run here (`npm run storm:test`, with the
+`ranger-compiler` npm package as the compiler) and are a merge gate on
 `master` (`test-gate` / `Storm engine (Ranger)` in GitHub Actions).
 
 ---

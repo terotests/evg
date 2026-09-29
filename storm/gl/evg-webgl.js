@@ -104,6 +104,8 @@ uniform vec2 uShift;
 // field below measures a circle. Nothing asks for one; a rotating camera
 // would want a mat3 here and nothing asks for that either.
 uniform vec4 uView;
+// Device pixels per page pixel (the canvas ratio); 0 turns the text snap off.
+uniform float uSnap;
 out vec4 vColor;
 out vec4 vColor2;
 out float vGrad;
@@ -139,6 +141,17 @@ void main() {
     p = c + vec2(d.x * co - d.y * s, d.x * s + d.y * co);
   }
   p = p * uView.xy + uView.zw;
+  // A TEXT QUAD LANDS ON WHOLE DEVICE PIXELS. Its atlas slot is a whole number
+  // of texels, rasterised at this scale, and the sampler filters linearly: a
+  // quad whose corner sits a fraction of a pixel off the grid samples every
+  // glyph between two texels and comes out soft -- the half-pixel blur a run
+  // had next to the same words in the page's own DOM. Moving the whole quad
+  // by less than half a pixel puts each texel on one pixel. Rotated runs are
+  // left alone: a turned quad has no grid to land on.
+  if (uSnap > 0.0 && aRot == 0.0 && (aShape.z == 1.0 || aShape.z == 3.0)) {
+    vec2 tl = (aRect.xy + uShift) * uView.xy + uView.zw;
+    p += floor(tl * uSnap + 0.5) / uSnap - tl;
+  }
   // Page space is y-down like every 2D layout engine; clip space is y-up.
   vec2 ndc = vec2((p.x / uPage.x) * 2.0 - 1.0, 1.0 - (p.y / uPage.y) * 2.0);
   gl_Position = vec4(ndc, 0.0, 1.0);
@@ -741,7 +754,13 @@ function measureRun(ctx, c, dpr) {
   // instead pushed every run up by the height of the empty space above its
   // capitals — a couple of pixels for a caption, most of a line for a
   // heading — which in a spreadsheet is text climbing out of its row.
-  const asc = m.actualBoundingBoxAscent || c.size * dpr * 0.8;
+  // Rounded UP to a whole device pixel, so the baseline the run is
+  // rasterised on is a texel row and not a fraction of one: the draw below
+  // lines the quad up on the device grid, and a glyph whose baseline sat
+  // 0.4 texel into its row came out resampled across two rows however well
+  // the quad was placed. The quad is placed from this same number, so the
+  // baseline on the page does not move.
+  const asc = Math.ceil(m.actualBoundingBoxAscent || c.size * dpr * 0.8);
   const desc = m.actualBoundingBoxDescent || c.size * dpr * 0.25;
   const faceAsc = m.fontBoundingBoxAscent || (c.h ? c.h * dpr * 0.78 : c.size * dpr * 1.05);
   // The face's DESCENT, needed for the half-leading — the line box holds the
@@ -850,7 +869,13 @@ function buildTextAtlas(cmds, dpr, view, maxTex) {
   let culled = false;
   const limit = Math.max(2048, maxTex || 2048);
   const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
+  // The atlas is READ BACK (`getImageData`, to find the ink a run actually
+  // drew), so it asks for a CPU-side bitmap up front. Without the flag
+  // Chromium keeps it on the GPU, warns "Multiple readback operations using
+  // getImageData are faster with the willReadFrequently attribute", and pays
+  // a GPU readback per call. The first getContext fixes the attributes, so
+  // it is said here and not at the later calls on the same canvas.
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!runs.length) return { canvas: null, slots: new Map(), culled, shelf: shelfOf(Math.min(2048, limit), limit) };
   const measure = (c) => measureRun(ctx, c, dpr);
   // Every run on a shelf, however tall that makes it — the fits are judged
@@ -1013,7 +1038,8 @@ function growAtlas(gl, have, texH) {
   const big = document.createElement("canvas");
   big.width = have.texW;
   big.height = texH;
-  const ctx = big.getContext("2d");
+  // Read back like the atlas it replaces — see `buildTextAtlas`.
+  const ctx = big.getContext("2d", { willReadFrequently: true });
   ctx.clearRect(0, 0, big.width, big.height);
   ctx.drawImage(have.bitmap, 0, 0);
   const scale = have.texH / texH;
@@ -2813,6 +2839,7 @@ function programsFor(gl) {
     uPage: gl.getUniformLocation(prog, "uPage"),
     uShift: gl.getUniformLocation(prog, "uShift"),
     uView: gl.getUniformLocation(prog, "uView"),
+    uSnap: gl.getUniformLocation(prog, "uSnap"),
     uAtlas: gl.getUniformLocation(prog, "uAtlas"),
     uImage: gl.getUniformLocation(prog, "uImage"),
     pathPosLoc: gl.getAttribLocation(pathProg, "aPos"),
@@ -3378,6 +3405,7 @@ function buildFrame(gl, doc, opts = {}) {
   gl.uniform2f(built.uPage, doc.width, doc.height);
   gl.uniform2f(built.uShift, 0, 0);
   gl.uniform4f(built.uView, vsx, vsy, vtx, vty);
+  gl.uniform1f(built.uSnap, dpr);
   gl.uniform1i(built.uAtlas, 0);
   gl.uniform1i(built.uImage, 1);
 
@@ -3429,7 +3457,14 @@ function buildFrame(gl, doc, opts = {}) {
   gl.disable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  if (clearFirst) {
+  // The offscreen target is THIS frame's surface and nothing else, so it
+  // starts empty even when the frame draws on top of the canvas: a frame drawn
+  // with `clear: false` is composited over what is already there at the end
+  // (see the last pass), and a target that kept the last frame's pixels, or
+  // one presented by REPLACING the canvas, wiped out everything the page had
+  // drawn before it. A deck's slide with a backdrop effect on it erased the
+  // editor beside it that way.
+  if (clearFirst || target) {
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
@@ -3861,8 +3896,18 @@ function buildFrame(gl, doc, opts = {}) {
       const dest = i === passes.length - 1 ? null : (srcTex === spare.tex ? target : spare);
       gl.bindFramebuffer(gl.FRAMEBUFFER, dest ? dest.fbo : null);
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
+      // The last pass onto a canvas the caller asked to keep goes OVER it:
+      // the target holds this frame alone, premultiplied (it was drawn into
+      // an empty texture with the blend above), so ONE / ONE_MINUS_SRC_ALPHA
+      // lays it on what is there and leaves the rest of the canvas alone.
+      const over = !dest && !clearFirst;
+      if (over) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      } else {
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
       // Drawn with no camera and no shift: the surface in the texture is
       // already where the camera put it.
       if (passes[i] === null) drawLegacyRipple(srcTex);
@@ -3879,6 +3924,7 @@ function buildFrame(gl, doc, opts = {}) {
       srcTex = dest ? dest.tex : null;
     }
     gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
 
   return {
