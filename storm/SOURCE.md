@@ -1,7 +1,8 @@
-This tree was copied from Ranger `lib/evg` at:
+This tree was copied from Ranger `lib/evg` (with `lib/image` and `lib/zip`
+as `../image` and `../zip`) and last synced at:
 
-    e33c2832c67ee4fbe7139dd26df77bac39f7846f
+    1eef8dfe03f0b3445cbb0fc307d8cd6e6ca2dbcb
 
 This repository (`terotests/evg`) is the canonical home for EVG 3.0 Storm.
-Ranger keeps a vendor copy under `lib/evg` so gallery CI can compile
-offline; engine changes land here first.
+Ranger no longer carries `lib/evg` or `lib/image`: its gallery fetches
+this repository with `rgrc install`. Engine changes land here.

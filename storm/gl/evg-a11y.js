@@ -274,6 +274,11 @@ export function createA11yMirror(host, { canvas, onActivate, onFocus, canMoveFoc
     // Open or closed. A trigger that never says which is a trigger a reader
     // cannot tell has already been pressed.
     setAttr(el, "aria-expanded", node.expanded ? TRI[node.expanded] || null : null);
+    // What it opens. The tree has carried `haspopup` ("menu", "listbox",
+    // "dialog") and serialised it all along; nothing here read it, so a select
+    // trigger or a date picker's button reached a reader as a plain button
+    // that happened to expand.
+    setAttr(el, "aria-haspopup", node.haspopup || null);
     setAttr(el, "aria-disabled", node.disabled ? "true" : null);
     // A native button that is disabled is not a tab stop and not activatable,
     // which is what the drawn one is.
@@ -292,7 +297,9 @@ export function createA11yMirror(host, { canvas, onActivate, onFocus, canMoveFoc
     setAttr(el, "aria-required", node.required || null);
     setAttr(el, "aria-invalid", node.invalid || null);
     setAttr(el, "aria-modal", node.modal ? "true" : null);
-    setAttr(el, "aria-selected", node.selected ? "true" : null);
+    // A tab says "false" out loud when it is not the selected one, as Radix's
+    // (and the APG's) do; elsewhere an unselected node carries nothing.
+    setAttr(el, "aria-selected", node.selected ? "true" : node.role === "tab" ? "false" : null);
     // A toggle button that says so in its own field. `node.pressed` has been
     // in the tree and in the serialisation all along and NOTHING read it here:
     // the only route to `aria-pressed` was through `checked`, so a control
@@ -420,6 +427,40 @@ export function createA11yMirror(host, { canvas, onActivate, onFocus, canMoveFoc
       if (!seen.has(id)) {
         entry.el.remove();
         els.delete(id);
+      }
+    }
+
+    // `aria-describedby`, once every element exists: the message a field
+    // points at is usually built AFTER the field. The target gets a DOM id
+    // derived from its node id; the resolved `aria-description` is dropped
+    // when the reference resolves, or a reader would say the sentence twice.
+    // A reference to a node that is not in the mirror falls back to the text.
+    for (const node of tree.nodes) {
+      const entry = els.get(node.id);
+      if (!entry) continue;
+      const target = node.describedby ? els.get(node.describedby) : null;
+      if (target) {
+        const domId = "evg-a11y-" + String(node.describedby).replace(/[^A-Za-z0-9_-]/g, "_");
+        if (target.el.id !== domId) target.el.id = domId;
+        setAttr(entry.el, "aria-describedby", domId);
+        setAttr(entry.el, "aria-description", null);
+      } else {
+        setAttr(entry.el, "aria-describedby", null);
+      }
+      // `aria-controls` and `aria-labelledby` resolve the same way: a tab
+      // names its panel, the panel is named by its tab. A reference to a node
+      // that is not in the mirror (an inactive panel) is left off rather than
+      // pointing at nothing, which axe reports as a broken reference.
+      for (const [key, attr] of [["controls", "aria-controls"], ["labelledby", "aria-labelledby"]]) {
+        const ref = node[key];
+        const to = ref ? els.get(ref) : null;
+        if (to) {
+          const domId = "evg-a11y-" + String(ref).replace(/[^A-Za-z0-9_-]/g, "_");
+          if (to.el.id !== domId) to.el.id = domId;
+          setAttr(entry.el, attr, domId);
+        } else {
+          setAttr(entry.el, attr, null);
+        }
       }
     }
 

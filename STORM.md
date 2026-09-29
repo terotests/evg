@@ -96,16 +96,15 @@ await Storm.renderToFile("./storm.pdf", 400, 200, storm);
 | `examples/` | XML and Storm JSON samples |
 | `dist/` | published NPM bundle |
 
-Ranger's gallery still path-depends on its vendor copy of this tree
-(`lib/evg`) until Storm is on this repository's `master`. After that,
-gallery `ranger.json` files can name this package as a git dependency
-(`subdir: "storm"`) and `rgrc install` fetches it — no extra checkout
-script.
+Ranger's gallery depends on this repository as a git package (no
+`lib/evg` in Ranger any more); `storm/ORIGIN.sha` is the Ranger commit the
+engine was last synced from before the move.
 
 Engine unit tests run here (`npm run storm:test`) and must pass before
-merge to `master`: CI checks out Ranger, compiles the `.rgr` suites, and
-`test-gate` stays red if they fail or if the compiler is missing.
-Testdrive is the first Ranger app that imports Storm as `pkg:evg` from a
-sibling checkout.
+merge to `master`. The compiler is the `ranger-compiler` npm package (a
+devDependency, so `npm ci` brings it); `RANGER_ROOT` points the suites at a
+Ranger checkout instead. `test-gate` stays red if a suite fails or no
+compiler is found. The WebP decoder has its own JavaScript + C++ suite:
+`bash image/tests/run_webp_tests.sh`.
 
 New engine work lands in this repository, not in Ranger.
