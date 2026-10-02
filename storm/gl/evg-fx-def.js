@@ -9,7 +9,7 @@
 //     "arrays": { "b": 32 },              // b0 … b31, floats like the rest
 //     "file": "spectrum.glsl" }
 //
-//   import { registerEffectManifest } from "./evg/gl/evg-fx-def.js";
+//   import { registerEffectManifest } from "<evg package>/gl/evg-fx-def.js";
 //   registerEffectManifest(manifest, glslText, commonGlsl);
 //
 // "bands": N is read as "arrays": { "b": N }, which is what the first
