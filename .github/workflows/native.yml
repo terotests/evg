@@ -1,0 +1,24 @@
+name: Native painter
+
+on:
+  push:
+    branches: [master, main]
+    paths: ["storm/native/**", ".github/workflows/native.yml"]
+  pull_request:
+    paths: ["storm/native/**", ".github/workflows/native.yml"]
+
+jobs:
+  gl:
+    name: native-gl
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - name: SDL2, OpenGL (Mesa) and a virtual display
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libgl-dev libgl1-mesa-dri xvfb
+      - name: Build the render tool
+        run: bash storm/native/tools/build.sh
+      - name: Pixel checks
+        run: node storm/native/tests/check.mjs

@@ -414,8 +414,11 @@ does — and it fails three ways if the routing is removed.
   inert: the painter skips a whole-surface pass with no drops.
 * **Other painters.** SoftCanvas, PDF and SVG draw the page and drop the
   effect, which is the right failure — `evg-html.js` now reports which kinds it
-  dropped. A Skia/AGSL host could implement the same plugin ABI; see
-  `PLAN_NATIVE_HOSTS.md`.
+  dropped. The native OpenGL painter (`native/`) implements the same plugin
+  ABI, all three layers, from a shared manifest + GLSL body
+  (`gl/evg-fx-def.js` on the web side); the built-in effects still live inside
+  `evg-webgl.js` and are not yet available to it. A Skia/AGSL host could
+  implement the same ABI; see `PLAN_NATIVE_HOSTS.md`.
 * **WebGPU.** The plugin declaration is a name, a parameter list and a shader
   string. Nothing in the display list or in a stylesheet says GLSL, so the same
   registry with WGSL bodies would need no change above the painter.

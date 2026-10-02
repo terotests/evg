@@ -77,6 +77,34 @@ last synced from. Engine unit tests run here (`npm run storm:test`, with the
 `ranger-compiler` npm package as the compiler) and are a merge gate on
 `master` (`test-gate` / `Storm engine (Ranger)` in GitHub Actions).
 
+### From a tree to pixels
+
+```
+ Ranger app ──► tree + stylesheet ──► layout ──► display list ──► painter
+ (any target)                                     (JSON / binary)   │
+                                                                    ├─ WebGL 2      storm/gl/evg-webgl.js
+                                                                    ├─ OpenGL 3.3   storm/native/   (C++)
+                                                                    ├─ CoreGraphics storm/apple/
+                                                                    ├─ Android      storm/android/
+                                                                    └─ SVG / DOM    storm/html/
+```
+
+The engine stops at the **display list**: a flat list of draw commands with
+nothing platform-specific in it. Each painter turns that list into pixels, so
+the same app compiled to JavaScript draws in a browser and compiled to C++
+draws in a native window.
+
+**Surface effects** are plugins of the painters, not of the engine: a stylesheet
+names one (`evg-surface-effect: starfield; evg-fx-density: 1.5`), the list
+carries the instance and its box, and the painter runs the plugin's GLSL in it.
+An effect is a manifest and one GLSL body (`vec4 fxColor(vec2 p, vec2 local)`)
+that both the WebGL and the native painter register unchanged
+(`storm/gl/evg-fx-def.js`, `EffectDef::fromManifest`). Values that change
+every frame — audio levels, a clock, presses — come from the host straight to
+the painter, so a running effect never causes a layout. See
+[`storm/native/README.md`](storm/native/README.md) and
+[`storm/PLAN_EFFECTS.md`](storm/PLAN_EFFECTS.md).
+
 ---
 
 ## THUNDERSTRUCK EDITION 2.0
