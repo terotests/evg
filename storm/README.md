@@ -55,6 +55,7 @@ This file is the reference for the engine itself. The other documents here are:
 | [`ISSUES.md`](ISSUES.md) | Known defects, with the measurements that found them |
 | [`showcase/README.md`](showcase/README.md) | The gallery, and how it is built |
 | [`gl/README.md`](gl/README.md) | The display-list seam and the GPU backend |
+| [`native/README.md`](native/README.md) | The native OpenGL painter, and effects written once for both painters |
 
 ---
 
@@ -968,7 +969,7 @@ painter that knows about quads, glyph runs and scissor rectangles.
 | **SVG / DOM** | [`html/evg-html.js`](html/evg-html.js) | 500 lines, in the browser, from the display list |
 | **Retained DOM** | [`html/evg-dom.js`](html/evg-dom.js) | one node per element, patched from the host tree's ops — the nodes survive a frame |
 | **WebGL 2** | [`gl/evg-webgl.js`](gl/evg-webgl.js) | one instanced quad per command; rounded corners from a distance field |
-| **SDL2 + OpenGL** | `lib/evg/gl/evg_gl_host.rgr` | the same list through the C++ target |
+| **OpenGL 3.3 (native)** | [`native/`](native/README.md) | the list's JSON from an app compiled to C++; stencil paths, glyph atlas, and the same surface-effect plugins as WebGL |
 | **Android / AWT** | [`android/`](android/) | `EvgPainter.kt` walks the list once; `EvgSurface` is Canvas or Graphics2D |
 | **Apple** | [`apple/`](apple/) | `EvgPainter.swift`, a transliteration of the Kotlin one, over CoreGraphics |
 
