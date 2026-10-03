@@ -276,6 +276,20 @@ class FlexRulesCheck {
         def m2:EVGElement (g2.getChild(2))
         this.near("the shorthand spaces the lines too" m2.calculatedY 50.0)
 
+        ; A gap sits between in-flow items only. A menu row with a growing
+        ; label, a chevron, and its open submenu hung off it as an absolute
+        ; child: the submenu took a gap from the label and the chevron moved.
+        def withAbs:[string]
+        push withAbs "flex-grow:1;height:40px"
+        push withAbs "width:20px;height:40px"
+        push withAbs "left:0px;top:0px;width:100px;height:100px"
+        def r16 (this.row("300px" withAbs))
+        r16.setAttribute("gap" "10px")
+        def l16 (this.lay(r16))
+        this.near("an absolute child takes no gap from the line" (this.widthOf(r16 0)) 270.0)
+        def ch16:EVGElement (r16.getChild(1))
+        this.near("so the item after the grower stays at the end" ch16.calculatedX 280.0)
+
         ; --- and the silence ----------------------------------------------------
         print ""
         print "-- a declaration the engine cannot use is reported, not swallowed"
