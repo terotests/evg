@@ -83,6 +83,7 @@ bool Text::init(std::string& err) {
   prog_ = linkProgram(kPageVertexShader, TEXT_FRAG, err);
   if (!prog_) return false;
   uRes_ = glGetUniformLocation(prog_, "uRes");
+  uRot_ = glGetUniformLocation(prog_, "uRot");
   uAtlas_ = glGetUniformLocation(prog_, "uAtlas");
   uColor_ = glGetUniformLocation(prog_, "uColor");
   atlas_.assign((size_t)atlasW_ * atlasH_, 0);
@@ -133,6 +134,49 @@ int Text::faceFor(const json::Value& cmd) const {
   return best;
 }
 
+// The face that has `cp`: the run's own, else the first registered face
+// with the same weight that has it, else any that has it, else the run's
+// (whose missing-glyph box is then drawn). A symbol like ▶ or ⏮ in a run of
+// Open Sans comes out of whichever face the host gave that covers it, as a
+// browser falls back through its font stack.
+int Text::faceHaving(int face, unsigned cp) const {
+  auto has = [&](int f) { return stbtt_FindGlyphIndex((stbtt_fontinfo*)faces_[f]->info, (int)cp) != 0; };
+  if (cp < 128 || has(face)) return face;
+  for (int pass = 0; pass < 2; pass++) {
+    for (int i = 0; i < (int)faces_.size(); i++) {
+      if (i == face || (pass == 0 && faces_[i]->bold != faces_[face]->bold)) continue;
+      if (has(i)) return i;
+    }
+  }
+  return face;
+}
+
+double Text::measure(const std::string& font, double size, const std::string& text) const {
+  json::Value cmd;
+  cmd.type = json::Value::Obj;
+  json::Value f;
+  f.type = json::Value::Str;
+  f.str = font;
+  cmd.obj["font"] = f;
+  int face = faceFor(cmd);
+  if (face < 0 || text.empty()) return 0;
+  double w = 0;
+  int prev = 0, prevFace = -1;
+  for (size_t i = 0; i < text.size();) {
+    unsigned cp = nextCodepoint(text, i);
+    int fi = faceHaving(face, cp);
+    auto* info = (stbtt_fontinfo*)faces_[fi]->info;
+    float em = stbtt_ScaleForMappingEmToPixels(info, (float)size);
+    if (prev && fi == prevFace) w += stbtt_GetCodepointKernAdvance(info, prev, (int)cp) * em;
+    int adv = 0, lsb = 0;
+    stbtt_GetCodepointHMetrics(info, (int)cp, &adv, &lsb);
+    w += adv * em;
+    prev = (int)cp;
+    prevFace = fi;
+  }
+  return w;
+}
+
 const Text::Glyph& Text::glyph(int face, int px, unsigned cp) {
   unsigned long long key = ((unsigned long long)face << 52) | ((unsigned long long)px << 32) | cp;
   auto it = glyphs_.find(key);
@@ -176,7 +220,7 @@ const Text::Glyph& Text::glyph(int face, int px, unsigned cp) {
   return glyphs_[key] = g;
 }
 
-void Text::draw(const json::Value& c, int pageW, int pageH, float dpr) {
+void Text::draw(const json::Value& c, int pageW, int pageH, float dpr, const float* rot) {
   std::string s = c.strOr("text", "");
   int face = faceFor(c);
   if (s.empty() || face < 0) return;
@@ -199,11 +243,13 @@ void Text::draw(const json::Value& c, int pageW, int pageH, float dpr) {
   std::vector<float> v;
   float pen = x;
   float emPx = stbtt_ScaleForMappingEmToPixels(info, (float)px);
-  int prev = 0;
+  int prev = 0, prevFace = -1;
   for (size_t i = 0; i < s.size();) {
     unsigned cp = nextCodepoint(s, i);
-    if (prev) pen += stbtt_GetCodepointKernAdvance(info, prev, (int)cp) * emPx / dpr;
-    const Glyph& g = glyph(face, px, cp);
+    int fi = faceHaving(face, cp);
+    if (prev && fi == face && prevFace == face) pen += stbtt_GetCodepointKernAdvance(info, prev, (int)cp) * emPx / dpr;
+    prevFace = fi;
+    const Glyph& g = glyph(fi, px, cp);
     if (g.ok) {
       float gx = pen + g.xoff / dpr, gy = baseline + g.yoff / dpr, gw = g.w / dpr, gh = g.h / dpr;
       float q[24] = {gx, gy, g.u0, g.v0, gx + gw, gy, g.u1, g.v0, gx + gw, gy + gh, g.u1, g.v1,
@@ -223,6 +269,8 @@ void Text::draw(const json::Value& c, int pageW, int pageH, float dpr) {
   }
   glUseProgram(prog_);
   glUniform2f(uRes_, (float)pageW, (float)pageH);
+  const float none[3] = {0, 0, 0};
+  glUniform3fv(uRot_, 1, rot ? rot : none);
   glUniform1i(uAtlas_, 0);
   glUniform4fv(uColor_, 1, col);
   glBindVertexArray(vao_);

@@ -13,8 +13,17 @@
 //   k6 path fill stencil-then-cover, even-odd or non-zero, with a gradient
 //   k7 stroke    the flattened rings as thick segments
 //
-// Not drawn yet: images (k2), backdrop blur on a rect, per-corner radii
+//   k2 image     a texture the host supplies for `src` (Frame::images),
+//                cropped (`cu`), mirrored (`fx`, `fy`), rounded (`r`)
+//
+// Any command may be turned (`rot` degrees about `rox`,`roy`, or about its
+// box's centre). Not drawn yet: backdrop blur on a rect, per-corner radii
 // (the first is used), dashed strokes. A command it does not draw is skipped.
+//
+// A list can be drawn somewhere other than the whole window, as a slide is on
+// the stage and in the strip: `ox`, `oy` and `scale` place the list's page in
+// the window's (`page * scale + o`), and `clear` false draws over what is
+// there.
 //
 // The painter draws into whatever framebuffer is bound — a Target of its own
 // (EvgGlTarget.h) or the window — clears it to transparent, and blends so
@@ -32,6 +41,7 @@
 //   painter.draw(list, {pageW, pageH, drawW, drawH, seconds, hook});
 
 #pragma once
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -44,11 +54,19 @@
 namespace evg {
 namespace gl {
 
+// The texture for an image command's `src`, and its size in pixels; 0 when
+// the host has none (yet): the command is skipped.
+using ImageHook = std::function<GLuint(const std::string& src, int& w, int& h)>;
+
 struct Frame {
-  int pageW = 0, pageH = 0;  // the list's page, in points
+  int pageW = 0, pageH = 0;  // the list's page, in points (the window's)
   int drawW = 0, drawH = 0;  // the framebuffer, in pixels (HiDPI: larger)
   float time = 0;            // seconds, for effects
   EffectHook effects;        // per-instance inputs, may be empty
+  ImageHook images;          // textures for k2, may be empty
+  float ox = 0, oy = 0;      // where the list's page starts in the window, points
+  float scale = 1;           // how big the list's page is drawn
+  bool clear = true;         // clear the framebuffer first
 };
 
 class Painter {
@@ -70,6 +88,8 @@ class Painter {
   void border(const json::Value& c);
   void pathFill(const json::Value& c);
   void stroke(const json::Value& c);
+  void image(const json::Value& c);
+  void turn(const json::Value& c, GLint loc);
   void pushClip(const json::Value& c);
   void popClip();
   void applyClip();
@@ -79,9 +99,13 @@ class Painter {
   Effects effects_;
   SurfaceCopy surface_;
   GLuint prog_ = 0, vao_ = 0, vbo_ = 0;
-  GLint uRes_, uBox_, uRadius_, uC1_, uC2_, uGrad_, uMode_, uThick_, uBlur_;
+  GLint uRes_, uBox_, uRadius_, uC1_, uC2_, uGrad_, uMode_, uThick_, uBlur_, uRot_;
+  GLuint imgProg_ = 0;
+  GLint iRes_, iRot_, iBox_, iRadius_, iTex_, iAlpha_, iUV_;
+  float rot_[3] = {0, 0, 0};
   Frame frame_;
-  float dpr_ = 1;
+  float dpr_ = 1;     // framebuffer pixels per unit of the list's page
+  float winDpr_ = 1;  // framebuffer pixels per window point
   std::vector<float> clip_;
 };
 

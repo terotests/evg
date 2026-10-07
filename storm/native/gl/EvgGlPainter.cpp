@@ -55,6 +55,32 @@ void main() {
 }
 )GLSL";
 
+// A picture: the window `uUV` (u0,v0,u1,v1) of the texture across the quad,
+// rounded to uRadius inside uBox, faded by uAlpha.
+const char* IMAGE_FRAG = R"GLSL(#version 330 core
+in vec2 vP;
+in vec2 vTex;
+out vec4 o;
+uniform vec4 uBox;
+uniform float uRadius;
+uniform sampler2D uTex;
+uniform float uAlpha;
+uniform vec4 uUV;
+float sdBox(vec2 p) {
+  vec2 h = uBox.zw * 0.5;
+  vec2 c = uBox.xy + h;
+  float r = min(uRadius, min(h.x, h.y));
+  vec2 d = abs(p - c) - (h - vec2(r));
+  return length(max(d, vec2(0.0))) + min(max(d.x, d.y), 0.0) - r;
+}
+void main() {
+  vec2 t = clamp((vP - uBox.xy) / max(uBox.zw, vec2(1.0)), 0.0, 1.0);
+  vec4 col = texture(uTex, mix(uUV.xy, uUV.zw, t));
+  float cov = uRadius > 0.0 ? 1.0 - smoothstep(-0.5, 0.5, sdBox(vP)) : 1.0;
+  o = vec4(col.rgb, col.a * uAlpha * cov);
+}
+)GLSL";
+
 void color(const json::Value* c, float out[4]) {
   out[0] = out[1] = out[2] = 0;
   out[3] = 1;
@@ -100,6 +126,16 @@ bool Painter::init(std::string& err) {
   uMode_ = glGetUniformLocation(prog_, "uMode");
   uThick_ = glGetUniformLocation(prog_, "uThick");
   uBlur_ = glGetUniformLocation(prog_, "uBlur");
+  uRot_ = glGetUniformLocation(prog_, "uRot");
+  imgProg_ = linkProgram(kPageVertexShader, IMAGE_FRAG, err);
+  if (!imgProg_) return false;
+  iRes_ = glGetUniformLocation(imgProg_, "uRes");
+  iRot_ = glGetUniformLocation(imgProg_, "uRot");
+  iBox_ = glGetUniformLocation(imgProg_, "uBox");
+  iRadius_ = glGetUniformLocation(imgProg_, "uRadius");
+  iTex_ = glGetUniformLocation(imgProg_, "uTex");
+  iAlpha_ = glGetUniformLocation(imgProg_, "uAlpha");
+  iUV_ = glGetUniformLocation(imgProg_, "uUV");
   glGenVertexArrays(1, &vao_);
   glGenBuffers(1, &vbo_);
   glBindVertexArray(vao_);
@@ -143,6 +179,54 @@ void Painter::shape(float x, float y, float w, float h, float radius, const floa
   glUniform1i(uMode_, mode);
   glUniform1f(uThick_, thick);
   glUniform1f(uBlur_, blur);
+  glUniform3fv(uRot_, 1, rot_);
+}
+
+// The turn a command asks for: `rot` degrees about (`rox`, `roy`), or about
+// the centre of its box when it names no point.
+void Painter::turn(const json::Value& c, GLint loc) {
+  float deg = (float)c.numOr("rot", 0);
+  rot_[0] = deg * 3.14159265358979f / 180.f;
+  if (c.get("rox")) {
+    rot_[1] = (float)c.numOr("rox", 0);
+    rot_[2] = (float)c.numOr("roy", 0);
+  } else {
+    rot_[1] = (float)(c.numOr("x", 0) + c.numOr("w", 0) / 2);
+    rot_[2] = (float)(c.numOr("y", 0) + c.numOr("h", 0) / 2);
+  }
+  if (loc >= 0) glUniform3fv(loc, 1, rot_);
+}
+
+void Painter::image(const json::Value& c) {
+  if (!frame_.images) return;
+  int tw = 0, th = 0;
+  GLuint tex = frame_.images(c.strOr("src", ""), tw, th);
+  if (!tex) return;
+  float x = (float)c.numOr("x", 0), y = (float)c.numOr("y", 0);
+  float w = (float)c.numOr("w", 0), h = (float)c.numOr("h", 0);
+  float uv[4] = {0, 0, 1, 1};
+  if (const json::Value* cu = c.get("cu")) {
+    if (cu->arr.size() == 4) {
+      for (int i = 0; i < 4; i++) uv[i] = (float)cu->arr[i].num;
+    }
+  }
+  if (c.numOr("fx", 0) != 0) std::swap(uv[0], uv[2]);
+  if (c.numOr("fy", 0) != 0) std::swap(uv[1], uv[3]);
+  float alpha = 1;
+  if (const json::Value* cv = c.get("c")) {
+    if (cv->arr.size() > 3) alpha = (float)cv->arr[3].num;
+  }
+  glUseProgram(imgProg_);
+  glUniform2f(iRes_, (float)frame_.pageW, (float)frame_.pageH);
+  glUniform3fv(iRot_, 1, rot_);
+  glUniform4f(iBox_, x, y, w, h);
+  glUniform1f(iRadius_, (float)c.numOr("r", 0));
+  glUniform1f(iAlpha_, alpha);
+  glUniform4f(iUV_, uv[0], uv[1], uv[2], uv[3]);
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, tex);
+  glUniform1i(iTex_, 0);
+  quad(x, y, w, h);
 }
 
 void Painter::rect(const json::Value& c) {
@@ -256,7 +340,9 @@ void Painter::applyClip() {
   size_t n = clip_.size();
   float x = clip_[n - 4], y = clip_[n - 3], w = clip_[n - 2], h = clip_[n - 1];
   glEnable(GL_SCISSOR_TEST);
-  glScissor((int)std::floor(x * dpr_), (int)std::floor(frame_.drawH - (y + h) * dpr_),
+  // the clip is in the list's page; the scissor is in the window's pixels
+  float wx = frame_.ox * winDpr_ + x * dpr_, wy = frame_.oy * winDpr_ + y * dpr_;
+  glScissor((int)std::floor(wx), (int)std::floor(frame_.drawH - (wy + h * dpr_)),
             std::max(0, (int)std::ceil(w * dpr_)), std::max(0, (int)std::ceil(h * dpr_)));
 }
 
@@ -292,16 +378,26 @@ void Painter::drawEffect(const json::Value& inst, Layer layer) {
 
 void Painter::draw(const json::Value& list, const Frame& frame) {
   frame_ = frame;
-  dpr_ = frame.pageW > 0 ? (float)frame.drawW / (float)frame.pageW : 1.f;
+  // window pixels per point, and per unit of the list's page as drawn
+  winDpr_ = frame.pageW > 0 ? (float)frame.drawW / (float)frame.pageW : 1.f;
+  dpr_ = winDpr_ * frame.scale;
   clip_.clear();
 
-  glViewport(0, 0, frame.drawW, frame.drawH);
+  // The page placed at (ox, oy) at `scale`: the viewport is that rectangle,
+  // so every program keeps projecting the list's own page onto it.
+  glViewport((GLint)std::lround(frame.ox * winDpr_),
+             (GLint)std::lround(frame.drawH - (frame.oy + frame.pageH * frame.scale) * winDpr_),
+             (GLsizei)std::lround(frame.pageW * dpr_), (GLsizei)std::lround(frame.pageH * dpr_));
   glDisable(GL_SCISSOR_TEST);
   glDisable(GL_DEPTH_TEST);
   glClearColor(0, 0, 0, 0);
   glClearStencil(0);
   glStencilMask(0xFF);
-  glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  if (frame.clear) {
+    glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+  } else {
+    glClear(GL_STENCIL_BUFFER_BIT);
+  }
   glEnable(GL_BLEND);
   // Straight-alpha sources, premultiplied result: over a transparent clear
   // this leaves rgb * a in the buffer, which a transparent window expects.
@@ -319,6 +415,7 @@ void Painter::draw(const json::Value& list, const Frame& frame) {
 
   if (const json::Value* cmds = list.get("cmds")) {
     for (const json::Value& c : cmds->arr) {
+      turn(c, -1);
       switch ((int)c.numOr("k", -1)) {
         case 0: {
           rect(c);
@@ -333,7 +430,8 @@ void Painter::draw(const json::Value& list, const Frame& frame) {
           break;
         }
         case 1: border(c); break;
-        case 3: text_.draw(c, frame_.pageW, frame_.pageH, dpr_); break;
+        case 2: image(c); break;
+        case 3: text_.draw(c, frame_.pageW, frame_.pageH, dpr_, rot_); break;
         case 4: pushClip(c); break;
         case 5: popClip(); break;
         case 6: pathFill(c); break;
@@ -346,6 +444,7 @@ void Painter::draw(const json::Value& list, const Frame& frame) {
   // The filters, over the finished surface, in the order the list declares.
   clip_.clear();
   applyClip();
+  rot_[0] = 0;
   for (const json::Value* inst : filters) drawEffect(*inst, Layer::Filter);
   glDisable(GL_SCISSOR_TEST);
 }

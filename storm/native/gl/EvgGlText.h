@@ -37,8 +37,14 @@ class Text {
   bool empty() const { return faces_.empty(); }
 
   bool init(std::string& err);
-  // Draw a k3 command. pageW/H and dpr as the painter's frame.
-  void draw(const json::Value& cmd, int pageW, int pageH, float dpr);
+  // How wide `text` is in `font` ("Noto Sans", "Open Sans-Bold") at `size`
+  // points, in the face draw() would pick: what a host answers a layout's
+  // measuring callback with, so boxes are measured with the face that
+  // paints them. 0 with no faces.
+  double measure(const std::string& font, double size, const std::string& text) const;
+  // Draw a k3 command. pageW/H and dpr as the painter's frame; `rot` is the
+  // turn (radians, origin x, y), or null for none.
+  void draw(const json::Value& cmd, int pageW, int pageH, float dpr, const float* rot = nullptr);
 
  private:
   struct Face {
@@ -51,6 +57,7 @@ class Text {
   struct Glyph { float u0, v0, u1, v1, w, h, xoff, yoff, adv; bool ok; };
 
   int faceFor(const json::Value& cmd) const;
+  int faceHaving(int face, unsigned cp) const;
   const Glyph& glyph(int face, int px, unsigned cp);
 
   std::vector<std::unique_ptr<Face>> faces_;  // stable addresses: stb keeps pointers into the bytes
@@ -59,7 +66,7 @@ class Text {
   int atlasW_ = 1024, atlasH_ = 1024, penX_ = 1, penY_ = 1, rowH_ = 0;
   bool dirty_ = false;
   GLuint prog_ = 0, tex_ = 0, vao_ = 0, vbo_ = 0;
-  GLint uRes_ = -1, uAtlas_ = -1, uColor_ = -1;
+  GLint uRes_ = -1, uAtlas_ = -1, uColor_ = -1, uRot_ = -1;
 };
 
 }  // namespace gl
