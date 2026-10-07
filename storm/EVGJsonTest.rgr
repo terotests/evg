@@ -168,6 +168,7 @@ class EVGJsonTest {
         this.testLetterSpacing()
         this.testParagraphSpacing()
         this.testDocumentTheme()
+        this.testTextOutsideAscii()
         print ""
         print ("passed = " + (to_string passed) + "  failed = " + (to_string failed))
         if (failed > 0) {
@@ -175,6 +176,22 @@ class EVGJsonTest {
         } {
             print "ALL PASS"
         }
+    }
+
+    ; TEXT PAST ASCII COMES OUT AS IT WENT IN.
+    ;
+    ; On the C++ target a string is UTF-8 bytes and `charAt` reads one byte;
+    ; the writer copied text a character at a time through `strfromcode`,
+    ; which encodes its argument as UTF-8, so each byte of "ä" was encoded
+    ; again and every native painter drew "Ã¤". The JavaScript target reads
+    ; UTF-16 units and never showed it, so this is meant for the C++ build
+    ; as much as for this one.
+    fn testTextOutsideAscii:void () {
+        def words:string "Neljäs – Sibelius ♪ “quoted” \\ end"
+        def json:string (EVGDisplayList.jsonString(words))
+        this.ok("non-ASCII text is copied as it is" ((indexOf json "Neljäs – Sibelius ♪ “quoted”") >= 0))
+        this.ok("a backslash is still escaped" ((indexOf json "\\\\ end") >= 0))
+        this.ok("the string is quoted" (((strlen json) - (strlen words)) == 3))
     }
 
     ; WHATEVER GOES IN, A JSON NUMBER COMES OUT.
