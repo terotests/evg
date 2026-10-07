@@ -137,5 +137,32 @@ expect("placed list: drawn at its place and scale", px2(120, 70), [0, 255, 0, 25
 expect("placed list: nothing cleared around it", px2(60, 90), [128, 128, 128, 255]);
 expect("placed list: its clip is placed too", px2(160, 70), [0, 0, 255, 255]);
 expect("placed list: and cuts where it ends", px2(185, 70), [128, 128, 128, 255]);
+
+// A symbol the run's face lacks comes from a face that has it: ▶ in a run of
+// Open Sans, drawn from DejaVu Sans when the system has it to register.
+const dejavu = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/Library/Fonts/DejaVuSans.ttf"].find((f) => fs.existsSync(f));
+if (dejavu) {
+  fs.writeFileSync(path.join(tmp, "sym.json"), JSON.stringify({
+    width: 60, height: 60,
+    cmds: [{ k: 3, x: 5, y: 5, w: 50, h: 50, c: [255, 255, 255, 1], text: "\u25B6", font: "Open Sans", size: 40 }],
+  }));
+  const out3 = path.join(tmp, "out3.pam");
+  let cmd3 = tool, args3 = [path.join(tmp, "sym.json"), out3, "--font", `Open Sans:regular:${font}`, "--font", `DejaVu Sans:regular:${dejavu}`];
+  if (process.platform === "linux" && !process.env.DISPLAY) {
+    args3 = ["-a", "-s", "-screen 0 640x480x24 +extension GLX", cmd3, ...args3];
+    cmd3 = "xvfb-run";
+  }
+  const r3 = spawnSync(cmd3, args3, { encoding: "utf8" });
+  if (r3.status !== 0 || !fs.existsSync(out3)) { console.error(r3.stdout, r3.stderr); process.exit(1); }
+  const buf3 = fs.readFileSync(out3);
+  const end3 = buf3.indexOf("ENDHDR\n") + 7;
+  let lit = 0;
+  for (let i = end3; i + 3 < buf3.length; i += 4) if (buf3[i + 3] > 128) lit++;
+  const okSym = lit > 300;
+  if (!okSym) fails.push("symbol fallback");
+  console.log(`  ${okSym ? "ok  " : "FAIL"} a symbol the face lacks is drawn from one that has it (${lit} pixels)`);
+} else {
+  console.log("  (no DejaVu Sans on this system: the symbol fallback was not checked)");
+}
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fails.length ? 1 : 0);

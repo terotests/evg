@@ -134,6 +134,49 @@ int Text::faceFor(const json::Value& cmd) const {
   return best;
 }
 
+// The face that has `cp`: the run's own, else the first registered face
+// with the same weight that has it, else any that has it, else the run's
+// (whose missing-glyph box is then drawn). A symbol like ▶ or ⏮ in a run of
+// Open Sans comes out of whichever face the host gave that covers it, as a
+// browser falls back through its font stack.
+int Text::faceHaving(int face, unsigned cp) const {
+  auto has = [&](int f) { return stbtt_FindGlyphIndex((stbtt_fontinfo*)faces_[f]->info, (int)cp) != 0; };
+  if (cp < 128 || has(face)) return face;
+  for (int pass = 0; pass < 2; pass++) {
+    for (int i = 0; i < (int)faces_.size(); i++) {
+      if (i == face || (pass == 0 && faces_[i]->bold != faces_[face]->bold)) continue;
+      if (has(i)) return i;
+    }
+  }
+  return face;
+}
+
+double Text::measure(const std::string& font, double size, const std::string& text) const {
+  json::Value cmd;
+  cmd.type = json::Value::Obj;
+  json::Value f;
+  f.type = json::Value::Str;
+  f.str = font;
+  cmd.obj["font"] = f;
+  int face = faceFor(cmd);
+  if (face < 0 || text.empty()) return 0;
+  double w = 0;
+  int prev = 0, prevFace = -1;
+  for (size_t i = 0; i < text.size();) {
+    unsigned cp = nextCodepoint(text, i);
+    int fi = faceHaving(face, cp);
+    auto* info = (stbtt_fontinfo*)faces_[fi]->info;
+    float em = stbtt_ScaleForMappingEmToPixels(info, (float)size);
+    if (prev && fi == prevFace) w += stbtt_GetCodepointKernAdvance(info, prev, (int)cp) * em;
+    int adv = 0, lsb = 0;
+    stbtt_GetCodepointHMetrics(info, (int)cp, &adv, &lsb);
+    w += adv * em;
+    prev = (int)cp;
+    prevFace = fi;
+  }
+  return w;
+}
+
 const Text::Glyph& Text::glyph(int face, int px, unsigned cp) {
   unsigned long long key = ((unsigned long long)face << 52) | ((unsigned long long)px << 32) | cp;
   auto it = glyphs_.find(key);
@@ -200,11 +243,13 @@ void Text::draw(const json::Value& c, int pageW, int pageH, float dpr, const flo
   std::vector<float> v;
   float pen = x;
   float emPx = stbtt_ScaleForMappingEmToPixels(info, (float)px);
-  int prev = 0;
+  int prev = 0, prevFace = -1;
   for (size_t i = 0; i < s.size();) {
     unsigned cp = nextCodepoint(s, i);
-    if (prev) pen += stbtt_GetCodepointKernAdvance(info, prev, (int)cp) * emPx / dpr;
-    const Glyph& g = glyph(face, px, cp);
+    int fi = faceHaving(face, cp);
+    if (prev && fi == face && prevFace == face) pen += stbtt_GetCodepointKernAdvance(info, prev, (int)cp) * emPx / dpr;
+    prevFace = fi;
+    const Glyph& g = glyph(fi, px, cp);
     if (g.ok) {
       float gx = pen + g.xoff / dpr, gy = baseline + g.yoff / dpr, gw = g.w / dpr, gh = g.h / dpr;
       float q[24] = {gx, gy, g.u0, g.v0, gx + gw, gy, g.u1, g.v0, gx + gw, gy + gh, g.u1, g.v1,
