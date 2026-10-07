@@ -91,5 +91,51 @@ const inked = text.filter((g) => g > 200).length;
 const ok = inked > 15;
 if (!ok) fails.push("text");
 console.log(`  ${ok ? "ok  " : "FAIL"} text is drawn (${inked} light pixels)`);
+
+// A second frame: a turned box, a picture, and a list drawn over the first
+// at a place and a scale without clearing it, the way a host puts a slide on
+// its stage. 200 x 100, grey.
+const base = {
+  width: 200, height: 100,
+  cmds: [
+    { k: 0, x: 0, y: 0, w: 200, h: 100, c: [128, 128, 128, 1] },
+    // 80 x 20 turned a quarter about its centre (50, 50): 20 x 80 standing
+    { k: 0, x: 10, y: 40, w: 80, h: 20, c: [255, 255, 0, 1], rot: 90 },
+    { k: 2, x: 150, y: 0, w: 40, h: 40, src: "test:quad" },
+  ],
+};
+// its page is the window's, drawn at (100, 50) half size: x 0..100 of it
+// lands on 100..150, and its clip 100..140 on 150..170
+const over = {
+  width: 200, height: 100,
+  cmds: [
+    { k: 0, x: 0, y: 0, w: 100, h: 100, c: [0, 255, 0, 1] },
+    { k: 4, x: 100, y: 0, w: 40, h: 100, c: [0, 0, 0, 0] },
+    { k: 0, x: 100, y: 0, w: 100, h: 100, c: [0, 0, 255, 1] },
+    { k: 5, x: 0, y: 0, w: 0, h: 0, c: [0, 0, 0, 0] },
+  ],
+};
+fs.writeFileSync(path.join(tmp, "base.json"), JSON.stringify(base));
+fs.writeFileSync(path.join(tmp, "over.json"), JSON.stringify(over));
+const out2 = path.join(tmp, "out2.pam");
+let cmd2 = tool, args2 = [path.join(tmp, "base.json"), out2, "--over", path.join(tmp, "over.json"), "--at", "100,50,0.5"];
+if (process.platform === "linux" && !process.env.DISPLAY) {
+  args2 = ["-a", "-s", "-screen 0 640x480x24 +extension GLX", cmd2, ...args2];
+  cmd2 = "xvfb-run";
+}
+const r2 = spawnSync(cmd2, args2, { encoding: "utf8" });
+if (r2.status !== 0 || !fs.existsSync(out2)) { console.error(r2.stdout, r2.stderr); process.exit(1); }
+const buf2 = fs.readFileSync(out2);
+const end2 = buf2.indexOf("ENDHDR\n") + 7;
+const px2 = (x, y) => [...buf2.subarray(end2 + (y * W + x) * 4, end2 + (y * W + x) * 4 + 4)];
+expect("rotation: the turned box stands up", px2(50, 15), [255, 255, 0, 255]);
+expect("rotation: and is gone from where it lay", px2(15, 50), [128, 128, 128, 255]);
+expect("image: top left texel", px2(155, 5), [255, 0, 0, 255]);
+expect("image: top right texel", px2(185, 5), [0, 255, 0, 255]);
+expect("image: bottom left texel", px2(155, 35), [0, 0, 255, 255]);
+expect("placed list: drawn at its place and scale", px2(120, 70), [0, 255, 0, 255]);
+expect("placed list: nothing cleared around it", px2(60, 90), [128, 128, 128, 255]);
+expect("placed list: its clip is placed too", px2(160, 70), [0, 0, 255, 255]);
+expect("placed list: and cuts where it ends", px2(185, 70), [128, 128, 128, 255]);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fails.length ? 1 : 0);

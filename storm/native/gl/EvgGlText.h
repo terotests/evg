@@ -37,8 +37,9 @@ class Text {
   bool empty() const { return faces_.empty(); }
 
   bool init(std::string& err);
-  // Draw a k3 command. pageW/H and dpr as the painter's frame.
-  void draw(const json::Value& cmd, int pageW, int pageH, float dpr);
+  // Draw a k3 command. pageW/H and dpr as the painter's frame; `rot` is the
+  // turn (radians, origin x, y), or null for none.
+  void draw(const json::Value& cmd, int pageW, int pageH, float dpr, const float* rot = nullptr);
 
  private:
   struct Face {
@@ -59,7 +60,7 @@ class Text {
   int atlasW_ = 1024, atlasH_ = 1024, penX_ = 1, penY_ = 1, rowH_ = 0;
   bool dirty_ = false;
   GLuint prog_ = 0, tex_ = 0, vao_ = 0, vbo_ = 0;
-  GLint uRes_ = -1, uAtlas_ = -1, uColor_ = -1;
+  GLint uRes_ = -1, uAtlas_ = -1, uColor_ = -1, uRot_ = -1;
 };
 
 }  // namespace gl

@@ -9,12 +9,21 @@ const char* kPageVertexShader = R"GLSL(#version 330 core
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aUV;
 uniform vec2 uRes;
+// A command turned about a point: radians, then the point. A program that
+// never sets it leaves it zero, which is no turn.
+uniform vec3 uRot;
 out vec2 vP;
 out vec2 vTex;
 void main() {
   vP = aPos;
   vTex = aUV;
-  gl_Position = vec4(aPos.x / uRes.x * 2.0 - 1.0, 1.0 - aPos.y / uRes.y * 2.0, 0.0, 1.0);
+  vec2 p = aPos;
+  if (uRot.x != 0.0) {
+    vec2 d = aPos - uRot.yz;
+    float c = cos(uRot.x), s = sin(uRot.x);
+    p = uRot.yz + vec2(d.x * c - d.y * s, d.x * s + d.y * c);
+  }
+  gl_Position = vec4(p.x / uRes.x * 2.0 - 1.0, 1.0 - p.y / uRes.y * 2.0, 0.0, 1.0);
 }
 )GLSL";
 

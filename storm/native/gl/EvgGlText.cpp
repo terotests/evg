@@ -83,6 +83,7 @@ bool Text::init(std::string& err) {
   prog_ = linkProgram(kPageVertexShader, TEXT_FRAG, err);
   if (!prog_) return false;
   uRes_ = glGetUniformLocation(prog_, "uRes");
+  uRot_ = glGetUniformLocation(prog_, "uRot");
   uAtlas_ = glGetUniformLocation(prog_, "uAtlas");
   uColor_ = glGetUniformLocation(prog_, "uColor");
   atlas_.assign((size_t)atlasW_ * atlasH_, 0);
@@ -176,7 +177,7 @@ const Text::Glyph& Text::glyph(int face, int px, unsigned cp) {
   return glyphs_[key] = g;
 }
 
-void Text::draw(const json::Value& c, int pageW, int pageH, float dpr) {
+void Text::draw(const json::Value& c, int pageW, int pageH, float dpr, const float* rot) {
   std::string s = c.strOr("text", "");
   int face = faceFor(c);
   if (s.empty() || face < 0) return;
@@ -223,6 +224,8 @@ void Text::draw(const json::Value& c, int pageW, int pageH, float dpr) {
   }
   glUseProgram(prog_);
   glUniform2f(uRes_, (float)pageW, (float)pageH);
+  const float none[3] = {0, 0, 0};
+  glUniform3fv(uRot_, 1, rot ? rot : none);
   glUniform1i(uAtlas_, 0);
   glUniform4fv(uColor_, 1, col);
   glBindVertexArray(vao_);

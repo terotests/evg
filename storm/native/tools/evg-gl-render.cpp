@@ -8,6 +8,12 @@
 //   evg-gl-render list.json out.pam [--scale 2] [--time 1.5]
 //                 [--font "Noto Sans:regular:NotoSans-Regular.ttf"]…
 //                 [--effects effects.json]…
+//                 [--over list2.json --at ox,oy,scale]
+//
+// --over draws a second list over the first without clearing, its page
+// placed at (ox, oy) and scaled, the way a host draws a slide on a stage.
+// An image command whose src is "test:quad" gets a 2x2 texture: red, green
+// over blue, white.
 //
 // --effects reads an array of effect manifests ({ name, layer, params,
 // arrays, file }), each `file` relative to the manifest.
@@ -43,12 +49,16 @@ int main(int argc, char** argv) {
   std::string in = argv[1], out = argv[2];
   float scale = 1, time = 0;
   std::vector<std::string> fonts, effectFiles;
+  std::string over;
+  float atX = 0, atY = 0, atS = 1;
   for (int i = 3; i + 1 < argc; i += 2) {
     std::string a = argv[i];
     if (a == "--scale") scale = (float)std::atof(argv[i + 1]);
     else if (a == "--time") time = (float)std::atof(argv[i + 1]);
     else if (a == "--font") fonts.push_back(argv[i + 1]);
     else if (a == "--effects") effectFiles.push_back(argv[i + 1]);
+    else if (a == "--over") over = argv[i + 1];
+    else if (a == "--at") std::sscanf(argv[i + 1], "%f,%f,%f", &atX, &atY, &atS);
   }
 
   evg::json::Value list;
@@ -122,7 +132,37 @@ int main(int argc, char** argv) {
   frame.drawW = w;
   frame.drawH = h;
   frame.time = time;
+  GLuint quadTex = 0;
+  frame.images = [&](const std::string& src, int& tw, int& th) -> GLuint {
+    if (src != "test:quad") return 0;
+    if (!quadTex) {
+      const unsigned char px[16] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+      glGenTextures(1, &quadTex);
+      glBindTexture(GL_TEXTURE_2D, quadTex);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+    }
+    tw = th = 2;
+    return quadTex;
+  };
   painter.draw(list, frame);
+  if (!over.empty()) {
+    evg::json::Value list2;
+    if (!evg::json::Parser(readText(over)).parse(list2)) {
+      std::fprintf(stderr, "%s: not a display list\n", over.c_str());
+      return 1;
+    }
+    evg::gl::Frame f2 = frame;
+    f2.ox = atX;
+    f2.oy = atY;
+    f2.scale = atS;
+    f2.clear = false;
+    painter.draw(list2, f2);
+  }
   std::vector<unsigned char> rgba = target.readPixels();
 
   std::ofstream f(out, std::ios::binary);
