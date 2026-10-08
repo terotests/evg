@@ -97,6 +97,7 @@ class EVGHostMeasurerTest {
         this.testFaceCacheAndRunCache()
         this.testLineHeight()
         this.testUnattachedFallsBackThenAttaches()
+        this.testTableEmojiIsOneGlyph()
         this.testWrapInRealLayout()
         this.testHasFace()
         EVGDefaultMeasurer.uninstall()
@@ -227,6 +228,17 @@ class EVGHostMeasurerTest {
         this.near("with the host's width" w1 100.0)
         hm.invalidate()
         this.ok("invalidate moves the key again" ((hm.measureKey()) != k1))
+    }
+
+    fn testTableEmojiIsOneGlyph:void () {
+        print "-- the table measures an emoji as one glyph of 1.25 em"
+        ; SimpleTextMeasurer walks by code point, so the emoji reaches
+        ; measureChar whole, not as a surrogate pair.
+        def table (new SimpleTextMeasurer())
+        def face:string "😭"
+        this.near("crying face, 16px" ((table.measureText(face "sans-serif" 16.0)).width) 20.0)
+        this.near("one code point at a time as before" (table.measureChar(128557 "sans-serif" 16.0)) 20.0)
+        this.near("its high surrogate alone as before" (table.measureChar(55357 "sans-serif" 16.0)) 20.0)
     }
 
     fn testWrapInRealLayout:void () {

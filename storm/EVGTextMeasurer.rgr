@@ -479,10 +479,11 @@ class EVGTextMeasurer {
         ; The two failure modes are not symmetric: over-measuring leaves a box
         ; a few pixels wide, and under-measuring wraps a line that was meant
         ; to fit and pushes it out of its container.
-        if ((ch >= 55296) && (ch <= 56319)) {
-            if (ch == 55357) {
-                return (fontSize * 1.25)
-            }
+        ; A caller that walks by code point (`SimpleTextMeasurer`, the wrap,
+        ; and every string on C++ where text is UTF-8 bytes) hands over the
+        ; whole code point instead of its high surrogate, and it is the same
+        ; glyph, so it gets the same width.
+        if (((ch >= 55296) && (ch <= 56319)) || (ch >= 65536)) {
             return (fontSize * 1.25)
         }
         if ((ch >= 56320) && (ch <= 57343)) {
