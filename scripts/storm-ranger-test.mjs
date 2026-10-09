@@ -118,6 +118,7 @@ const RGR_SUITES = [
   "EvgBitmapTracerTest.rgr",
   "EVGEffectTest.rgr",
   "EVGRelayoutTest.rgr",
+  "EVGTextOverflowTest.rgr",
 ];
 
 function rangerRequired() {
