@@ -82,6 +82,7 @@ const JS_CHECKS = [
   path.join(STORM, "gl/view-policy-check.mjs"),
   path.join(STORM, "gl/shift-check.mjs"),
   path.join(STORM, "gl/a11y-paint-check.mjs"),
+  path.join(STORM, "gl/font-family-check.mjs"),
 ];
 
 for (const script of JS_CHECKS) {
