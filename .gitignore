@@ -26,3 +26,7 @@ storm/bin/*
 docs/site/node_modules/
 docs/site/dist/
 docs/site/.astro/
+
+# Rust core (rs/): cargo output
+rs/target/
+rs/parity/target/

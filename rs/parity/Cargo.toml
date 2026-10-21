@@ -1,0 +1,18 @@
+# The parity check of the strict-Rust EVG core: `cargo run` here, rgrc of
+# src/main.rs for es6 / go / cpp, and storm's .rgr (rs/parity/StormParity.rgr)
+# must print the same lines.
+
+[package]
+name = "evg_parity"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[dependencies]
+evg = { path = ".." }
+
+[profile.dev]
+overflow-checks = false
+
+[workspace]

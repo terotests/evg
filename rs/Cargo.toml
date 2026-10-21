@@ -1,0 +1,13 @@
+[package]
+name = "evg"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "EVG Storm core as strict Rust: compiles with rustc and with Ranger's rgrc"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[workspace]

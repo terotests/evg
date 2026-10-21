@@ -26,6 +26,7 @@
     "storm:test": "node scripts/storm-ranger-test.mjs",
     "storm:adopt": "node scripts/check-adopt.mjs",
     "storm:drops:test": "node storm/gl/drops-model-test.mjs",
+    "rs:parity": "node scripts/rs-parity.mjs",
     "docs:dev": "npm --prefix docs/site run dev",
     "docs:build": "npm --prefix docs/site run build",
     "docs:check": "npm --prefix docs/site run check"
