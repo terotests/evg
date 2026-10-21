@@ -1,0 +1,168 @@
+; SPDX-License-Identifier: MIT
+; The lines of rs/parity/src/main.rs, from storm's own .rgr classes: the
+; strict-Rust port must print exactly these (scripts/rs-parity.mjs). Numbers
+; go through fmt6 as in rs/src/num.rs, because to_string of a double is
+; written differently on each target.
+
+Import "../../storm/EVGUnit.rgr"
+Import "../../storm/EVGColor.rgr"
+Import "../../storm/EVGGrapheme.rgr"
+Import "../../storm/EVGEasing.rgr"
+
+class StormParity {
+
+    sfn fmt6:string (v:double) {
+        def neg:boolean (v < 0.0)
+        def a:double v
+        if neg {
+            a = (0.0 - v)
+        }
+        def scaled:int (floor ((a * 1000000.0) + 0.5))
+        def whole:int (to_int ((to_double scaled) / 1000000.0))
+        def frac:int (scaled - (whole * 1000000))
+        def out:string (to_string whole)
+        if (frac > 0) {
+            def f:int frac
+            def width:int 6
+            while ((f % 10) == 0) {
+                f = (to_int ((to_double f) / 10.0))
+                width = (width - 1)
+            }
+            def digits:string (to_string f)
+            while ((strlen digits) < width) {
+                digits = ("0" + digits)
+            }
+            out = ((out + ".") + digits)
+        }
+        if (neg && (scaled > 0)) {
+            out = ("-" + out)
+        }
+        return out
+    }
+
+    sfn yes:string (b:boolean) {
+        if b {
+            return "true"
+        }
+        return "false"
+    }
+
+    ; Unit.to_text
+    sfn unitText:string (u:EVGUnit) {
+        if (u.isSet == false) {
+            return "unset"
+        }
+        def v:string (StormParity.fmt6(u.value))
+        def t:int u.unitType
+        if (t == 0) { return (v + "px") }
+        if (t == 1) { return (v + "%") }
+        if (t == 2) { return (v + "em") }
+        if (t == 3) { return (v + "hp") }
+        if (t == 4) { return "fill" }
+        if (t == 5) { return (v + "rem") }
+        if (t == 7) { return (v + "vw") }
+        if (t == 8) { return (v + "vh") }
+        return v
+    }
+
+    sfn units:void () {
+        def xs:[string] ([] _:string ("100px" "50%" "2em" "1.5rem" "30hp" "10vw" "50vh" "12pt" "1in" "10mm" "2.54cm" "1pc" "fill" "auto" "fit-content" "" "10vmin" "4ch" "42" " 7 " "-3.5px" "1e2px" "calc(1px)" "abc" "+5%" "1.2.3px" "px" "10 px" ".5em" "-.25rem"))
+        for xs x:string i {
+            def u:EVGUnit (EVGUnit.parse(x))
+            def head:string ("unit [" + x + "] " + (StormParity.unitText(u)) + " set=" + (StormParity.yes(u.isSet)) + " type=" + (to_string u.unitType) + " px=" + (StormParity.fmt6(u.pixels)))
+            u.setContext(16.0 800.0 600.0)
+            u.resolve(200.0 12.0)
+            def a:string (StormParity.fmt6(u.pixels))
+            u.resolveForHeight(200.0 100.0 12.0)
+            def b:string (StormParity.fmt6(u.pixels))
+            u.resolveWithHeight(200.0 100.0 12.0)
+            def c:string (StormParity.fmt6(u.pixels))
+            print (head + " resolve=" + a + " height=" + b + " width=" + c)
+        }
+    }
+
+    ; Color.to_css
+    sfn css:string (c:EVGColor) {
+        if (c.isSet == false) {
+            return "none"
+        }
+        def rgb:string ((to_string (c.red())) + "," + (to_string (c.green())) + "," + (to_string (c.blue())))
+        if (c.a < 1.0) {
+            return ("rgba(" + rgb + "," + (StormParity.fmt6((c.alpha()))) + ")")
+        }
+        return ("rgb(" + rgb + ")")
+    }
+
+    ; Color.to_pdf
+    sfn pdf:string (c:EVGColor) {
+        if (c.isSet == false) {
+            return ""
+        }
+        return ((StormParity.fmt6((c.r / 255.0))) + " " + (StormParity.fmt6((c.g / 255.0))) + " " + (StormParity.fmt6((c.b / 255.0))))
+    }
+
+    sfn colors:void () {
+        def xs:[string] ([] _:string ("#fff" "#FFFA" "#336699" "#33669980" "#12" "#ggg" "Red" "navy" "transparent" "none" "bogus" "" "rgb(10, 20, 30)" "rgb(10 20 30)" "rgba(10,20,30,0.5)" "rgb(1,2)" "hsl(120, 100%, 50%)" "hsl(0 0% 50%)" "hsla(200, 50%, 40%, 0.3)" "hsl(1,2)" "rgb(300,-5,12.4)" "hsl(330, 70%, 80%)" "hsl(-30, 40%, 60%)"))
+        for xs x:string i {
+            def c:EVGColor (EVGColor.parse(x))
+            print ("color [" + x + "] set=" + (StormParity.yes(c.isSet)) + " css=" + (StormParity.css(c)) + " hex=" + (c.toHexString()) + " pdf=" + (StormParity.pdf(c)) + " light=" + (StormParity.css((c.lighten(0.2)))) + " dark=" + ((c.darken(0.5)).toHexString()) + " half=" + (StormParity.css((c.withAlpha(0.25)))))
+        }
+    }
+
+    sfn grapheme:void (cps:[int]) {
+        def s:string ""
+        for cps cp:int i {
+            s = (s + (EVGCodepoint.toStr(cp)))
+        }
+        def back:[int] (EVGCodepoint.toArray(s))
+        def b:string ""
+        def bs:[int] (EVGGrapheme.boundaries(back))
+        for bs v:int j {
+            b = (b + " " + (to_string v))
+        }
+        def flags:string ""
+        for back cp2:int k {
+            def f:string "-"
+            if (EVGCodepoint.breaksAfter(cp2)) {
+                f = "b"
+            }
+            if (EVGCodepoint.isSpace(cp2)) {
+                f = "s"
+            }
+            flags = (flags + f)
+        }
+        def first:string (EVGGrapheme.clusterAt(s 0))
+        print ("grapheme cps=" + (to_string (EVGCodepoint.count(s))) + " clusters=" + (to_string (EVGGrapheme.clusterCount(s))) + " at" + b + " flags=" + flags + " first=" + (to_string (EVGCodepoint.count(first))))
+    }
+
+    sfn graphemes:void () {
+        StormParity.grapheme(([] _:int (97 98 99)))
+        StormParity.grapheme(([] _:int (101 769 120)))
+        StormParity.grapheme(([] _:int (128077 127997 33)))
+        StormParity.grapheme(([] _:int (128104 8205 128105 8205 128103)))
+        StormParity.grapheme(([] _:int (127467 127470 127480 127466 127467)))
+        StormParity.grapheme(([] _:int (97 8205)))
+        StormParity.grapheme(([] _:int (228 45 47 8212 32 9)))
+        StormParity.grapheme(([] _:int (9829 65039 917607 917608)))
+    }
+
+    sfn easings:void () {
+        def xs:[string] ([] _:string ("linear" "ease" "ease-in" "ease-out" "ease-in-out" "step-start" "step-end" "cubic-bezier(0.1, 0.7, 1.0, 0.1)" "cubic-bezier(-1, 2, 3, -1)" "cubic-bezier(1,2)" "steps(4)" "steps(3, start)" "steps(2, jump-start)" "steps(0)" "steps(2.7, end)" "bounce" ""))
+        def ts:[double] ([] _:double (-0.5 0.0 0.1 0.25 0.5 0.75 0.9 1.0 1.5))
+        for xs x:string i {
+            def e:EVGEasing (EVGEasing.parse(x))
+            def vs:string ""
+            for ts t:double j {
+                vs = (vs + " " + (StormParity.fmt6((e.ease(t)))))
+            }
+            print ("easing [" + x + "] ok=" + (StormParity.yes(e.ok)) + " kind=" + (to_string e.kind) + " n=" + (to_string e.stepCount) + " start=" + (StormParity.yes(e.jumpStart)) + " at" + vs)
+        }
+    }
+
+    sfn main:void () {
+        StormParity.units()
+        StormParity.colors()
+        StormParity.graphemes()
+        StormParity.easings()
+    }
+}

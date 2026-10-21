@@ -1,0 +1,35 @@
+name: Rust core parity
+
+# rs/ is EVG's core in strict Rust. cargo, rgrc for es6 / go / cpp, and
+# Storm's own .rgr classes must print the same lines (npm run rs:parity).
+# Needs the Ranger with the Rust frontend, pinned here.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  parity:
+    name: rs-parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: evg
+      - uses: actions/checkout@v4
+        with:
+          repository: terotests/Ranger
+          ref: bb7fc2115c17faa5880cdcbbc4e33292f5a9fcd3
+          path: Ranger
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Parity
+        working-directory: evg
+        env:
+          RANGER_ROOT: ${{ github.workspace }}/Ranger
+        run: npm run rs:parity
