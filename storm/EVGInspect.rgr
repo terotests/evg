@@ -869,7 +869,7 @@ class EVGInspect {
                                 if (ch < 32) {
                                     out = (out + " ")
                                 } {
-                                    out = (out + (strfromcode ch))
+                                    out = (out + (substring v i (i + 1)))
                                 }
                             }
                         }

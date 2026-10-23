@@ -880,7 +880,10 @@ class EVGA11yTree {
                                 if (ch < 32) {
                                     out = (out + " ")
                                 } {
-                                    out = (out + (strfromcode ch))
+                                    ; the character as it is: in Go charAt is one
+                                    ; byte of UTF-8, which strfromcode would turn
+                                    ; into a code point of its own
+                                    out = (out + (substring v i (i + 1)))
                                 }
                             }
                         }
