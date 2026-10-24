@@ -705,6 +705,12 @@ class EVGLayout {
             ; ends up subtly wrong instead of obviously wrong.
             if (element.width.unitType == 6) {
                 def fitW:double (this.contentExtent(element))
+                ; no narrower than its own min-width says
+                if (element.minWidth.isSet && ((element.minWidth.isPercent()) == false)) {
+                    if (fitW < element.minWidth.pixels) {
+                        fitW = element.minWidth.pixels
+                    }
+                }
                 if ((fitW > 0.0) && (fitW < element.calculatedWidth)) {
                     element.calculatedWidth = fitW
                     element.calculatedInnerWidth = (element.box.getInnerWidth(fitW))
@@ -1262,14 +1268,33 @@ class EVGLayout {
                 ; move the finished subtree into place afterwards: the
                 ; positions inside it are relative to the element, so one
                 ; translation carries all of them.
+                ;
+                ; Its `width: auto` is its content's (CSS 2.1 10.3.7: shrink
+                ; to fit), as along a row, unless both `left` and `right` are
+                ; set, which `layoutAbsolute` stretches it between. As wide as
+                ; the parent, a send button written `right: 5px; bottom: 5px`
+                ; was as wide as the text field it sits in and drawn at its
+                ; left edge.
                 def wasRow0:boolean layingOutAlongRow
                 def wasShrink0:boolean columnCrossShrinks
-                layingOutAlongRow = alongRow
+                layingOutAlongRow = (alongRow || ((child.left.isSet && child.right.isSet) == false))
                 columnCrossShrinks = (this.crossShrinksUnder(parent))
                 this.layoutElement(child 0.0 0.0 innerWidth innerHeight)
                 layingOutAlongRow = wasRow0
                 columnCrossShrinks = wasShrink0
-                this.translateSubtree(child startX startY)
+                ; Placed from the far edge with a size its content gave it:
+                ; `layoutAbsolute` ran before the content was laid out and
+                ; placed it as if it were 0 wide or tall, so a box written
+                ; `bottom: 10px` hung its whole height below the line.
+                def fixX:double 0.0
+                def fixY:double 0.0
+                if ((child.right.isSet && (child.left.isSet == false)) && ((child.x.isSet == false) && (child.width.isSet == false))) {
+                    fixX = ((((innerWidth - child.right.pixels) - child.calculatedWidth) - child.box.marginRightPx) - child.calculatedX)
+                }
+                if ((child.bottom.isSet && (child.top.isSet == false)) && ((child.y.isSet == false) && (child.height.isSet == false))) {
+                    fixY = ((((innerHeight - child.bottom.pixels) - child.calculatedHeight) - child.box.marginBottomPx) - child.calculatedY)
+                }
+                this.translateSubtree(child (startX + fixX) (startY + fixY))
             }
     }
 
@@ -1551,12 +1576,53 @@ class EVGLayout {
                             totalFlexC = (totalFlexC + c.flex)
                             fixedHeight = (fixedHeight + mAxis)
                         } {
-                            ; auto-height non-flex child: 0 main-axis basis estimate
+                            ; auto-height non-flex child: measured below, when
+                            ; something grows into what it leaves
                             fixedHeight = (fixedHeight + mAxis)
                         }
                     }
                 }
                 jc = (jc + 1)
+            }
+            ; AN AUTO-HEIGHT ITEM BESIDE A GROWING ONE IS AS TALL AS ITS CONTENT.
+            ;
+            ; Its basis is its content (CSS `flex-basis: auto` on an auto
+            ; height), and the growing items share what is left after it. It
+            ; used to count as zero here, so a `flex: 1` panel took the whole
+            ; column and a footer of text under it was pushed out of the box:
+            ; a dashboard's chat, a welcome text scrolling over its own input.
+            ; The height is a layout at the width the item will be laid out
+            ; at — as the grid measures its rows — and the real pass lays it
+            ; out again where it goes.
+            if (totalFlexC > 0.0) {
+                def jm:int 0
+                while (jm < childCount) {
+                    def c:EVGElement (parent.getChild(jm))
+                    if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && ((c.height.isSet == false) && (c.flex <= 0.0))) {
+                        def availM:double ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx)
+                        def cw:double (this.estimateChildWidth(c availM (this.crossShrinksUnder(parent))))
+                        if c.hasFlexWidth {
+                            cw = c.calculatedFlexWidth
+                        } {
+                            if c.width.isSet {
+                                cw = c.width.pixels
+                                if (cw >= innerWidth) {
+                                    cw = availM
+                                }
+                            }
+                        }
+                        def wasRowM:boolean layingOutAlongRow
+                        def wasShrinkM:boolean columnCrossShrinks
+                        layingOutAlongRow = false
+                        columnCrossShrinks = (this.crossShrinksUnder(parent))
+                        c.calculatedFlexHeight = 0.0
+                        this.layoutElement(c 0.0 0.0 cw innerHeight)
+                        layingOutAlongRow = wasRowM
+                        columnCrossShrinks = wasShrinkM
+                        fixedHeight = (fixedHeight + c.calculatedHeight)
+                    }
+                    jm = (jm + 1)
+                }
             }
             def gapTotalC:double 0.0
             if (flowCountC > 1) {
@@ -2201,6 +2267,17 @@ class EVGLayout {
         def availableHeight:double innerHeight
         if parent.height.isSet {
             availableHeight = parent.calculatedInnerHeight
+        }
+        ; An auto height held up by `min-height` is that tall by the time it
+        ; is drawn, but not yet here: the box is sized after its children.
+        ; Aligning against the stale inner height put a 16px icon 8px ABOVE
+        ; the 24px button it was meant to be centred in.
+        if (((parent.height.isSet == false) && (parent.hasDefiniteHeight == false)) && (parent.minHeight.isSet && ((parent.minHeight.isPercent()) == false))) {
+            def minInner:double (parent.minHeight.pixels - (parent.box.getVerticalChrome()))
+            availableHeight = contentHeight
+            if (minInner > availableHeight) {
+                availableHeight = minInner
+            }
         }
         
         def offsetY:double 0.0
@@ -3439,6 +3516,19 @@ class EVGLayout {
                 }
             } {
                 outer = (this.intrinsicOfChildren(el wantMin))
+            }
+            ; ...and its own `min-width` and `max-width` hold it, as they hold
+            ; its laid-out width. Without them a 24px button with a 16px icon
+            ; in it counted as 16 and the box around it came out too narrow.
+            if (el.maxWidth.isSet && ((el.maxWidth.isPercent()) == false)) {
+                if (outer > el.maxWidth.pixels) {
+                    outer = el.maxWidth.pixels
+                }
+            }
+            if (el.minWidth.isSet && ((el.minWidth.isPercent()) == false)) {
+                if (outer < el.minWidth.pixels) {
+                    outer = el.minWidth.pixels
+                }
             }
         }
         if (outer <= 0.0) {
