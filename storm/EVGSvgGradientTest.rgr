@@ -1,0 +1,177 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGSvgGradientTest — <linearGradient> and <radialGradient> in imported SVG
+; ==============================================================================
+;
+; SvgParser resolves a `url(#id)` fill or stroke to an SvgGradient on the
+; item: its coordinates as written, and the matrix from them to the
+; document's user space (CTM, then the shape's bounding box for
+; objectBoundingBox, then gradientTransform). What is asserted:
+;
+;   * the bounding box and the CTM end up in the matrix, so a renderer needs
+;     nothing but the matrix and the coordinates;
+;   * userSpaceOnUse percentages are of the viewBox;
+;   * a radial gradient's defaults (r 50 %, focus at the centre);
+;   * href: stops and attributes come from the referenced gradient;
+;   * stop colours from attributes and from style, and the paint's opacity
+;     in their alpha;
+;   * a missing gradient falls back to the colour after the url, and one
+;     without stops paints nothing, as a browser does;
+;   * the colour fields stay unset, so PDF and PNG draw what they drew before;
+;   * the display list's JSON carries it ("gr").
+; ==============================================================================
+
+Import "SvgParser.rgr"
+Import "EVGDisplayList.rgr"
+
+class GradCheck {
+    def passed:int 0
+    def failed:int 0
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:void (name:string got:double want:double) {
+        def d:double (got - want)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        if (d > 0.001) {
+            print ("       got " + (to_string got) + " want " + (to_string want))
+        }
+        this.ok(name (d <= 0.001))
+    }
+}
+
+class EVGSvgGradientTest {
+    sfn item:SvgVectorItem (src:string) {
+        def p (new SvgParser())
+        def doc:SvgDocument (p.parse(src))
+        if ((doc.itemCount()) == 0) {
+            return (new SvgVectorItem())
+        }
+        return (itemAt doc.items 0)
+    }
+
+    sfn testLinearBox:void (c:GradCheck) {
+        print ""
+        print "--- linear, objectBoundingBox ---"
+        def it:SvgVectorItem (EVGSvgGradientTest.item("<svg viewBox=\"0 0 40 40\"><defs><linearGradient id=\"g\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#ff0000\"/><stop offset=\"0.5\" stop-color=\"#00ff00\"/><stop offset=\"1\" stop-color=\"#0000ff\"/></linearGradient></defs><rect x=\"5\" y=\"5\" width=\"10\" height=\"20\" fill=\"url(#g)\"/></svg>"))
+        c.ok("a url(#id) fill is a gradient" (it.hasGradientFill()))
+        c.ok("…and leaves the colour unset for targets without gradients" (it.hasFill() == false))
+        if (it.hasGradientFill()) {
+            def g:SvgGradient (unwrap it.fillGradient)
+            c.ok("linear" g.isLinear)
+            c.near("x2 as written" g.x2 0.0)
+            c.near("y2 as written" g.y2 1.0)
+            c.ok("three stops" ((array_length g.stops) == 3))
+            c.near("the box's width is in the matrix" g.matrix.a 10.0)
+            c.near("…its height" g.matrix.d 20.0)
+            c.near("…its left" g.matrix.e 5.0)
+            c.near("…its top" g.matrix.f 5.0)
+            def avg:EVGColor (g.averageColor())
+            c.near("the average weighs each stop by its stretch (red)" avg.r 63.75)
+            c.near("…(green)" avg.g 127.5)
+        }
+    }
+
+    sfn testUserSpace:void (c:GradCheck) {
+        print ""
+        print "--- linear, userSpaceOnUse, under a transform ---"
+        def it:SvgVectorItem (EVGSvgGradientTest.item("<svg viewBox=\"0 0 40 20\"><defs><linearGradient id=\"u\" gradientUnits=\"userSpaceOnUse\" x1=\"0%\" x2=\"100%\"><stop offset=\"0\" stop-color=\"red\"/><stop offset=\"1\" stop-color=\"blue\"/></linearGradient></defs><g transform=\"translate(3 4)\"><rect width=\"10\" height=\"10\" fill=\"url(#u)\"/></g></svg>"))
+        if (it.hasGradientFill()) {
+            def g:SvgGradient (unwrap it.fillGradient)
+            c.near("a percentage is of the viewBox's width" g.x2 40.0)
+            c.near("the CTM is the matrix (scale)" g.matrix.a 1.0)
+            c.near("…(translation)" g.matrix.e 3.0)
+            c.near("…(translation y)" g.matrix.f 4.0)
+        } {
+            c.ok("a userSpaceOnUse gradient resolves" false)
+        }
+    }
+
+    sfn testRadial:void (c:GradCheck) {
+        print ""
+        print "--- radial ---"
+        def it:SvgVectorItem (EVGSvgGradientTest.item("<svg viewBox=\"0 0 10 10\"><radialGradient id=\"r\" fx=\"0.25\"><stop offset=\"0\" stop-color=\"white\"/><stop offset=\"1\" style=\"stop-color: #000; stop-opacity: 0.5\"/></radialGradient><circle cx=\"5\" cy=\"5\" r=\"4\" fill=\"url(#r)\" fill-opacity=\"0.5\"/></svg>"))
+        if (it.hasGradientFill()) {
+            def g:SvgGradient (unwrap it.fillGradient)
+            c.ok("radial" (g.isLinear == false))
+            c.near("r defaults to 50 %" g.r 0.5)
+            c.near("cx defaults to 50 %" g.cx 0.5)
+            c.near("fx as written" g.fx 0.25)
+            c.near("fy defaults to cy" g.fy 0.5)
+            def last:SvgGradientStop (itemAt g.stops 1)
+            c.near("stop-opacity from style, times fill-opacity" (last.color.alpha()) 0.25)
+            c.ok("a gradient outside <defs> draws nothing itself" ((array_length g.stops) == 2))
+        } {
+            c.ok("a radial gradient resolves" false)
+        }
+    }
+
+    sfn testHref:void (c:GradCheck) {
+        print ""
+        print "--- href and gradientTransform ---"
+        def it:SvgVectorItem (EVGSvgGradientTest.item("<svg viewBox=\"0 0 10 10\"><defs><linearGradient id=\"a\" x2=\"0.5\"><stop offset=\"0\" stop-color=\"red\"/><stop offset=\"1\" stop-color=\"blue\"/></linearGradient><linearGradient id=\"b\" xlink:href=\"#a\" gradientTransform=\"scale(2)\"/></defs><path d=\"M0 0H10V10H0Z\" stroke=\"url(#b)\" stroke-width=\"2\" fill=\"none\"/></svg>"))
+        c.ok("a stroke gradient" (it.hasGradientStroke()))
+        if (it.hasGradientStroke()) {
+            def g:SvgGradient (unwrap it.strokeGradient)
+            c.ok("the stops come from the referenced gradient" ((array_length g.stops) == 2))
+            c.near("…and the attributes it does not set" g.x2 0.5)
+            c.near("gradientTransform after the box" g.matrix.a 20.0)
+        }
+    }
+
+    sfn testFallback:void (c:GradCheck) {
+        print ""
+        print "--- fallbacks ---"
+        def miss:SvgVectorItem (EVGSvgGradientTest.item("<svg viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" fill=\"url(#none) #ff0000\"/></svg>"))
+        c.ok("a missing gradient is no gradient" (miss.hasGradientFill() == false))
+        c.ok("…and the colour after the url is the fill" ((miss.hasFill()) && ((miss.fillColor.red()) == 255)))
+        def empty:SvgVectorItem (EVGSvgGradientTest.item("<svg viewBox=\"0 0 10 10\"><defs><linearGradient id=\"e\"/></defs><rect width=\"10\" height=\"10\" fill=\"url(#e)\"/></svg>"))
+        c.ok("a gradient without stops paints nothing" ((empty.hasGradientFill() == false) && (empty.hasFill() == false)))
+    }
+
+    sfn testJson:void (c:GradCheck) {
+        print ""
+        print "--- the display list's JSON ---"
+        def g (new SvgGradient())
+        def st (new SvgGradientStop())
+        st.offset = 0.25
+        st.color = (EVGColor.create(255.0 0.0 0.0 0.5))
+        push g.stops st
+        def json:string (EVGDisplayList.svgGradJson(g (Matrix2D.create(0.8333 0.0 0.0 2.0 10.0 20.0))))
+        c.ok("type" ((indexOf json "\"t\":\"l\"") >= 0))
+        c.ok("the matrix to four places" ((indexOf json "\"m\":[0.8333,0.0000,0.0000,2.0000,10.00,20.00]") >= 0))
+        c.ok("the stops with their alpha" ((indexOf json "\"st\":[[0.2500,255,0,0,0.5000]]") >= 0))
+        if ((indexOf json "\"st\":[[0.2500,255,0,0,0.5000]]") < 0) {
+            print ("       " + json)
+        }
+    }
+
+    sfn main:void () {
+        def c (new GradCheck())
+        print "=== EVG SVG gradients ==="
+        EVGSvgGradientTest.testLinearBox(c)
+        EVGSvgGradientTest.testUserSpace(c)
+        EVGSvgGradientTest.testRadial(c)
+        EVGSvgGradientTest.testHref(c)
+        EVGSvgGradientTest.testFallback(c)
+        EVGSvgGradientTest.testJson(c)
+        print ""
+        print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))
+        if (c.failed > 0) {
+            print "FAILURES"
+        } {
+            print "ALL PASS"
+        }
+    }
+}

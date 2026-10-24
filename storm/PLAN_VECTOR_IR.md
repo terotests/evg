@@ -490,6 +490,15 @@ than rendered differently in each target.
 
 ## 6. Gradients are deferred, on purpose
 
+**Status (2026-10).** `SvgParser` now reads `linearGradient` and
+`radialGradient` (stops, `href`, both `gradientUnits`, `gradientTransform`,
+`spreadMethod`) into `SvgGradient` on the item, beside a colour that stays
+unset, so PDF and PNG still draw no fill there, as before. The display list carries the gradient on
+PATH and STROKE commands (`"gr"` in the JSON, with the average of the stops
+as the command's colour), and the HTML painter draws it. WebGL, the native
+painters, PDF and PNG paint that average or nothing; the reasoning below still
+holds for them. Tested in `EVGSvgGradientTest.rgr`.
+
 `linearGradient` / `radialGradient` are dropped from the first vector profile.
 Everything else in this plan comes first. The reasoning is worth recording,
 because it is not just a scheduling call.

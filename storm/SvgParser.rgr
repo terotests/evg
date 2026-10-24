@@ -58,6 +58,88 @@ Import "EVGColor.rgr"
 ; ==============================================================================
 
 ; ------------------------------------------------------------------------------
+; SvgGradient — a <linearGradient> or <radialGradient> paint, resolved.
+; ------------------------------------------------------------------------------
+; The coordinates are the gradient's own (x1..y2, or cx, cy, r, fx, fy, as
+; written), and `matrix` takes them to the document's user space: the shape's
+; CTM, then its bounding box when gradientUnits is objectBoundingBox, then
+; gradientTransform. A renderer that draws in page space puts its own viewBox
+; mapping in front and hands both to its gradient primitive, which is how
+; SVG's `userSpaceOnUse` + `gradientTransform` already describes it. Stop
+; colours carry the shape's fill or stroke opacity in their alpha.
+class SvgGradientStop {
+    def offset:double 0.0
+    def color:EVGColor (EVGColor.black())
+}
+
+class SvgGradient {
+    def isLinear:boolean true
+    def x1:double 0.0
+    def y1:double 0.0
+    def x2:double 1.0
+    def y2:double 0.0
+    def cx:double 0.5
+    def cy:double 0.5
+    def r:double 0.5
+    def fx:double 0.5
+    def fy:double 0.5
+    ; pad, reflect or repeat
+    def spread:string "pad"
+    def matrix:Matrix2D (Matrix2D.identity())
+    def stops:[SvgGradientStop]
+
+    Constructor () {
+        def st:[SvgGradientStop]
+        stops = st
+    }
+
+    ; One colour for a target that has no gradient primitive: the average of
+    ; the stops, each weighted by the stretch of the gradient it covers, so a
+    ; flat fill is at least the colour the eye averages the shape to.
+    fn averageColor:EVGColor () {
+        def n:int (array_length stops)
+        if (n == 0) {
+            return (EVGColor.noColor())
+        }
+        def r0:double 0.0
+        def g0:double 0.0
+        def b0:double 0.0
+        def a0:double 0.0
+        def total:double 0.0
+        def i:int 0
+        while (i < n) {
+            def st:SvgGradientStop (itemAt stops i)
+            def lo:double 0.0
+            def hi:double 1.0
+            if (i > 0) {
+                def prev:SvgGradientStop (itemAt stops (i - 1))
+                lo = ((prev.offset + st.offset) / 2.0)
+            }
+            if (i < (n - 1)) {
+                def next:SvgGradientStop (itemAt stops (i + 1))
+                hi = ((st.offset + next.offset) / 2.0)
+            }
+            def wgt:double (hi - lo)
+            if (wgt < 0.0) {
+                wgt = 0.0
+            }
+            def c:EVGColor st.color
+            r0 = (r0 + (c.r * wgt))
+            g0 = (g0 + (c.g * wgt))
+            b0 = (b0 + (c.b * wgt))
+            a0 = (a0 + (c.a * wgt))
+            total = (total + wgt)
+            i = (i + 1)
+        }
+        if (total <= 0.0) {
+            def first:SvgGradientStop (itemAt stops 0)
+            return first.color
+        }
+        return (EVGColor.create((r0 / total) (g0 / total) (b0 / total) (a0 / total)))
+    }
+}
+
+; ------------------------------------------------------------------------------
 ; SvgVectorItem — one drawable, ready to render.
 ; ------------------------------------------------------------------------------
 ; `commands` are absolute PathCommands in the document's user space. An unset
@@ -72,6 +154,11 @@ class SvgVectorItem {
     def fillRule:string "nonzero"
     def dashArray:string ""
     def dashOffset:double 0.0
+    ; A gradient fill or stroke. The colour beside it stays unset, so a target
+    ; that reads only colours (PDF, PNG) draws what it drew before gradients
+    ; were read: no fill, no stroke. The display list paints the gradient.
+    def fillGradient@(optional):SvgGradient
+    def strokeGradient@(optional):SvgGradient
 
     Constructor () {
         def c:[PathCommand]
@@ -86,6 +173,17 @@ class SvgVectorItem {
 
     fn hasFill:boolean () {
         return fillColor.isSet
+    }
+
+    fn hasGradientFill:boolean () {
+        return (!null? fillGradient)
+    }
+
+    fn hasGradientStroke:boolean () {
+        if (null? strokeGradient) {
+            return false
+        }
+        return (strokeWidth > 0.0)
     }
 
     fn hasStroke:boolean () {
@@ -130,6 +228,9 @@ class SvgStyleState {
     def fillOpacity:double 1.0
     def strokeOpacity:double 1.0
     def groupOpacity:double 1.0
+    ; the id a `url(#id)` fill or stroke names, "" for a colour
+    def fillRef:string ""
+    def strokeRef:string ""
 
     Constructor () {
         ctm = (Matrix2D.identity())
@@ -156,6 +257,8 @@ class SvgStyleState {
         s.fillOpacity = fillOpacity
         s.strokeOpacity = strokeOpacity
         s.groupOpacity = groupOpacity
+        s.fillRef = fillRef
+        s.strokeRef = strokeRef
         return s
     }
 }
@@ -580,7 +683,7 @@ class SvgParser {
         ; ---- <defs> ----------------------------------------------------------
         ; Definitions are drawn only where they are referenced. Pass one already
         ; recorded their markup by id, so nothing is lost by not walking in.
-        if (name == "defs") {
+        if (((name == "defs") || (name == "linearGradient")) || (name == "radialGradient")) {
             if (tag.selfClose == false) {
                 this.skipSubtree(name)
             }
@@ -674,8 +777,6 @@ class SvgParser {
         if (name == "style") { return true }
         if (name == "text") { return true }
         if (name == "image") { return true }
-        if (name == "linearGradient") { return true }
-        if (name == "radialGradient") { return true }
         if (name == "animate") { return true }
         if (name == "animateTransform") { return true }
         if (name == "animateMotion") { return true }
@@ -700,10 +801,6 @@ class SvgParser {
         }
         if (name == "style") {
             this.warn("style" "a <style> element is not applied; CSS in the document is outside the profile, so use presentation attributes instead")
-            return
-        }
-        if ((name == "linearGradient") || (name == "radialGradient")) {
-            this.warn("gradient" "gradient paint is deferred (PLAN_VECTOR_IR.md §6): the three renderers do not agree on gradients yet, so a gradient fill is dropped rather than rendered differently in each output")
             return
         }
         if ((name == "clipPath") || (name == "mask")) {
@@ -844,10 +941,16 @@ class SvgParser {
         def v:string (trim value)
 
         if (name == "fill") {
+            if (v != "inherit") {
+                s.fillRef = (this.paintRef(v))
+            }
             s.fill = (this.parsePaint(v (unwrap s.fill)))
             return
         }
         if (name == "stroke") {
+            if (v != "inherit") {
+                s.strokeRef = (this.paintRef(v))
+            }
             s.stroke = (this.parsePaint(v (unwrap s.stroke)))
             return
         }
@@ -929,7 +1032,15 @@ class SvgParser {
             return (unwrap initialFill)
         }
         if ((indexOf v "url(") == 0) {
-            this.warn("gradient" "gradient paint is deferred (PLAN_VECTOR_IR.md §6): the three renderers do not agree on gradients yet, so a gradient fill is dropped rather than rendered differently in each output")
+            ; The gradient itself is resolved per shape (paintRef, emitShape);
+            ; the colour is the fallback after the reference, or none.
+            def close:int (indexOf v ")")
+            if (close > 0) {
+                def rest:string (trim (substring v (close + 1) (strlen v)))
+                if ((strlen rest) > 0) {
+                    return (this.parsePaint(rest inheritedPaint))
+                }
+            }
             return (EVGColor.noColor())
         }
         def c:EVGColor (EVGColor.parse(v))
@@ -938,6 +1049,274 @@ class SvgParser {
             return inheritedPaint
         }
         return c
+    }
+
+    ; The id in `url(#id)`, or "" for any other paint.
+    fn paintRef:string (v:string) {
+        if ((indexOf v "url(") != 0) {
+            return ""
+        }
+        def close:int (indexOf v ")")
+        if (close < 0) {
+            return ""
+        }
+        def inner:string (trim (substring v 4 close))
+        if ((strlen inner) > 1) {
+            def q:int (charAt inner 0)
+            if ((q == 34) || (q == 39)) {
+                inner = (substring inner 1 ((strlen inner) - 1))
+            }
+        }
+        if ((strlen inner) < 2) {
+            return ""
+        }
+        if ((charAt inner 0) != 35) {
+            return ""
+        }
+        return (substring inner 1 (strlen inner))
+    }
+
+    ; --------------------------------------------------------------------------
+    ; Gradients
+    ; --------------------------------------------------------------------------
+    ; The element `id` names, read from its markup (pass one kept it), with what
+    ; its `href` chain gives it: the stops when it has none of its own, and each
+    ; attribute it does not set. Only same-document gradients; anything else
+    ; (a pattern, a missing id) is no gradient and the fallback paint stands.
+    fn gradientTags:[SvgTag] (id:string stops:[SvgTag]) {
+        def chain:[SvgTag]
+        def cur:string id
+        def hops:int 0
+        while ((strlen cur) > 0) {
+            if (hops > maxUseDepth) {
+                return chain
+            }
+            def span@(optional):string (get spans cur)
+            if (null? span) {
+                return chain
+            }
+            def sub (new SvgParser())
+            sub.src = (unwrap span)
+            sub.len = (strlen sub.src)
+            sub.pos = 0
+            if ((sub.findTagStart()) < 0) {
+                return chain
+            }
+            def head:SvgTag (sub.readTag())
+            if (head.valid == false) {
+                return chain
+            }
+            if ((head.name != "linearGradient") && (head.name != "radialGradient")) {
+                return chain
+            }
+            push chain head
+            ; the stops of the first gradient in the chain that has any
+            if (((array_length stops) == 0) && (head.selfClose == false)) {
+                while ((sub.findTagStart()) >= 0) {
+                    def t:SvgTag (sub.readTag())
+                    if (t.valid == false) {
+                        break
+                    }
+                    if ((t.isEnd == false) && (t.name == "stop")) {
+                        push stops t
+                    }
+                }
+            }
+            cur = ""
+            def href:string (head.attr("href"))
+            if ((strlen href) == 0) {
+                href = (head.attr("xlink:href"))
+            }
+            if ((strlen href) > 1) {
+                if ((charAt href 0) == 35) {
+                    cur = (substring href 1 (strlen href))
+                }
+            }
+            hops = (hops + 1)
+        }
+        return chain
+    }
+
+    ; The first value of `name` along the chain, or "".
+    fn chainAttr:string (chain:[SvgTag] name:string) {
+        def i:int 0
+        while (i < (array_length chain)) {
+            def t:SvgTag (itemAt chain i)
+            if (t.has(name)) {
+                return (t.attr(name))
+            }
+            i = (i + 1)
+        }
+        return ""
+    }
+
+    ; A gradient coordinate: a number, or a percentage of `span` (1 in the
+    ; bounding box, the viewport's side in user space).
+    fn gradLength:double (v:string fallback:double span:double) {
+        def t:string (trim v)
+        if ((strlen t) == 0) {
+            return fallback
+        }
+        if ((charAt t ((strlen t) - 1)) == 37) {
+            def p@(optional):double (str2double (substring t 0 ((strlen t) - 1)))
+            if (null? p) {
+                return fallback
+            }
+            return (((unwrap p) / 100.0) * span)
+        }
+        def d@(optional):double (str2double t)
+        if (null? d) {
+            return fallback
+        }
+        return (unwrap d)
+    }
+
+    ; The gradient `id` names, for a shape whose untransformed commands are
+    ; `cmds`, drawn under `ctm`, with its paint's opacity `alpha`; or none.
+    fn resolveGradient@(optional):SvgGradient (id:string cmds:[PathCommand] ctm:Matrix2D alpha:double) {
+        def none@(optional):SvgGradient
+        def stopTags:[SvgTag]
+        def chain:[SvgTag] (this.gradientTags(id stopTags))
+        if ((array_length chain) == 0) {
+            this.warn(("paint-" + id) ("the paint url(#" + id + ") is not a gradient in this document; the fallback paint was used"))
+            return none
+        }
+        def head:SvgTag (itemAt chain 0)
+        def g (new SvgGradient())
+        g.isLinear = (head.name == "linearGradient")
+
+        ; stops: offsets clamped and never decreasing, as the spec says
+        def last:double 0.0
+        def k:int 0
+        while (k < (array_length stopTags)) {
+            def st:SvgTag (itemAt stopTags k)
+            def props (new SvgStyleState())
+            props.fill = (EVGColor.black())
+            def color:string (trim (st.attr("stop-color")))
+            def opacity:string (trim (st.attr("stop-opacity")))
+            def style:string (st.attr("style"))
+            if ((strlen style) > 0) {
+                def decls:[string] (this.splitOn(style 59))
+                def j:int 0
+                while (j < (array_length decls)) {
+                    def decl:string (itemAt decls j)
+                    def colon:int (indexOf decl ":")
+                    if (colon > 0) {
+                        def dn:string (trim (substring decl 0 colon))
+                        def dv:string (trim (substring decl (colon + 1) (strlen decl)))
+                        if (dn == "stop-color") {
+                            color = dv
+                        }
+                        if (dn == "stop-opacity") {
+                            opacity = dv
+                        }
+                    }
+                    j = (j + 1)
+                }
+            }
+            def c:EVGColor (EVGColor.black())
+            if ((strlen color) > 0) {
+                if (color == "currentColor") {
+                    c = (unwrap initialFill)
+                } {
+                    def pc:EVGColor (EVGColor.parse(color))
+                    if pc.isSet {
+                        c = pc
+                    }
+                }
+            }
+            def op:double (this.parseOpacity(opacity 1.0))
+            def off:double (this.gradLength((st.attr("offset")) 0.0 1.0))
+            if (off < last) {
+                off = last
+            }
+            if (off > 1.0) {
+                off = 1.0
+            }
+            last = off
+            def gs (new SvgGradientStop())
+            gs.offset = off
+            gs.color = (this.withAlpha(c (op * alpha)))
+            push g.stops gs
+            k = (k + 1)
+        }
+        if ((array_length g.stops) == 0) {
+            ; no stops: the paint is none, as in a browser
+            return none
+        }
+
+        def bbox:boolean ((this.chainAttr(chain "gradientUnits")) != "userSpaceOnUse")
+        def vb:ViewBoxRect (doc.effectiveViewBox())
+        def sw:double 1.0
+        def sh:double 1.0
+        def sd:double 1.0
+        if (bbox == false) {
+            sw = vb.width
+            sh = vb.height
+            sd = (sqrt (((sw * sw) + (sh * sh)) / 2.0))
+        }
+        if g.isLinear {
+            g.x1 = (this.gradLength((this.chainAttr(chain "x1")) 0.0 sw))
+            g.y1 = (this.gradLength((this.chainAttr(chain "y1")) 0.0 sh))
+            g.x2 = (this.gradLength((this.chainAttr(chain "x2")) sw sw))
+            g.y2 = (this.gradLength((this.chainAttr(chain "y2")) 0.0 sh))
+        } {
+            g.cx = (this.gradLength((this.chainAttr(chain "cx")) (0.5 * sw) sw))
+            g.cy = (this.gradLength((this.chainAttr(chain "cy")) (0.5 * sh) sh))
+            g.r = (this.gradLength((this.chainAttr(chain "r")) (0.5 * sd) sd))
+            g.fx = (this.gradLength((this.chainAttr(chain "fx")) g.cx sw))
+            g.fy = (this.gradLength((this.chainAttr(chain "fy")) g.cy sh))
+        }
+        def spread:string (this.chainAttr(chain "spreadMethod"))
+        if ((spread == "reflect") || (spread == "repeat")) {
+            g.spread = spread
+        }
+
+        def m:Matrix2D ctm
+        if bbox {
+            ; the shape's own box, before its transform: what
+            ; objectBoundingBox is measured in
+            def parser:SVGPathParser (SVGPathParser.fromCommands(cmds))
+            def rings:[PathRing] (parser.flattenRingsPlain(16))
+            def minX:double 0.0
+            def minY:double 0.0
+            def maxX:double 0.0
+            def maxY:double 0.0
+            def any:boolean false
+            def ri:int 0
+            while (ri < (array_length rings)) {
+                def ring:PathRing (itemAt rings ri)
+                def pi:int 0
+                while ((pi + 1) < (array_length ring.pts)) {
+                    def px:double (itemAt ring.pts pi)
+                    def py:double (itemAt ring.pts (pi + 1))
+                    if ((any == false) || (px < minX)) { minX = px }
+                    if ((any == false) || (py < minY)) { minY = py }
+                    if ((any == false) || (px > maxX)) { maxX = px }
+                    if ((any == false) || (py > maxY)) { maxY = py }
+                    any = true
+                    pi = (pi + 2)
+                }
+                ri = (ri + 1)
+            }
+            ; a box with no width or height has no gradient: the spec leaves
+            ; such an element unpainted
+            if ((any == false) || ((maxX - minX) <= 0.0)) {
+                return none
+            }
+            if ((maxY - minY) <= 0.0) {
+                return none
+            }
+            m = (m.multiply((Matrix2D.create((maxX - minX) 0.0 0.0 (maxY - minY) minX minY))))
+        }
+        def gt:string (this.chainAttr(chain "gradientTransform"))
+        if ((strlen gt) > 0) {
+            m = (m.multiply((this.parseTransform(gt))))
+        }
+        g.matrix = m
+        def some@(optional):SvgGradient
+        some = g
+        return some
     }
 
     fn parseOpacity:double (v:string fallback:double) {
@@ -1153,10 +1532,23 @@ class SvgParser {
         item.dashArray = s.dashArray
         item.dashOffset = s.dashOffset
 
-        if s.fill.isSet {
+        if ((strlen s.fillRef) > 0) {
+            def fg@(optional):SvgGradient (this.resolveGradient(s.fillRef cmds (unwrap s.ctm) (s.fillOpacity * s.groupOpacity)))
+            if (!null? fg) {
+                item.fillGradient = fg
+            }
+        }
+        if ((s.fill.isSet) && (null? item.fillGradient)) {
             item.fillColor = (this.withAlpha((unwrap s.fill) (s.fillOpacity * s.groupOpacity)))
         }
-        if s.stroke.isSet {
+        if ((strlen s.strokeRef) > 0) {
+            def sg@(optional):SvgGradient (this.resolveGradient(s.strokeRef cmds (unwrap s.ctm) (s.strokeOpacity * s.groupOpacity)))
+            if (!null? sg) {
+                item.strokeGradient = sg
+                item.strokeWidth = (s.strokeWidth * (this.scaleOf((unwrap s.ctm))))
+            }
+        }
+        if ((s.stroke.isSet) && (null? item.strokeGradient)) {
             item.strokeColor = (this.withAlpha((unwrap s.stroke) (s.strokeOpacity * s.groupOpacity)))
             ; A stroke is drawn in the shape's own space, so a scaled group
             ; scales the pen with it. Under a non-uniform scale there is no
@@ -1169,8 +1561,11 @@ class SvgParser {
 
         ; A shape that is neither filled nor stroked draws nothing. Keeping it
         ; would make item counts misleading for no gain.
-        if ((item.hasFill() == false) && (item.hasStroke() == false)) {
+        if (((item.hasFill() == false) && (item.hasStroke() == false)) && ((item.hasGradientFill() == false) && (item.hasGradientStroke() == false))) {
             return
+        }
+        if ((item.hasGradientFill()) || (item.hasGradientStroke())) {
+            this.warn("gradient" "gradient paint is drawn by the display list's painters; the PDF and PNG targets do not draw it yet (PLAN_VECTOR_IR.md §6)")
         }
 
         push doc.items item

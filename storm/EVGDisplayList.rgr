@@ -108,6 +108,12 @@ class EVGDrawCmd {
     def g2:int 0
     def b2:int 0
     def a2:double 1.0
+    ; An SVG gradient on a PATH (kind 6) or STROKE (kind 7): its coordinates
+    ; and stops, and `gradMatrix` from its coordinates to the page. The colour
+    ; above is the average of the stops, which is what a painter without
+    ; gradients draws. In the JSON as "gr".
+    def svgGrad@(optional):SvgGradient
+    def gradMatrix:Matrix2D (Matrix2D.identity())
     ; `backdrop-filter: blur(Npx)` on a RECT: soften what is already painted
     ; behind this rectangle before drawing it, clipped to the rectangle and its
     ; radius. 0 is no filter.
@@ -1067,12 +1073,52 @@ class EVGDisplayList {
             scale = 1.0
         }
 
+        ; document user space to the page, which a gradient's matrix goes after
+        def page:Matrix2D (Matrix2D.create(m.a m.b m.c m.d (m.e + x) (m.f + y)))
         def k:int 0
         while (k < (doc.itemCount())) {
             def item:SvgVectorItem (itemAt doc.items k)
             def parser:SVGPathParser (SVGPathParser.fromCommands(item.commands))
             def rings:[PathRing] (parser.flattenRings(steps m.a m.b m.c m.d (m.e + x) (m.f + y)))
             if ((array_length rings) > 0) {
+                if (item.hasGradientFill()) {
+                    def gf:SvgGradient (unwrap item.fillGradient)
+                    def avg:EVGColor (gf.averageColor())
+                    def cg (new EVGDrawCmd())
+                    cg.kind = 6
+                    cg.x = x
+                    cg.y = y
+                    cg.w = w
+                    cg.h = h
+                    cg.evenOdd = (item.fillRule == "evenodd")
+                    cg.r = (avg.red())
+                    cg.g = (avg.green())
+                    cg.b = (avg.blue())
+                    cg.a = (avg.alpha())
+                    cg.svgGrad = gf
+                    cg.gradMatrix = (page.multiply(gf.matrix))
+                    this.copyRings(cg rings)
+                    this.addCmd(cg)
+                }
+                if (item.hasGradientStroke()) {
+                    def gs:SvgGradient (unwrap item.strokeGradient)
+                    def avs:EVGColor (gs.averageColor())
+                    def cgs (new EVGDrawCmd())
+                    cgs.kind = 7
+                    cgs.x = x
+                    cgs.y = y
+                    cgs.w = w
+                    cgs.h = h
+                    cgs.thickness = (item.strokeWidth * scale)
+                    cgs.r = (avs.red())
+                    cgs.g = (avs.green())
+                    cgs.b = (avs.blue())
+                    cgs.a = (avs.alpha())
+                    cgs.svgGrad = gs
+                    cgs.gradMatrix = (page.multiply(gs.matrix))
+                    this.copyRings(cgs rings)
+                    this.addCmd(cgs)
+                }
                 if (item.hasFill()) {
                     def cf (new EVGDrawCmd())
                     cf.kind = 6
@@ -2449,6 +2495,73 @@ class EVGDisplayList {
         return 180.0
     }
 
+    ; Four decimals for a value of any size up to a hundred thousand: a
+    ; gradient's coordinates are fractions of a bounding box as often as
+    ; user units, and its matrix scales them, so hundredths are too coarse
+    ; and frac4's range of a thousand too small.
+    sfn num4:string (v:double) {
+        def x:double 0.0
+        if (v > 0.0) {
+            x = v
+        }
+        if (v < 0.0) {
+            x = v
+        }
+        if (x > 100000.0) {
+            x = 100000.0
+        }
+        if (x < (0.0 - 100000.0)) {
+            x = (0.0 - 100000.0)
+        }
+        def neg:boolean (x < 0.0)
+        def av:double x
+        if neg {
+            av = (0.0 - x)
+        }
+        def scaled:int (to_int ((av * 10000.0) + 0.5))
+        def whole:int (idiv scaled 10000)
+        def frac:int (scaled - (whole * 10000))
+        def fs:string (to_string frac)
+        while ((strlen fs) < 4) {
+            fs = ("0" + fs)
+        }
+        def out:string ((to_string whole) + "." + fs)
+        if neg {
+            if (scaled > 0) {
+                out = ("-" + out)
+            }
+        }
+        return out
+    }
+
+    ; An SVG gradient as JSON: "t" l or r, its coordinates, "m" the matrix
+    ; from them to the page (a b c d e f, as SVG's matrix()), "sp" the spread
+    ; and "st" the stops as [offset, r, g, b, a].
+    sfn svgGradJson:string (g:SvgGradient m:Matrix2D) {
+        def out:string "{"
+        if g.isLinear {
+            out = out + "\"t\":\"l\",\"x1\":" + (EVGDisplayList.num4(g.x1)) + ",\"y1\":" + (EVGDisplayList.num4(g.y1))
+            out = out + ",\"x2\":" + (EVGDisplayList.num4(g.x2)) + ",\"y2\":" + (EVGDisplayList.num4(g.y2))
+        } {
+            out = out + "\"t\":\"r\",\"cx\":" + (EVGDisplayList.num4(g.cx)) + ",\"cy\":" + (EVGDisplayList.num4(g.cy))
+            out = out + ",\"r\":" + (EVGDisplayList.num4(g.r)) + ",\"fx\":" + (EVGDisplayList.num4(g.fx)) + ",\"fy\":" + (EVGDisplayList.num4(g.fy))
+        }
+        out = out + ",\"m\":[" + (EVGDisplayList.num4(m.a)) + "," + (EVGDisplayList.num4(m.b)) + "," + (EVGDisplayList.num4(m.c))
+        out = out + "," + (EVGDisplayList.num4(m.d)) + "," + (EVGDisplayList.num(m.e)) + "," + (EVGDisplayList.num(m.f)) + "]"
+        out = out + ",\"sp\":" + (EVGDisplayList.jsonString(g.spread)) + ",\"st\":["
+        def i:int 0
+        while (i < (array_length g.stops)) {
+            def st:SvgGradientStop (itemAt g.stops i)
+            if (i > 0) {
+                out = out + ","
+            }
+            out = out + "[" + (EVGDisplayList.num4(st.offset)) + "," + (to_string (st.color.red())) + "," + (to_string (st.color.green()))
+            out = out + "," + (to_string (st.color.blue())) + "," + (EVGDisplayList.num4((st.color.alpha()))) + "]"
+            i = (i + 1)
+        }
+        return (out + "]}")
+    }
+
     sfn hasLinearGradient:boolean (el:EVGElement) {
         ; The RGU1 pair — `gradient-from` / `gradient-to` / `gradient-dir` — is
         ; already this list's own vocabulary: a direction and two colours, with
@@ -3766,6 +3879,9 @@ class EVGDisplayList {
             ; canvas but never in the JSON, so every backend on the other side
             ; of it painted the first stop flat across the box. `gd` is the
             ; direction (1 = across, otherwise down) and `c2` the far stop.
+            if (!null? c.svgGrad) {
+                out = out + ",\"gr\":" + (EVGDisplayList.svgGradJson((unwrap c.svgGrad) c.gradMatrix))
+            }
             if c.hasGrad {
                 out = out + ",\"gd\":" + (to_string c.gradDir)
                 out = out + ",\"c2\":[" + (to_string c.r2) + "," + (to_string c.g2)
