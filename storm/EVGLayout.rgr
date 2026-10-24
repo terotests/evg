@@ -4306,6 +4306,42 @@ class EVGLayout {
             ci = (ci + 1)
         }
         colSpec = (EVGGridTemplate.resolveAutoRepeat(colSpec innerWidth colGapPx inFlow parent.inheritedFontSize))
+        ; an item placed past the explicit columns makes implicit ones, as
+        ; grid-auto-columns has them (CSS Grid 7.5)
+        def lastLine:int 0
+        def pi:int 0
+        while (pi < (parent.getChildCount())) {
+            def pc:EVGElement (parent.getChild(pi))
+            if (((pc.hasAbsolutePosition()) == false) && ((strlen pc.gridColumn) > 0)) {
+                def pp:EVGGridPlacement (EVGGridPlacement.parse(pc.gridColumn))
+                if (pp.start > 0) {
+                    def endL:int ((pp.start - 1) + pp.span)
+                    if (endL > lastLine) {
+                        lastLine = endL
+                    }
+                }
+            }
+            pi = (pi + 1)
+        }
+        def autoCol:string parent.gridAutoColumns
+        if ((strlen autoCol) == 0) {
+            autoCol = "auto"
+        }
+        if (lastLine > 1) {
+            def have:int 0
+            if ((strlen parent.gridTemplateColumns) > 0) {
+                have = ((EVGGridTemplate.parse(colSpec)).count())
+            } {
+                colSpec = ""
+            }
+            while (have < lastLine) {
+                if ((strlen colSpec) > 0) {
+                    colSpec = (colSpec + " ")
+                }
+                colSpec = (colSpec + autoCol)
+                have = (have + 1)
+            }
+        }
         def cols:EVGGridTemplate (EVGGridTemplate.parse(colSpec))
         if (cols.hadError) {
             this.warn(("grid-template-columns: " + cols.errorText))
@@ -4683,6 +4719,49 @@ class EVGLayout {
                         }
                     }
                     dr = (dr + 1)
+                }
+            }
+        }
+
+        ; grid-auto-rows with a fixed size sets every implicit row.
+        def autoRowFixed:boolean false
+        if ((haveTemplateRows == false) && ((strlen rowSpec) == 0) && ((strlen parent.gridAutoRows) > 0)) {
+            def ar:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
+            if ((ar.hadError == false) && ((ar.count()) > 0)) {
+                def at0:EVGGridTrack (ar.trackAt(0))
+                if (at0.kind == 0) {
+                    autoRowFixed = true
+                    def ra:int 0
+                    while (ra < rowsUsed) {
+                        def atk:EVGGridTrack (ar.trackAt((ra % (ar.count()))))
+                        if (atk.kind == 0) {
+                            set rowSizes ra atk.value
+                        }
+                        ra = (ra + 1)
+                    }
+                }
+            }
+        }
+
+        ; Implicit auto rows of a grid with a definite height share the
+        ; leftover space (align-content: normal stretches auto tracks).
+        if ((haveTemplateRows == false) && ((strlen rowSpec) == 0) && parent.hasDefiniteHeight && (rowsUsed > 0) && (autoRowFixed == false)) {
+            def ac:string parent.alignContent
+            if (((strlen ac) == 0) || (ac == "normal") || (ac == "stretch")) {
+                def usedH:double rowGapTotal
+                def u:int 0
+                while (u < rowsUsed) {
+                    usedH = (usedH + (itemAt rowSizes u))
+                    u = (u + 1)
+                }
+                def spare:double (innerHeight - usedH)
+                if (spare > 0.0) {
+                    def each:double (spare / (to_double rowsUsed))
+                    def u2:int 0
+                    while (u2 < rowsUsed) {
+                        set rowSizes u2 ((itemAt rowSizes u2) + each)
+                        u2 = (u2 + 1)
+                    }
                 }
             }
         }

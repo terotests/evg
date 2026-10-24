@@ -218,6 +218,45 @@ class CssBoxCheck {
         this.layoutAt(page9 300.0 600.0)
         this.ok("static-flex: centred along the row, at the cross end" ((this.near((a9.calculatedX - f9.calculatedX) 40.0)) && (this.near((a9.calculatedY - f9.calculatedY) 40.0))))
 
+        ; --- 8. implicit grid tracks ----------------------------------------------
+        ; No templates: grid-column 2 makes a second auto column, and the
+        ; two auto rows share a definite height (align-content stretch).
+        def page10 (EVGElement.createDiv())
+        page10.setAttribute("width" "300px")
+        def g10 (EVGElement.createDiv())
+        g10.setAttribute("display" "grid")
+        g10.setAttribute("align-content" "stretch")
+        g10.setAttribute("width" "200px")
+        g10.setAttribute("height" "200px")
+        def b10 (EVGElement.createDiv())
+        b10.setAttribute("grid-row" "2")
+        b10.setAttribute("grid-column" "2")
+        b10.setAttribute("height" "10px")
+        def c10 (EVGElement.createDiv())
+        c10.setAttribute("grid-row" "1")
+        c10.setAttribute("grid-column" "1")
+        c10.setAttribute("height" "10px")
+        g10.addChild(c10)
+        g10.addChild(b10)
+        page10.addChild(g10)
+        this.layoutAt(page10 300.0 600.0)
+        this.ok("implicit tracks: item at column 2 / row 2 sits at 100,100" ((this.near((b10.calculatedX - g10.calculatedX) 100.0)) && (this.near((b10.calculatedY - g10.calculatedY) 100.0))))
+
+        def g11 (EVGElement.createDiv())
+        g11.setAttribute("display" "grid")
+        g11.setAttribute("grid-auto-rows" "30px")
+        g11.setAttribute("width" "200px")
+        def a11 (EVGElement.createDiv())
+        def b11 (EVGElement.createDiv())
+        b11.setAttribute("grid-row" "2")
+        g11.addChild(a11)
+        g11.addChild(b11)
+        def page11 (EVGElement.createDiv())
+        page11.setAttribute("width" "300px")
+        page11.addChild(g11)
+        this.layoutAt(page11 300.0 600.0)
+        this.ok("grid-auto-rows: 30px rows" (this.near((b11.calculatedY - g11.calculatedY) 30.0)))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

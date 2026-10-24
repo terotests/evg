@@ -749,6 +749,9 @@ class EVGElement {
     ; grid-auto-flow: "row" (default) or "row dense" — dense backfills earlier
     ; holes instead of only moving forward.
     def gridAutoFlow:string "row"
+    ; the size of an implicit column, an implicit row ("" is auto)
+    def gridAutoColumns:string ""
+    def gridAutoRows:string ""
     ; Full-bleed: this element should run past the trim edge into the bleed
     ; area, so the cut falls inside its ink rather than at its edge. Only has
     ; an effect when the output was asked for a bleed, and only on the edges
@@ -3464,6 +3467,8 @@ class EVGElement {
         subgridPending = other.subgridPending
         gridTemplateAreas = other.gridTemplateAreas
         gridAutoFlow = other.gridAutoFlow
+        gridAutoColumns = other.gridAutoColumns
+        gridAutoRows = other.gridAutoRows
         fullBleed = other.fullBleed
         gridArea = other.gridArea
         gridColumn = other.gridColumn
@@ -4697,6 +4702,14 @@ class EVGElement {
         }
         if ((name == "grid-template-areas") || (name == "gridTemplateAreas")) {
             gridTemplateAreas = value
+            return
+        }
+        if ((name == "grid-auto-columns") || (name == "gridAutoColumns")) {
+            gridAutoColumns = value
+            return
+        }
+        if ((name == "grid-auto-rows") || (name == "gridAutoRows")) {
+            gridAutoRows = value
             return
         }
         if ((name == "grid-auto-flow") || (name == "gridAutoFlow")) {
