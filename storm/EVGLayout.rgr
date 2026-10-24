@@ -671,6 +671,12 @@ class EVGLayout {
         ; Handle absolute positioning
         if element.isAbsolute {
             this.layoutAbsolute(element parentWidth parentHeight)
+            ; stretched between `top` and `bottom` it has that height, and
+            ; not its content's (which the auto height below would give it)
+            if ((element.top.isSet && element.bottom.isSet) && ((element.height.isSet == false) && element.hasDefiniteHeight)) {
+                autoHeight = false
+                height = element.calculatedHeight
+            }
         }
         
         ; Layout children and get content height
@@ -822,8 +828,28 @@ class EVGLayout {
             }
         }
         
+        def innerBefore:double element.calculatedInnerHeight
         element.calculatedHeight = height
         element.calculatedInnerHeight = (element.box.getInnerHeight(height))
+        ; AN ABSOLUTE CHILD WRITTEN `top: 0; bottom: 0` IS AS TALL AS THIS
+        ; BOX, which is known only now when the height came from the content
+        ; or from a flex line: the child was laid out against the height
+        ; there was before (0 for an auto height) and kept its content's.
+        ; A dashboard's slides, `inset: 0` in a `flex: 1` stage, were each
+        ; as tall as their text, so their scroll areas and backgrounds ended
+        ; halfway down. Lay those children out again against this height.
+        if (autoHeight && ((childCount > 0) && (innerBefore != element.calculatedInnerHeight))) {
+            def ai:int 0
+            while (ai < childCount) {
+                def ac:EVGElement (element.getChild(ai))
+                if ((ac.isAbsolute && ((ac.isFixedPosition()) == false)) && ((ac.top.isSet && ac.bottom.isSet) && (ac.height.isSet == false))) {
+                    def sx:double ((element.calculatedX + element.box.borderWidthPx) + element.box.paddingLeftPx)
+                    def sy:double ((element.calculatedY + element.box.borderWidthPx) + element.box.paddingTopPx)
+                    this.layoutOutOfFlowChild(element ac element.calculatedInnerWidth element.calculatedInnerHeight sx sy (element.flexDirection != "column"))
+                }
+                ai = (ai + 1)
+            }
+        }
         ; THE ANONYMOUS FLEX ITEM. An element that is a flex container and
         ; carries text of its own does not lay that text out as a block: CSS
         ; wraps it in an item, and `align-items` (across a row) or
@@ -1487,7 +1513,16 @@ class EVGLayout {
             ; others — otherwise clamping just left a hole in the row. This is
             ; the CSS "resolve flexible lengths" loop, bounded by the child count
             ; because each pass freezes at least one item.
-            if (totalFlex > 0.0) {
+            ; A row that wraps grows each of its lines by that line's free
+            ; space (CSS Flexbox 9.3, 9.7). Shared across the container, the
+            ; free space was the whole row's: tiles written `flex: 1 1 100px`
+            ; four to a 260px panel stayed 100px wide, two to a line, with a
+            ; third of each line empty.
+            def grewLines:boolean false
+            if (canWrap && (totalFlex > 0.0)) {
+                grewLines = (this.growWrappedLines(parent innerWidth gapPx))
+            }
+            if ((totalFlex > 0.0) && (grewLines == false)) {
                 def frozen:[boolean]
                 def jf:int 0
                 while (jf < childCount) {
@@ -2076,6 +2111,87 @@ class EVGLayout {
         }
         
         return totalHeight
+    }
+
+    ; The lines a wrapping row breaks into, from each item's hypothetical
+    ; size (its basis, else its width, else its content's), and every
+    ; growing item's size in its own line. False, and nothing set, when the
+    ; items make one line: the shared pass is that line's already.
+    fn growWrappedLines:boolean (parent:EVGElement innerWidth:double gapPx:double) {
+        def items:[EVGElement]
+        def hyp:[double]
+        def n:int (parent.getChildCount())
+        def j:int 0
+        while (j < n) {
+            def c:EVGElement (parent.getChild(j))
+            if (c.isAbsolute == false) {
+                def b:double 0.0
+                if c.flexBasis.isSet {
+                    b = c.flexBasis.pixels
+                } {
+                    if c.width.isSet {
+                        b = c.width.pixels
+                    } {
+                        b = (this.estimateChildWidth(c ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx) true))
+                    }
+                }
+                push items c
+                push hyp (this.clampMain(c b))
+            }
+            j = (j + 1)
+        }
+        def count:int (array_length items)
+        ; where each line starts, and one past the last item
+        def starts:[int]
+        def used:double 0.0
+        def k:int 0
+        while (k < count) {
+            def c:EVGElement (itemAt items k)
+            def outer:double (((itemAt hyp k) + c.box.marginLeftPx) + c.box.marginRightPx)
+            if ((k == 0) || (((used + gapPx) + outer) > (innerWidth + 0.01))) {
+                push starts k
+                used = outer
+            } {
+                used = ((used + gapPx) + outer)
+            }
+            k = (k + 1)
+        }
+        if ((array_length starts) < 2) {
+            return false
+        }
+        push starts count
+        def li:int 0
+        while (li < ((array_length starts) - 1)) {
+            def a:int (itemAt starts li)
+            def z:int (itemAt starts (li + 1))
+            def lineUsed:double ((to_double ((z - a) - 1)) * gapPx)
+            def lineFlex:double 0.0
+            k = a
+            while (k < z) {
+                def c:EVGElement (itemAt items k)
+                lineUsed = (((lineUsed + (itemAt hyp k)) + c.box.marginLeftPx) + c.box.marginRightPx)
+                if (c.flex > 0.0) {
+                    lineFlex = (lineFlex + c.flex)
+                }
+                k = (k + 1)
+            }
+            def free:double (innerWidth - lineUsed)
+            k = a
+            while (k < z) {
+                def c:EVGElement (itemAt items k)
+                if (c.flex > 0.0) {
+                    def w:double (itemAt hyp k)
+                    if ((free > 0.0) && (lineFlex > 0.0)) {
+                        w = (w + ((free * c.flex) / lineFlex))
+                    }
+                    c.calculatedFlexWidth = (this.clampMain(c w))
+                    c.hasFlexWidth = true
+                }
+                k = (k + 1)
+            }
+            li = (li + 1)
+        }
+        return true
     }
 
     ; Remember a finished line so align-content can move it later.
@@ -3784,6 +3900,15 @@ class EVGLayout {
             }
         }
 
+        def inFlow:int 0
+        def ci:int 0
+        while (ci < (parent.getChildCount())) {
+            if (((parent.getChild(ci)).hasAbsolutePosition()) == false) {
+                inFlow = (inFlow + 1)
+            }
+            ci = (ci + 1)
+        }
+        colSpec = (EVGGridTemplate.resolveAutoRepeat(colSpec innerWidth colGapPx inFlow parent.inheritedFontSize))
         def cols:EVGGridTemplate (EVGGridTemplate.parse(colSpec))
         if (cols.hadError) {
             this.warn(("grid-template-columns: " + cols.errorText))
@@ -4186,7 +4311,15 @@ class EVGLayout {
             ; Grid items stretch to their cell by default (§7.1), which is what
             ; photo cells want. An explicit height still wins: layoutElement only
             ; consults calculatedFlexHeight when height.isSet is false.
-            if (boxH > 0.0) {
+            ; align-items / align-self center, end or start keep the item
+            ; its content's height and place it in the cell instead
+            ; (`flex-start`, EVG's default, still stretches)
+            def ga:string el.alignSelf
+            if (((strlen ga) == 0) || (ga == "auto")) {
+                ga = parent.alignItems
+            }
+            def placedV:boolean ((ga == "center") || ((ga == "end") || ((ga == "flex-end") || ((ga == "start") || (ga == "self-end")))))
+            if ((boxH > 0.0) && (placedV == false)) {
                 el.calculatedFlexHeight = boxH
             }
 
@@ -4224,6 +4357,21 @@ class EVGLayout {
             el.resolveUnits(boxW boxH)
 
             this.layoutElement(el el.calculatedX el.calculatedY boxW boxH)
+            if placedV {
+                def free:double ((boxH - el.calculatedHeight) - 0.0)
+                if (free > 0.0) {
+                    def dy:double free
+                    if (ga == "center") {
+                        dy = (free / 2.0)
+                    }
+                    if (ga == "start") {
+                        dy = 0.0
+                    }
+                    if (dy != 0.0) {
+                        this.translateSubtree(el 0.0 dy)
+                    }
+                }
+            }
             p = (p + 1)
         }
 
