@@ -1407,6 +1407,65 @@ class EVGLayout {
                 if ((child.bottom.isSet && (child.top.isSet == false)) && ((child.y.isSet == false) && (child.height.isSet == false))) {
                     fixY = ((((innerHeight - child.bottom.pixels) - child.calculatedHeight) - child.box.marginBottomPx) - child.calculatedY)
                 }
+                if child.staticFlex {
+                    def outW:double ((child.calculatedWidth + child.box.marginLeftPx) + child.box.marginRightPx)
+                    def outH:double ((child.calculatedHeight + child.box.marginTopPx) + child.box.marginBottomPx)
+                    def mainFree:double (innerWidth - outW)
+                    def crossFree:double (innerHeight - outH)
+                    if (parent.flexDirection == "column") {
+                        mainFree = (innerHeight - outH)
+                        crossFree = (innerWidth - outW)
+                    }
+                    def jc:string parent.justifyContent
+                    def safeJ:boolean ((indexOf jc "safe ") == 0)
+                    if (((indexOf jc "safe ") == 0) || ((indexOf jc "unsafe ") == 0)) {
+                        jc = (substring jc ((indexOf jc " ") + 1) (strlen jc))
+                    }
+                    if (safeJ && (mainFree < 0.0)) {
+                        jc = "flex-start"
+                    }
+                    def mainOff:double 0.0
+                    if ((jc == "center") || ((jc == "space-around") || (jc == "space-evenly"))) {
+                        mainOff = (mainFree / 2.0)
+                    }
+                    if ((jc == "flex-end") || ((jc == "end") || (jc == "right"))) {
+                        mainOff = mainFree
+                    }
+                    def ca:string (this.crossAlignIn((parent.flexDirection == "column") child parent.alignItems))
+                    ; `safe` falls back to the start when the box does not fit
+                    def safeA:boolean ((indexOf ca "safe ") == 0)
+                    if (((indexOf ca "safe ") == 0) || ((indexOf ca "unsafe ") == 0)) {
+                        ca = (substring ca ((indexOf ca " ") + 1) (strlen ca))
+                    }
+                    def toEnd:boolean ((ca == "flex-end") || ((ca == "end") || ((ca == "self-end") || (ca == "last baseline"))))
+                    ; wrap-reverse swaps the cross axis' start and end for
+                    ; the flex- values and the stretch (normal)
+                    if (parent.flexWrap == "wrap-reverse") {
+                        if (ca == "flex-end") {
+                            toEnd = false
+                        }
+                        if ((ca == "flex-start") || ((ca == "stretch") || ((ca == "normal") || ((strlen ca) == 0)))) {
+                            toEnd = true
+                        }
+                    }
+                    def crossOff:double 0.0
+                    if (ca == "center") {
+                        crossOff = (crossFree / 2.0)
+                    }
+                    if toEnd {
+                        crossOff = crossFree
+                    }
+                    if (safeA && (crossFree < 0.0)) {
+                        crossOff = 0.0
+                    }
+                    if (parent.flexDirection == "column") {
+                        fixX = (fixX + crossOff)
+                        fixY = (fixY + mainOff)
+                    } {
+                        fixX = (fixX + mainOff)
+                        fixY = (fixY + crossOff)
+                    }
+                }
                 this.translateSubtree(child (startX + fixX) (startY + fixY))
             }
     }

@@ -810,6 +810,10 @@ class EVGElement {
     ; box-sizing: content-box: width, height and their limits are the
     ; content box's (EVG's own default is the border box)
     def contentBox:boolean false
+    ; an absolutely positioned child of a CSS flex container with no inset:
+    ; its static position is where justify-content and align-self put it
+    ; as the container's only item (CSS Flexbox 4.1)
+    def staticFlex:boolean false
     ; Original image dimensions (set by image loader)
     def sourceWidth:double 0.0
     def sourceHeight:double 0.0
@@ -3333,6 +3337,7 @@ class EVGElement {
         justifySelf = other.justifySelf
         aspectRatio = other.aspectRatio
         contentBox = other.contentBox
+        staticFlex = other.staticFlex
         justifyItems = other.justifyItems
         marginAutoRight = other.marginAutoRight
         marginAutoBottom = other.marginAutoBottom
@@ -4346,6 +4351,10 @@ class EVGElement {
         }
         
         ; Image properties
+        if ((name == "static-flex") || (name == "staticFlex")) {
+            staticFlex = (value == "true")
+            return
+        }
         if ((name == "box-sizing") || (name == "boxSizing")) {
             contentBox = (value == "content-box")
             return

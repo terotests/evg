@@ -16,6 +16,8 @@
 ;      and the most under it
 ;   6. a fit-content item in a wrapping row is measured as its content,
 ;      not the whole line, when the row decides where to wrap
+;   7. an absolutely positioned child of a flex container with no inset
+;      (static-flex) is where justify-content and align-items put it
 ; ==============================================================================
 
 Import "EVGElement.rgr"
@@ -193,6 +195,28 @@ class CssBoxCheck {
         page8.addChild(r8)
         this.layoutAt(page8 300.0 600.0)
         this.ok("fit-content: a 50px grid stays beside a 100px box" ((this.near(g8.calculatedY a8.calculatedY)) && (this.near(g8.calculatedX 100.0))))
+
+        ; --- 7. static position in a flex container -----------------------------
+        def page9 (EVGElement.createDiv())
+        page9.setAttribute("width" "300px")
+        def f9 (EVGElement.createDiv())
+        f9.setAttribute("display" "flex")
+        f9.setAttribute("flex-direction" "row")
+        f9.setAttribute("justify-content" "center")
+        f9.setAttribute("align-items" "flex-end")
+        f9.setAttribute("width" "100px")
+        f9.setAttribute("height" "50px")
+        def a9 (EVGElement.createDiv())
+        a9.setAttribute("position" "absolute")
+        a9.setAttribute("top" "0px")
+        a9.setAttribute("left" "0px")
+        a9.setAttribute("static-flex" "true")
+        a9.setAttribute("width" "20px")
+        a9.setAttribute("height" "10px")
+        f9.addChild(a9)
+        page9.addChild(f9)
+        this.layoutAt(page9 300.0 600.0)
+        this.ok("static-flex: centred along the row, at the cross end" ((this.near((a9.calculatedX - f9.calculatedX) 40.0)) && (this.near((a9.calculatedY - f9.calculatedY) 40.0))))
 
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
