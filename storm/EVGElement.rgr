@@ -151,6 +151,16 @@ class EVGElement {
     def pageWidth:double 0.0       ; Resolved page width in points
     def pageHeight:double 0.0      ; Resolved page height in points
     
+    ; `margin: auto` per side (top, right, bottom, left). In a flex
+    ; container an auto margin takes the free space of its axis before
+    ; justify-content does (CSS Flexbox 8.1); a block's left and right
+    ; centre it. The margin itself resolves to zero until the layout
+    ; hands it the space.
+    def marginAutoTop:boolean false
+    def marginAutoRight:boolean false
+    def marginAutoBottom:boolean false
+    def marginAutoLeft:boolean false
+
     ; Tree structure
     def parent@(optional):EVGElement
     def children:[EVGElement]
@@ -3287,6 +3297,10 @@ class EVGElement {
         ; href is an annotation rather than blue ink, there is nothing left on
         ; the page to say it ever was one.
         href = other.href
+        marginAutoTop = other.marginAutoTop
+        marginAutoRight = other.marginAutoRight
+        marginAutoBottom = other.marginAutoBottom
+        marginAutoLeft = other.marginAutoLeft
         tagName = other.tagName
         elementType = other.elementType
         format = other.format
@@ -3691,7 +3705,7 @@ class EVGElement {
     ; Rave's strip counted it as one for every button on the page.
     fn unitOf:EVGUnit (name:string value:string) {
         def u:EVGUnit (EVGUnit.parse(value))
-        if ((u.isSet == false) && (u.unitType != 6)) {
+        if ((u.isSet == false) && ((u.unitType != 6) && ((u.unitType != 7) && (u.unitType != 8)))) {
             if ((EVGReject.isAbsent(value)) == false) {
                 EVGReject.note("unsupported length" name value)
             }
@@ -4063,6 +4077,28 @@ class EVGElement {
         
         ; Margin
         if (name == "margin") {
+            def mw:[string] (EVGElement.splitWords(value))
+            def mn:int (array_length mw)
+            if ((mn >= 1) && (mn <= 4)) {
+                ; top, right, bottom, left as the shorthand repeats them
+                def wt:string (itemAt mw 0)
+                def wr:string wt
+                if (mn >= 2) {
+                    wr = (itemAt mw 1)
+                }
+                def wb:string wt
+                if (mn >= 3) {
+                    wb = (itemAt mw 2)
+                }
+                def wl:string wr
+                if (mn >= 4) {
+                    wl = (itemAt mw 3)
+                }
+                marginAutoTop = (wt == "auto")
+                marginAutoRight = (wr == "auto")
+                marginAutoBottom = (wb == "auto")
+                marginAutoLeft = (wl == "auto")
+            }
             def ms:[EVGUnit] (EVGElement.boxSides(value true))
             if ((array_length ms) == 4) {
                 box.setMarginValues((itemAt ms 0) (itemAt ms 1) (itemAt ms 2) (itemAt ms 3))
@@ -4070,18 +4106,22 @@ class EVGElement {
             return
         }
         if ((name == "margin-left") || (name == "marginLeft")) {
+            marginAutoLeft = ((trim value) == "auto")
             box.marginLeft = (this.unitOf(name value))
             return
         }
         if ((name == "margin-right") || (name == "marginRight")) {
+            marginAutoRight = ((trim value) == "auto")
             box.marginRight = (this.unitOf(name value))
             return
         }
         if ((name == "margin-top") || (name == "marginTop")) {
+            marginAutoTop = ((trim value) == "auto")
             box.marginTop = (this.unitOf(name value))
             return
         }
         if ((name == "margin-bottom") || (name == "marginBottom")) {
+            marginAutoBottom = ((trim value) == "auto")
             box.marginBottom = (this.unitOf(name value))
             return
         }

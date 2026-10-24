@@ -238,6 +238,20 @@ class EVGUnit {
             unit.isSet = false
             return unit
         }
+        ; min-content and max-content: the box's narrowest and widest
+        ; content size, the layout reads the unit type as for fit-content
+        if (trimmed == "min-content") {
+            unit.value = 0.0
+            unit.unitType = 7
+            unit.isSet = false
+            return unit
+        }
+        if (trimmed == "max-content") {
+            unit.value = 0.0
+            unit.unitType = 8
+            unit.isSet = false
+            return unit
+        }
         
         ; Check for percentage
         def lastChar:int (charAt trimmed (len - 1))

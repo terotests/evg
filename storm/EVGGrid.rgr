@@ -49,6 +49,11 @@ class EVGGridTrack {
     def maxUnit:EVGUnit
     ; Set while the redistribution loop has already pinned this track.
     def frozen:boolean false
+    ; An intrinsic track written `min-content` (its items' narrowest), or
+    ; `auto`, which also takes a share of the space no fr track wants
+    ; (CSS Grid 11.8, stretch auto tracks)
+    def minContentTrack:boolean false
+    def autoTrack:boolean false
 
     Constructor () {
         kind = 0
@@ -456,6 +461,13 @@ class EVGGridTemplate {
         ; in it. It used to be 1fr, which is predictable but not what CSS does.
         if (t == "auto") {
             track.kind = 3
+            track.autoTrack = true
+            push tracks track
+            return
+        }
+        if ((t == "max-content") || (t == "min-content")) {
+            track.kind = 3
+            track.minContentTrack = (t == "min-content")
             push tracks track
             return
         }
@@ -589,6 +601,9 @@ class EVGGridTemplate {
                 if (i < (array_length content)) {
                     c = (itemAt content i)
                 }
+                if (t.minContentTrack && (i < (array_length minContent))) {
+                    c = (itemAt minContent i)
+                }
                 if t.hasFitLimit {
                     t.fitLimit.resolve(available 16.0)
                     if (c > t.fitLimit.pixels) {
@@ -622,6 +637,30 @@ class EVGGridTemplate {
         def poolSpace:double (available - used)
         if (poolSpace < 0.0) {
             poolSpace = 0.0
+        }
+        ; with no fr track the space left goes to the auto tracks, evenly
+        if ((totalFr == 0.0) && (poolSpace > 0.0)) {
+            def autos:int 0
+            def ai:int 0
+            while (ai < n) {
+                def a0:EVGGridTrack (itemAt tracks ai)
+                if a0.autoTrack {
+                    autos = (autos + 1)
+                }
+                ai = (ai + 1)
+            }
+            if (autos > 0) {
+                def share:double (poolSpace / (to_double autos))
+                ai = 0
+                while (ai < n) {
+                    def at:EVGGridTrack (itemAt tracks ai)
+                    if at.autoTrack {
+                        at.sizePx = (at.sizePx + share)
+                    }
+                    ai = (ai + 1)
+                }
+                poolSpace = 0.0
+            }
         }
         def poolFr:double totalFr
         def pass:int 0

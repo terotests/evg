@@ -477,6 +477,38 @@ class EVGLayout {
         if element.hasFlexWidth {
             width = element.calculatedFlexWidth
         }
+        ; width: min-content | max-content | fit-content, from what the box
+        ; holds: its narrowest, its widest, or the room there is between
+        ; the two (CSS Sizing 3, 3.2)
+        def keywordW:boolean false
+        def wt:int element.width.unitType
+        if (((element.width.isSet == false) && (element.hasFlexWidth == false)) && ((wt == 6) || ((wt == 7) || (wt == 8)))) {
+            def mOut:double (element.box.marginLeftPx + element.box.marginRightPx)
+            def mnW:double ((this.intrinsicWidth(element true)) - mOut)
+            def mxW:double ((this.intrinsicWidth(element false)) - mOut)
+            if (mnW < 0.0) {
+                mnW = 0.0
+            }
+            if (mxW < mnW) {
+                mxW = mnW
+            }
+            if (wt == 7) {
+                width = mnW
+            }
+            if (wt == 8) {
+                width = mxW
+            }
+            if (wt == 6) {
+                width = parentWidth
+                if (width > mxW) {
+                    width = mxW
+                }
+                if (width < mnW) {
+                    width = mnW
+                }
+            }
+            keywordW = true
+        }
         
         ; Text leaf nodes without explicit width shrink-wrap to measured content
         if ((element.width.isSet == false) && (element.hasFlexWidth == false)) {
@@ -709,7 +741,7 @@ class EVGLayout {
             ; every percentage below aligned against the wider box, and keeping
             ; those positions while narrowing the box is how a "fixed" layout
             ; ends up subtly wrong instead of obviously wrong.
-            if (element.width.unitType == 6) {
+            if ((element.width.unitType == 6) && (keywordW == false)) {
                 def fitW:double (this.contentExtent(element))
                 ; no narrower than its own min-width says
                 if (element.minWidth.isSet && ((element.minWidth.isPercent()) == false)) {
@@ -1177,10 +1209,48 @@ class EVGLayout {
     ; existed here, which is the usual way a gap gets found: somebody assumed
     ; the CSS they know, and the declaration went nowhere.
     fn crossAlignOf:string (child:EVGElement parentAlign:string) {
+        return (this.crossAlignIn(false child parentAlign))
+    }
+
+    fn crossAlignIn:string (colParent:boolean child:EVGElement parentAlign:string) {
+        ; auto margins on the cross axis place the item and keep it from
+        ; stretching, whatever align-self says (CSS Flexbox 8.1)
+        def before:boolean child.marginAutoTop
+        def after:boolean child.marginAutoBottom
+        if colParent {
+            before = child.marginAutoLeft
+            after = child.marginAutoRight
+        }
+        if (before && after) {
+            return "center"
+        }
+        if before {
+            return "flex-end"
+        }
+        if after {
+            return "flex-start"
+        }
         if ((strlen child.alignSelf) > 0) {
             return child.alignSelf
         }
         return parentAlign
+    }
+
+    ; Whether `width: auto` on this child of a column fits its content:
+    ; the column aligns it anywhere but the stretch, or it has auto
+    ; margins across
+    fn crossShrinksFor:boolean (parent:EVGElement child:EVGElement) {
+        if (this.crossShrinksUnder(parent)) {
+            return true
+        }
+        if (parent.flexDirection != "column") {
+            return false
+        }
+        if (child.marginAutoLeft || child.marginAutoRight) {
+            return true
+        }
+        def a:string child.alignSelf
+        return ((a == "center") || ((a == "flex-end") || ((a == "end") || (a == "flex-start"))))
     }
 
     ; A main-axis size, clamped the way CSS clamps it.
@@ -2049,7 +2119,7 @@ class EVGLayout {
             def wasRow:boolean layingOutAlongRow
             def wasShrink:boolean columnCrossShrinks
             layingOutAlongRow = (isColumn == false)
-            columnCrossShrinks = (this.crossShrinksUnder(parent))
+            columnCrossShrinks = (this.crossShrinksFor(parent child))
             this.layoutElement(child child.calculatedX child.calculatedY childWidth innerHeight)
             layingOutAlongRow = wasRow
             columnCrossShrinks = wasShrink
@@ -2438,6 +2508,29 @@ class EVGLayout {
             distributeFirstY = distributeGapY
         }
         def usesDistributeY:boolean ((distributeGapY > 0.0) || (distributeFirstY > 0.0))
+
+        ; auto margins down the column take the free height first
+        def autoCountY:int 0
+        def ay:int 0
+        while (ay < childCount) {
+            def ach:EVGElement (parent.getChild(ay))
+            if (ach.isAbsolute == false) {
+                if ach.marginAutoTop {
+                    autoCountY = (autoCountY + 1)
+                }
+                if ach.marginAutoBottom {
+                    autoCountY = (autoCountY + 1)
+                }
+            }
+            ay = (ay + 1)
+        }
+        def autoShareY:double 0.0
+        if (autoCountY > 0) {
+            autoShareY = (freeSpaceY / (to_double autoCountY))
+            offsetY = 0.0
+            usesDistributeY = false
+        }
+        def autoRunY:double 0.0
         
         ; Apply offsets to all non-absolute children
         def i:int 0
@@ -2452,6 +2545,15 @@ class EVGLayout {
                 if usesDistributeY {
                     elemOffsetY = (distributeFirstY + (distributeGapY * (to_double flowIndex)))
                 }
+                if (autoCountY > 0) {
+                    if child.marginAutoTop {
+                        autoRunY = (autoRunY + autoShareY)
+                    }
+                    elemOffsetY = autoRunY
+                    if child.marginAutoBottom {
+                        autoRunY = (autoRunY + autoShareY)
+                    }
+                }
                 if (elemOffsetY != 0.0) {
                     child.calculatedY = child.calculatedY + elemOffsetY
                     ; Propagate to descendants
@@ -2462,7 +2564,7 @@ class EVGLayout {
                 ; Apply horizontal alignment (alignItems, or the child's own
                 ; align-self where it has one — in a column the cross axis is
                 ; the horizontal one).
-                def childAlign:string (this.crossAlignOf(child horizontalAlign))
+                def childAlign:string (this.crossAlignIn(true child horizontalAlign))
                 def childTotalWidth:double (child.calculatedWidth + child.box.marginLeftPx + child.box.marginRightPx)
                 def offsetX:double 0.0
                 
@@ -2598,6 +2700,30 @@ class EVGLayout {
             distributeFirst = distributeGap
         }
         def usesDistribute:boolean ((distributeGap > 0.0) || (distributeFirst > 0.0))
+
+        ; Auto margins along the row take the free space first, shared out
+        ; evenly; then there is none left for justify-content
+        def autoCount:int 0
+        if (isColumn == false) {
+            def ac:int 0
+            while (ac < elementCount) {
+                def ael:EVGElement (itemAt rowElements ac)
+                if ael.marginAutoLeft {
+                    autoCount = (autoCount + 1)
+                }
+                if ael.marginAutoRight {
+                    autoCount = (autoCount + 1)
+                }
+                ac = (ac + 1)
+            }
+        }
+        def autoShare:double 0.0
+        if (autoCount > 0) {
+            autoShare = (freeSpace / (to_double autoCount))
+            offsetX = 0.0
+            usesDistribute = false
+        }
+        def autoRun:double 0.0
         
         ; Vertical alignment (alignItems for row, justifyContent for column)
         def verticalAlignVal:string crossAxisAlign
@@ -2712,6 +2838,15 @@ class EVGLayout {
             def elemOffsetX:double offsetX
             if usesDistribute {
                 elemOffsetX = (distributeFirst + (distributeGap * (to_double i)))
+            }
+            if (autoCount > 0) {
+                if el.marginAutoLeft {
+                    autoRun = (autoRun + autoShare)
+                }
+                elemOffsetX = autoRun
+                if el.marginAutoRight {
+                    autoRun = (autoRun + autoShare)
+                }
             }
             if (elemOffsetX != 0.0) {
                 el.calculatedX = el.calculatedX + elemOffsetX
@@ -3631,7 +3766,11 @@ class EVGLayout {
                     outer = (contentW + (el.box.getHorizontalChrome()))
                 }
             } {
-                outer = (this.intrinsicOfChildren(el wantMin))
+                if (el.display == "grid") {
+                    outer = (this.intrinsicOfGrid(el wantMin))
+                } {
+                    outer = (this.intrinsicOfChildren(el wantMin))
+                }
             }
             ; ...and its own `min-width` and `max-width` hold it, as they hold
             ; its laid-out width. Without them a 24px button with a 16px icon
@@ -3689,6 +3828,80 @@ class EVGLayout {
             return true
         }
         return columnCrossShrinks
+    }
+
+    ; A grid's content width: its column tracks, a length as it is and any
+    ; other the widest (or, for min-content, narrowest) of the items that
+    ; fall in it in order, with the gaps
+    fn intrinsicOfGrid:double (el:EVGElement wantMin:boolean) {
+        def spec:string el.gridTemplateColumns
+        if ((strlen spec) == 0) {
+            spec = "1fr"
+        }
+        def gapPx:double 0.0
+        if el.gap.isSet {
+            gapPx = el.gap.pixels
+        }
+        if el.columnGap.isSet {
+            gapPx = el.columnGap.pixels
+        }
+        ; with no room given, auto-fill repeats once
+        spec = (EVGGridTemplate.resolveAutoRepeat(spec 0.0 gapPx 1 el.inheritedFontSize))
+        def tpl:EVGGridTemplate (EVGGridTemplate.parse(spec))
+        def nc:int (tpl.count())
+        if (nc < 1) {
+            return (this.intrinsicOfChildren(el wantMin))
+        }
+        def widths:[double]
+        def c0:int 0
+        while (c0 < nc) {
+            push widths 0.0
+            c0 = (c0 + 1)
+        }
+        def n:int (el.getChildCount())
+        def at:int 0
+        def i:int 0
+        while (i < n) {
+            def kid:EVGElement (el.getChild(i))
+            if ((kid.isAbsolute || (kid.isHidden())) == false) {
+                def wasResolved:boolean kid.unitsResolved
+                kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
+                def w:double (this.intrinsicWidth(kid wantMin))
+                if (wasResolved == false) {
+                    kid.unitsResolved = false
+                }
+                def col:int (at % nc)
+                if (w > (itemAt widths col)) {
+                    set widths col w
+                }
+                at = (at + 1)
+            }
+            i = (i + 1)
+        }
+        def total:double 0.0
+        def c:int 0
+        while (c < nc) {
+            def t:EVGGridTrack (tpl.trackAt(c))
+            def tw:double (itemAt widths c)
+            if (t.kind == 0) {
+                tw = t.value
+            }
+            if (t.hasMin && ((t.kind == 2) || (t.kind == 3))) {
+                t.minUnit.resolve(0.0 el.inheritedFontSize)
+                if (t.minUnit.pixels > tw) {
+                    tw = t.minUnit.pixels
+                }
+            }
+            if (c > 0) {
+                total = (total + gapPx)
+            }
+            total = (total + tw)
+            c = (c + 1)
+        }
+        if (total <= 0.0) {
+            return 0.0
+        }
+        return (total + (el.box.getHorizontalChrome()))
     }
 
     ; The recursive half. A row adds its children up; a column takes the widest.
@@ -3782,7 +3995,8 @@ class EVGLayout {
             i = (i + 1)
         }
         def inner:double total
-        if isColumn {
+        ; a row that wraps is, at its narrowest, its widest item
+        if (isColumn || (wantMin && (el.flexWrap != "nowrap"))) {
             inner = widest
         }
         if (inner <= 0.0) {
@@ -4356,7 +4570,15 @@ class EVGLayout {
             el.unitsResolved = false
             el.resolveUnits(boxW boxH)
 
+            ; a grid item is as wide as its cell (justify-self: normal is
+            ; the stretch), not its content as it would be along a row
+            def wasRowG:boolean layingOutAlongRow
+            def wasShrinkG:boolean columnCrossShrinks
+            layingOutAlongRow = false
+            columnCrossShrinks = false
             this.layoutElement(el el.calculatedX el.calculatedY boxW boxH)
+            layingOutAlongRow = wasRowG
+            columnCrossShrinks = wasShrinkG
             if placedV {
                 def free:double ((boxH - el.calculatedHeight) - 0.0)
                 if (free > 0.0) {
