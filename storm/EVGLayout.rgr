@@ -830,12 +830,18 @@ class EVGLayout {
                 ; 0.846em, which is exactly -0.0585 + 0.905. The clamp made that
                 ; 0.905 and moved every tightly-led line down by the difference.
                 def metrics:EVGTextMetrics (textEngine.measureRunSpaced(textContent (element.effectiveFontFamily()) fontSize element.letterSpacing))
-                def leading:double ((lineSpacing - (metrics.ascent + metrics.descent)) / 2.0)
+                ; (a TrueType measurer gives the descender as the font
+                ; table has it, below the baseline and negative)
+                def descentAbs:double metrics.descent
+                if (descentAbs < 0.0) {
+                    descentAbs = (0.0 - descentAbs)
+                }
+                def leading:double ((lineSpacing - (metrics.ascent + descentAbs)) / 2.0)
                 ; `textShiftY` is written below, once the height is final —
                 ; it is a share of the slack and there is no slack until then
                 ; — so the baseline is completed there as well.
                 element.calculatedBaseline = (element.box.paddingTopPx + element.box.borderWidthPx + leading + metrics.ascent)
-                element.calculatedDescent = metrics.descent
+                element.calculatedDescent = descentAbs
                 element.hasBaseline = true
             }
         }
@@ -2109,7 +2115,7 @@ class EVGLayout {
                 def availableWidth:double (((startX + innerWidth) - currentX) + 0.01)
                 if (((childTotalWidth > availableWidth) && ((array_length rowElements) > 0)) && (parent.flexWrap != "nowrap")) {
                     ; Wrap to next row
-                    this.alignRow(rowElements parent rowHeight startX innerWidth)
+                    rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
                     this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
                     currentY = ((currentY + rowHeight) + crossGapPx)
                     totalHeight = ((totalHeight + rowHeight) + crossGapPx)
@@ -2161,7 +2167,7 @@ class EVGLayout {
             ; Handle explicit line break
             if child.lineBreak {
                 if (isColumn == false) {
-                    this.alignRow(rowElements parent rowHeight startX innerWidth)
+                    rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
                     this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
                     currentY = ((currentY + rowHeight) + crossGapPx)
                     totalHeight = ((totalHeight + rowHeight) + crossGapPx)
@@ -2176,7 +2182,7 @@ class EVGLayout {
         
         ; Handle final row (for row layout)
         if ((isColumn == false) && ((array_length rowElements) > 0)) {
-            this.alignRow(rowElements parent rowHeight startX innerWidth)
+            rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
             this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
             totalHeight = totalHeight + rowHeight
         }
@@ -2629,11 +2635,11 @@ class EVGLayout {
         return (el.box.marginTopPx + el.calculatedHeight + el.box.marginBottomPx)
     }
 
-    fn alignRow:void (rowElements:[EVGElement] parent:EVGElement rowHeight:double startX:double innerWidth:double) {
+    fn alignRow:double (rowElements:[EVGElement] parent:EVGElement rowHeight:double startX:double innerWidth:double) {
         ; Apply horizontal and vertical alignment to a row of elements
         def elementCount:int (array_length rowElements)
         if (elementCount == 0) {
-            return
+            return rowHeight
         }
         
         ; Calculate row width
@@ -2830,17 +2836,35 @@ class EVGLayout {
         ; align-items: baseline — line the row up on the text baselines rather
         ; than on the box edges, so captions of different sizes read as one line.
         ; Needs real ascent metrics, which is why this waited for the font work.
-        def useBaseline:boolean (verticalAlignVal == "baseline")
+        ; Each item that aligns on the baseline (align-items or its own
+        ; align-self) takes part; the line is as tall as the most above the
+        ; baseline and the most under it (CSS Flexbox 9.4, step 8)
+        def useBaseline:boolean false
         def maxBaseline:double 0.0
-        if useBaseline {
+        def maxBelow:double 0.0
+        if (isColumn == false) {
             def b:int 0
             while (b < elementCount) {
                 def bel:EVGElement (itemAt rowElements b)
-                def bo:double (this.baselineOffsetOf(bel))
-                if (bo > maxBaseline) {
-                    maxBaseline = bo
+                if ((this.crossAlignOf(bel verticalAlignVal)) == "baseline") {
+                    useBaseline = true
+                    def bo:double (this.baselineOffsetOf(bel))
+                    if (bo > maxBaseline) {
+                        maxBaseline = bo
+                    }
+                    def under:double (((bel.calculatedHeight + bel.box.marginTopPx) + bel.box.marginBottomPx) - bo)
+                    if (under > maxBelow) {
+                        maxBelow = under
+                    }
                 }
                 b = (b + 1)
+            }
+        }
+        def lineOut:double rowHeight
+        if (useBaseline && ((maxBaseline + maxBelow) > lineOut)) {
+            lineOut = (maxBaseline + maxBelow)
+            if (effectiveRowHeight < lineOut) {
+                effectiveRowHeight = lineOut
             }
         }
 
@@ -2899,6 +2923,7 @@ class EVGLayout {
             
             i = i + 1
         }
+        return lineOut
     }
     
     ; Called right after `parent`'s own box moved by the same offset, so the
@@ -4782,6 +4807,33 @@ class EVGLayout {
         ; It is the same question `layoutElement` asks two hundred lines up,
         ; and asking it two different ways is what let the flex basis and the
         ; finished width disagree.
+        ; min-content | max-content | fit-content, as layoutElement sizes them
+        def wt:int child.width.unitType
+        if ((wt == 6) || ((wt == 7) || (wt == 8))) {
+            def mOut:double (child.box.marginLeftPx + child.box.marginRightPx)
+            def mnW:double ((this.intrinsicWidth(child true)) - mOut)
+            def mxW:double ((this.intrinsicWidth(child false)) - mOut)
+            if (mnW < 0.0) {
+                mnW = 0.0
+            }
+            if (mxW < mnW) {
+                mxW = mnW
+            }
+            if (wt == 7) {
+                return mnW
+            }
+            if (wt == 8) {
+                return mxW
+            }
+            def fw:double maxInnerWidth
+            if (fw > mxW) {
+                fw = mxW
+            }
+            if (fw < mnW) {
+                fw = mnW
+            }
+            return fw
+        }
         if ((child.display == "flex") && alongRow) {
             def intrinsic:double (this.intrinsicWidth(child false))
             if (intrinsic > 0.0) {

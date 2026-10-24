@@ -12,6 +12,10 @@
 ;   3. box-sizing: content-box, with a percentage padding
 ;   4. align-content: stretch in a wrapping row sizes each line from its
 ;      items and shares the free space between the lines
+;   5. a baseline-aligned line is as tall as the most above the baseline
+;      and the most under it
+;   6. a fit-content item in a wrapping row is measured as its content,
+;      not the whole line, when the row decides where to wrap
 ; ==============================================================================
 
 Import "EVGElement.rgr"
@@ -139,6 +143,56 @@ class CssBoxCheck {
         page6.addChild(w6)
         this.layoutAt(page6 200.0 600.0)
         this.ok("align-content: stretch gives each line its share: 55 and 45" ((this.near(l1.calculatedHeight 55.0)) && ((this.near(l2.calculatedHeight 45.0)) && (this.near(l2.calculatedY 55.0)))))
+
+        ; --- 5. baseline alignment sizes the line ------------------------------
+        def page7 (EVGElement.createDiv())
+        page7.setAttribute("width" "300px")
+        def r7 (EVGElement.createDiv())
+        r7.setAttribute("display" "flex")
+        r7.setAttribute("flex-direction" "row")
+        r7.setAttribute("align-items" "baseline")
+        def a7 (EVGElement.createDiv())
+        a7.setAttribute("width" "20px")
+        a7.setAttribute("height" "30px")
+        def b7 (EVGElement.createDiv())
+        b7.setAttribute("display" "flex")
+        b7.setAttribute("flex-direction" "column")
+        b7.setAttribute("width" "40px")
+        b7.setAttribute("height" "50px")
+        def t7 (EVGElement.createSpan())
+        t7.setAttribute("font-size" "10px")
+        t7.textContent = "x"
+        b7.addChild(t7)
+        r7.addChild(a7)
+        r7.addChild(b7)
+        page7.addChild(r7)
+        this.layoutAt(page7 300.0 600.0)
+        def bb:double (b7.calculatedBaseline)
+        this.ok("baseline: the picture's bottom on the text's baseline" (this.near((a7.calculatedY + 30.0) (b7.calculatedY + bb))))
+        this.ok("baseline: the line holds both (30 above, the rest of 50 under)" (this.near(r7.calculatedHeight ((30.0 + 50.0) - bb))))
+
+        ; --- 6. fit-content in a wrapping row -------------------------------------
+        def page8 (EVGElement.createDiv())
+        page8.setAttribute("width" "300px")
+        def r8 (EVGElement.createDiv())
+        r8.setAttribute("display" "flex")
+        r8.setAttribute("flex-direction" "row")
+        r8.setAttribute("flex-wrap" "wrap")
+        def a8 (EVGElement.createDiv())
+        a8.setAttribute("width" "100px")
+        a8.setAttribute("height" "20px")
+        def g8 (EVGElement.createDiv())
+        g8.display = "grid"
+        g8.setAttribute("width" "fit-content")
+        g8.setAttribute("grid-template-columns" "50px")
+        def k8 (EVGElement.createDiv())
+        k8.setAttribute("height" "20px")
+        g8.addChild(k8)
+        r8.addChild(a8)
+        r8.addChild(g8)
+        page8.addChild(r8)
+        this.layoutAt(page8 300.0 600.0)
+        this.ok("fit-content: a 50px grid stays beside a 100px box" ((this.near(g8.calculatedY a8.calculatedY)) && (this.near(g8.calculatedX 100.0))))
 
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
