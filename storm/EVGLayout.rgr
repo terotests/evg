@@ -2255,10 +2255,207 @@ class EVGLayout {
 
         ; Handle column alignment (for column layout)
         if isColumn {
-            this.alignColumn(parent totalHeight startX startY innerWidth innerHeight)
+            def wrapped:boolean false
+            if (parent.flexWrap != "nowrap") {
+                ; a wrapping column breaks where its height ends: a definite
+                ; one, or max-height
+                def limit:double -1.0
+                if parent.hasDefiniteHeight {
+                    limit = innerHeight
+                } {
+                    if (parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) {
+                        limit = (parent.maxHeight.pixels - (parent.box.getVerticalChrome()))
+                    }
+                }
+                if ((limit >= 0.0) && (totalHeight > (limit + 0.01))) {
+                    def cg:double 0.0
+                    if parent.columnGap.isSet {
+                        parent.columnGap.resolve(innerWidth parent.inheritedFontSize)
+                        cg = parent.columnGap.pixels
+                    } {
+                        if parent.gap.isSet {
+                            cg = parent.gap.pixels
+                        }
+                    }
+                    wrapped = (this.wrapColumn(parent limit startX startY innerWidth gapPx cg))
+                }
+            }
+            if (wrapped == false) {
+                this.alignColumn(parent totalHeight startX startY innerWidth innerHeight)
+            }
         }
         
         return totalHeight
+    }
+
+    ; A wrapping column taller than its limit: its items in lines side by
+    ; side, each line as wide as its widest item, each placed down its
+    ; line by justify-content and across it by align-items (CSS Flexbox 9)
+    fn wrapColumn:boolean (parent:EVGElement limit:double startX:double startY:double innerWidth:double gapPx:double crossGap:double) {
+        def items:[EVGElement]
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                push items c
+            }
+            i = (i + 1)
+        }
+        def cnt:int (array_length items)
+        if (cnt < 2) {
+            return false
+        }
+        ; each item's own width (its set one, else its content's) and the
+        ; lines by height
+        def ownW:[double]
+        def lineOf:[int]
+        def lineCross:[double]
+        def lineMain:[double]
+        def lineCount:int 0
+        def run:double 0.0
+        def k:int 0
+        while (k < cnt) {
+            def it:EVGElement (itemAt items k)
+            def mX:double (it.box.marginLeftPx + it.box.marginRightPx)
+            def w:double (it.calculatedWidth + mX)
+            if (it.width.isSet == false) {
+                w = (this.intrinsicWidth(it false))
+                if (w > innerWidth) {
+                    w = innerWidth
+                }
+            }
+            push ownW w
+            def h:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+            def need:double h
+            if (lineCount > 0) {
+                if (run > 0.0) {
+                    need = ((run + gapPx) + h)
+                }
+            }
+            if ((lineCount == 0) || ((need > (limit + 0.01)) && (run > 0.0))) {
+                push lineCross 0.0
+                push lineMain 0.0
+                lineCount = (lineCount + 1)
+                run = h
+            } {
+                run = need
+            }
+            push lineOf (lineCount - 1)
+            set lineMain (lineCount - 1) run
+            if (w > (itemAt lineCross (lineCount - 1))) {
+                set lineCross (lineCount - 1) w
+            }
+            k = (k + 1)
+        }
+        if (lineCount < 2) {
+            return false
+        }
+        ; align-content: stretch (normal) shares the spare width out
+        def ac:string parent.alignContent
+        def sumCross:double (crossGap * (to_double (lineCount - 1)))
+        def l0:int 0
+        while (l0 < lineCount) {
+            sumCross = (sumCross + (itemAt lineCross l0))
+            l0 = (l0 + 1)
+        }
+        def spare:double (innerWidth - sumCross)
+        def firstX:double 0.0
+        def betweenX:double crossGap
+        if (spare > 0.0) {
+            if ((ac == "stretch") || (ac == "normal")) {
+                def l1:int 0
+                while (l1 < lineCount) {
+                    set lineCross l1 ((itemAt lineCross l1) + (spare / (to_double lineCount)))
+                    l1 = (l1 + 1)
+                }
+            }
+            if (ac == "center") {
+                firstX = (spare / 2.0)
+            }
+            if ((ac == "flex-end") || (ac == "end")) {
+                firstX = spare
+            }
+            if (ac == "space-between") {
+                betweenX = (crossGap + (spare / (to_double (lineCount - 1))))
+            }
+            if (ac == "space-around") {
+                firstX = ((spare / (to_double lineCount)) / 2.0)
+                betweenX = (crossGap + (spare / (to_double lineCount)))
+            }
+            if (ac == "space-evenly") {
+                firstX = (spare / (to_double (lineCount + 1)))
+                betweenX = (crossGap + firstX)
+            }
+        }
+        def lineX:[double]
+        def x:double firstX
+        def l2:int 0
+        while (l2 < lineCount) {
+            push lineX x
+            x = ((x + (itemAt lineCross l2)) + betweenX)
+            l2 = (l2 + 1)
+        }
+        if (parent.flexWrap == "wrap-reverse") {
+            def l3:int 0
+            while (l3 < lineCount) {
+                set lineX l3 ((innerWidth - (itemAt lineX l3)) - (itemAt lineCross l3))
+                l3 = (l3 + 1)
+            }
+        }
+        ; down each line
+        def jc:string parent.justifyContent
+        def y:double 0.0
+        def line:int -1
+        def m:int 0
+        while (m < cnt) {
+            def it:EVGElement (itemAt items m)
+            def ln:int (itemAt lineOf m)
+            def lc:double (itemAt lineCross ln)
+            if (ln != line) {
+                line = ln
+                def free:double (limit - (itemAt lineMain ln))
+                y = 0.0
+                if (free > 0.0) {
+                    if (jc == "center") {
+                        y = (free / 2.0)
+                    }
+                    if ((jc == "flex-end") || (jc == "end")) {
+                        y = free
+                    }
+                }
+            }
+            def align:string (this.crossAlignIn(true it parent.alignItems))
+            def mX:double (it.box.marginLeftPx + it.box.marginRightPx)
+            def w:double (itemAt ownW m)
+            def stretch:boolean (((align == "stretch") || ((align == "normal") || ((strlen align) == 0))) && (it.width.isSet == false))
+            if stretch {
+                w = lc
+            }
+            def bw:double (w - mX)
+            if (bw < 0.0) {
+                bw = 0.0
+            }
+            if ((it.width.isSet == false) && ((bw - it.calculatedWidth) * (bw - it.calculatedWidth) > 0.0001)) {
+                it.hasFlexWidth = true
+                it.calculatedFlexWidth = bw
+                this.layoutElement(it it.calculatedX it.calculatedY bw it.calculatedHeight)
+            }
+            def dxIn:double 0.0
+            def outW:double (it.calculatedWidth + mX)
+            if (align == "center") {
+                dxIn = ((lc - outW) / 2.0)
+            }
+            if ((align == "flex-end") || (align == "end")) {
+                dxIn = (lc - outW)
+            }
+            def nx:double (((startX + (itemAt lineX ln)) + dxIn) + it.box.marginLeftPx)
+            def ny:double ((startY + y) + it.box.marginTopPx)
+            this.translateSubtree(it (nx - it.calculatedX) (ny - it.calculatedY))
+            y = ((((y + it.calculatedHeight) + it.box.marginTopPx) + it.box.marginBottomPx) + gapPx)
+            m = (m + 1)
+        }
+        return true
     }
 
     ; The lines a wrapping row breaks into, from each item's hypothetical
@@ -2682,6 +2879,21 @@ class EVGLayout {
             }
             i = (i + 1)
         }
+        ; a grid whose first item has no baseline (a picture) synthesizes
+        ; it from that item's bottom margin edge (CSS Align 9.1)
+        if (element.display == "grid") {
+            def j:int 0
+            while (j < n) {
+                def g:EVGElement (element.getChild(j))
+                if ((g.isAbsolute == false) && ((g.isHidden()) == false)) {
+                    element.calculatedBaseline = (((g.calculatedY - element.calculatedY) + g.calculatedHeight) + g.box.marginBottomPx)
+                    element.calculatedDescent = 0.0
+                    element.hasBaseline = true
+                    return
+                }
+                j = (j + 1)
+            }
+        }
     }
 
     ; Distance from an element's top MARGIN edge to its baseline. CSS gives a
@@ -3037,7 +3249,10 @@ class EVGLayout {
         def i:int 0
         while (i < n) {
             def ch:EVGElement (parent.getChild(i))
-            if (ch.isAbsolute == false) {
+            ; (auto margins are physical: they place a block's child the
+            ; same way in either direction; a grid area is mirrored still)
+            def autoX:boolean ((parent.display != "grid") && (ch.marginAutoLeft || ch.marginAutoRight))
+            if ((ch.isAbsolute == false) && (autoX == false)) {
                 def mL:double ch.box.marginLeftPx
                 def mR:double ch.box.marginRightPx
                 def marginRightEdge:double ((ch.calculatedX + ch.calculatedWidth) + mR)
@@ -3886,7 +4101,9 @@ class EVGLayout {
             }
         }
         if (outer <= 0.0) {
-            return 0.0
+            ; an empty box's margins still count (a line break's negative
+            ; margin takes back the gap before it)
+            return (el.box.marginLeftPx + el.box.marginRightPx)
         }
         return ((outer + el.box.marginLeftPx) + el.box.marginRightPx)
     }
@@ -4166,7 +4383,9 @@ class EVGLayout {
                 c.unitsResolved = false
                 c.resolveUnits(aw ah)
                 this.layoutOutOfFlowChild(parent c aw ah (startX + ax) (startY + ay) true)
-                if c.staticFlex {
+                if (c.staticFlex || ((strlen c.staticAxis) > 0)) {
+                    def alongX:boolean (c.staticFlex || (c.staticAxis == "x"))
+                    def alongY:boolean (c.staticFlex || (c.staticAxis == "y"))
                     def outW:double ((c.calculatedWidth + c.box.marginLeftPx) + c.box.marginRightPx)
                     def outH:double ((c.calculatedHeight + c.box.marginTopPx) + c.box.marginBottomPx)
                     def gj:string c.justifySelf
@@ -4200,6 +4419,12 @@ class EVGLayout {
                     }
                     if ((ga == "end") || ((ga == "flex-end") || (ga == "self-end"))) {
                         dy = (ah - outH)
+                    }
+                    if (alongX == false) {
+                        dx = 0.0
+                    }
+                    if (alongY == false) {
+                        dy = 0.0
                     }
                     if ((dx != 0.0) || (dy != 0.0)) {
                         this.translateSubtree(c dx dy)
@@ -4823,6 +5048,15 @@ class EVGLayout {
             }
             if ((boxH > 0.0) && (placedV == false)) {
                 el.calculatedFlexHeight = boxH
+            }
+            ; stretched down its area with no width of its own: a box with an
+            ; aspect ratio is as wide as the ratio makes that height
+            if (((el.aspectRatio > 0.0) && ((placedV == false) && (gj != "stretch"))) && (((el.width.isSet == false) && (el.height.isSet == false)) && (boxH > 0.0))) {
+                def arX:double ((el.box.paddingLeftPx + el.box.paddingRightPx) + (el.box.borderWidthPx * 2.0))
+                def arY:double ((el.box.paddingTopPx + el.box.paddingBottomPx) + (el.box.borderWidthPx * 2.0))
+                el.hasFlexWidth = true
+                el.calculatedFlexWidth = (((boxH - arY) * el.aspectRatio) + arX)
+                placedH = true
             }
 
             ; Hand this cell's tracks down to a subgrid child before it lays

@@ -817,6 +817,9 @@ class EVGElement {
     ; its static position is where justify-content and align-self put it
     ; as the container's only item (CSS Flexbox 4.1)
     def staticFlex:boolean false
+    ; in a grid area, the one axis ("x" or "y") with no inset, which
+    ; justify-self / align-self place along
+    def staticAxis:string ""
     ; Original image dimensions (set by image loader)
     def sourceWidth:double 0.0
     def sourceHeight:double 0.0
@@ -3341,6 +3344,7 @@ class EVGElement {
         aspectRatio = other.aspectRatio
         contentBox = other.contentBox
         staticFlex = other.staticFlex
+        staticAxis = other.staticAxis
         justifyItems = other.justifyItems
         marginAutoRight = other.marginAutoRight
         marginAutoBottom = other.marginAutoBottom
@@ -4358,6 +4362,9 @@ class EVGElement {
         ; Image properties
         if ((name == "static-flex") || (name == "staticFlex")) {
             staticFlex = (value == "true")
+            if ((value == "x") || (value == "y")) {
+                staticAxis = value
+            }
             return
         }
         if ((name == "box-sizing") || (name == "boxSizing")) {
