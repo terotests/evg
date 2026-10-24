@@ -3831,116 +3831,117 @@ class EVGDisplayList {
             out = (out + "\"view\":[" + (EVGDisplayList.fine(viewX)) + ",")
             out = (out + (EVGDisplayList.fine(viewY)) + "," + (EVGDisplayList.fine(viewScale)) + "],")
         }
-        out = (out + "\"cmds\":[")
+        ; each command on its own, the commands joined once: appending them to
+        ; one growing string copied it all again for every piece, and a
+        ; window with a dashboard's page took 100-300 ms a frame for it
+        def cparts:[string]
         def i:int 0
         while (i < (array_length cmds)) {
             def c:EVGDrawCmd (itemAt cmds i)
-            if (i > 0) {
-                out = out + ","
-            }
-            out = out + "{\"k\":" + (to_string c.kind)
+            def co:string ""
+            co = co + "{\"k\":" + (to_string c.kind)
             if (c.layer > 0) {
-                out = out + ",\"layer\":" + (to_string c.layer)
+                co = co + ",\"layer\":" + (to_string c.layer)
             }
             if attribute {
-                out = out + ",\"n\":" + (to_string c.node)
+                co = co + ",\"n\":" + (to_string c.node)
             }
-            out = out + ",\"x\":" + (EVGDisplayList.num(c.x))
-            out = out + ",\"y\":" + (EVGDisplayList.num(c.y))
-            out = out + ",\"w\":" + (EVGDisplayList.num(c.w))
-            out = out + ",\"h\":" + (EVGDisplayList.num(c.h))
+            co = co + ",\"x\":" + (EVGDisplayList.num(c.x))
+            co = co + ",\"y\":" + (EVGDisplayList.num(c.y))
+            co = co + ",\"w\":" + (EVGDisplayList.num(c.w))
+            co = co + ",\"h\":" + (EVGDisplayList.num(c.h))
             if c.perCorner {
-                out = out + ",\"rc\":[" + (EVGDisplayList.num(c.radius)) + "," +
+                co = co + ",\"rc\":[" + (EVGDisplayList.num(c.radius)) + "," +
                     (EVGDisplayList.num(c.radiusTR)) + "," +
                     (EVGDisplayList.num(c.radiusBR)) + "," +
                     (EVGDisplayList.num(c.radiusBL)) + "]"
             }
             if (c.radius > 0.0) {
-                out = out + ",\"r\":" + (EVGDisplayList.num(c.radius))
+                co = co + ",\"r\":" + (EVGDisplayList.num(c.radius))
             }
             if (c.thickness > 0.0) {
-                out = out + ",\"t\":" + (EVGDisplayList.num(c.thickness))
+                co = co + ",\"t\":" + (EVGDisplayList.num(c.thickness))
                 if (c.strokeCap != 0) {
-                    out = out + ",\"cap\":" + (to_string c.strokeCap)
+                    co = co + ",\"cap\":" + (to_string c.strokeCap)
                 }
                 if (c.strokeJoin != 0) {
-                    out = out + ",\"join\":" + (to_string c.strokeJoin)
+                    co = co + ",\"join\":" + (to_string c.strokeJoin)
                 }
                 if ((strlen c.strokeDash) > 0) {
-                    out = out + ",\"dash\":" + (EVGDisplayList.jsonString(c.strokeDash))
+                    co = co + ",\"dash\":" + (EVGDisplayList.jsonString(c.strokeDash))
                     if (c.strokeDashOffset != 0.0) {
-                        out = out + ",\"dashoff\":" + (EVGDisplayList.num(c.strokeDashOffset))
+                        co = co + ",\"dashoff\":" + (EVGDisplayList.num(c.strokeDashOffset))
                     }
                 }
             }
-            out = out + ",\"c\":[" + (to_string c.r) + "," + (to_string c.g)
-            out = out + "," + (to_string c.b) + "," + (EVGDisplayList.num(c.a)) + "]"
+            co = co + ",\"c\":[" + (to_string c.r) + "," + (to_string c.g)
+            co = co + "," + (to_string c.b) + "," + (EVGDisplayList.num(c.a)) + "]"
             ; A two-stop gradient was on the command and in the software
             ; canvas but never in the JSON, so every backend on the other side
             ; of it painted the first stop flat across the box. `gd` is the
             ; direction (1 = across, otherwise down) and `c2` the far stop.
             if (!null? c.svgGrad) {
-                out = out + ",\"gr\":" + (EVGDisplayList.svgGradJson((unwrap c.svgGrad) c.gradMatrix))
+                co = co + ",\"gr\":" + (EVGDisplayList.svgGradJson((unwrap c.svgGrad) c.gradMatrix))
             }
             if c.hasGrad {
-                out = out + ",\"gd\":" + (to_string c.gradDir)
-                out = out + ",\"c2\":[" + (to_string c.r2) + "," + (to_string c.g2)
-                out = out + "," + (to_string c.b2) + "," + (EVGDisplayList.num(c.a2)) + "]"
+                co = co + ",\"gd\":" + (to_string c.gradDir)
+                co = co + ",\"c2\":[" + (to_string c.r2) + "," + (to_string c.g2)
+                co = co + "," + (to_string c.b2) + "," + (EVGDisplayList.num(c.a2)) + "]"
             }
             if ((strlen c.text) > 0) {
-                out = out + ",\"text\":" + (EVGDisplayList.jsonString(c.text))
-                out = out + ",\"font\":" + (EVGDisplayList.jsonString(c.fontFamily))
-                out = out + ",\"size\":" + (EVGDisplayList.num(c.fontSize))
+                co = co + ",\"text\":" + (EVGDisplayList.jsonString(c.text))
+                co = co + ",\"font\":" + (EVGDisplayList.jsonString(c.fontFamily))
+                co = co + ",\"size\":" + (EVGDisplayList.num(c.fontSize))
                 ; Weight / slant so a canvas backend paints the same face the
                 ; SoftCanvas rasterizer picked.
                 if (c.letterSpacing != 0.0) {
-                    out = out + ",\"ls\":" + (EVGDisplayList.num(c.letterSpacing))
+                    co = co + ",\"ls\":" + (EVGDisplayList.num(c.letterSpacing))
                 }
                 if ((strlen c.fontWeight) > 0) {
-                    out = out + ",\"weight\":" + (EVGDisplayList.jsonString(c.fontWeight))
+                    co = co + ",\"weight\":" + (EVGDisplayList.jsonString(c.fontWeight))
                 }
                 if (c.textAlign == "italic") {
-                    out = out + ",\"italic\":true"
+                    co = co + ",\"italic\":true"
                 }
             }
             if ((strlen c.src) > 0) {
-                out = out + ",\"src\":" + (EVGDisplayList.jsonString(c.src))
+                co = co + ",\"src\":" + (EVGDisplayList.jsonString(c.src))
             }
             if c.flipH {
-                out = out + ",\"fx\":true"
+                co = co + ",\"fx\":true"
             }
             if c.flipV {
-                out = out + ",\"fy\":true"
+                co = co + ",\"fy\":true"
             }
             ; Only when there IS a crop, so a list built without one is the
             ; same bytes it was before this field existed.
             if c.hasCrop {
-                out = out + ",\"cu\":[" + (EVGDisplayList.frac4(c.cropX)) + "," + (EVGDisplayList.frac4(c.cropY))
-                out = out + "," + (EVGDisplayList.frac4(c.cropX + c.cropW)) + "," + (EVGDisplayList.frac4(c.cropY + c.cropH)) + "]"
+                co = co + ",\"cu\":[" + (EVGDisplayList.frac4(c.cropX)) + "," + (EVGDisplayList.frac4(c.cropY))
+                co = co + "," + (EVGDisplayList.frac4(c.cropX + c.cropW)) + "," + (EVGDisplayList.frac4(c.cropY + c.cropH)) + "]"
             }
             if (c.rotate != 0.0) {
-                out = out + ",\"rot\":" + (EVGDisplayList.num(c.rotate))
+                co = co + ",\"rot\":" + (EVGDisplayList.num(c.rotate))
                 if c.hasRotOrigin {
-                    out = out + ",\"rox\":" + (EVGDisplayList.num(c.rotOriginX))
-                    out = out + ",\"roy\":" + (EVGDisplayList.num(c.rotOriginY))
+                    co = co + ",\"rox\":" + (EVGDisplayList.num(c.rotOriginX))
+                    co = co + ",\"roy\":" + (EVGDisplayList.num(c.rotOriginY))
                 }
             }
             if ((strlen c.effectId) > 0) {
-                out = out + ",\"efx\":" + (EVGDisplayList.jsonString(c.effectId))
+                co = co + ",\"efx\":" + (EVGDisplayList.jsonString(c.effectId))
             }
             if (c.backdropBlur > 0.0) {
-                out = out + ",\"bb\":" + (EVGDisplayList.num(c.backdropBlur))
+                co = co + ",\"bb\":" + (EVGDisplayList.num(c.backdropBlur))
             }
             ; The drop shadow, in the shape both painters read it: an offset,
             ; a blur and a colour. The binary bridge has carried this since
             ; slot 31; the JSON never did, so the two bridges disagreed about
             ; a frame and only one of them was right.
             if c.hasShadow {
-                out = out + ",\"sh\":{\"x\":" + (EVGDisplayList.num(c.shadowX))
-                out = out + ",\"y\":" + (EVGDisplayList.num(c.shadowY))
-                out = out + ",\"blur\":" + (EVGDisplayList.num(c.shadowBlur))
-                out = out + ",\"c\":[" + (to_string c.shadowR) + "," + (to_string c.shadowG)
-                out = out + "," + (to_string c.shadowB) + "," + (EVGDisplayList.num(c.shadowA)) + "]}"
+                co = co + ",\"sh\":{\"x\":" + (EVGDisplayList.num(c.shadowX))
+                co = co + ",\"y\":" + (EVGDisplayList.num(c.shadowY))
+                co = co + ",\"blur\":" + (EVGDisplayList.num(c.shadowBlur))
+                co = co + ",\"c\":[" + (to_string c.shadowR) + "," + (to_string c.shadowG)
+                co = co + "," + (to_string c.shadowB) + "," + (EVGDisplayList.num(c.shadowA)) + "]}"
             }
             ; The GEOMETRY decides whether there is a path, not the ring list:
             ; a command built by hand — and there are several, in this gallery
@@ -3951,40 +3952,41 @@ class EVGDisplayList {
             ; ring covering everything is what a single-contour path means
             ; anyway, so say it here rather than expecting each caller to.
             if ((array_length c.pts) > 0) {
-                out = out + ",\"pts\":["
+                co = co + ",\"pts\":["
                 def pi:int 0
                 while (pi < (array_length c.pts)) {
                     if (pi > 0) {
-                        out = out + ","
+                        co = co + ","
                     }
-                    out = out + (EVGDisplayList.num((itemAt c.pts pi)))
+                    co = co + (EVGDisplayList.num((itemAt c.pts pi)))
                     pi = (pi + 1)
                 }
-                out = out + "],\"ends\":["
+                co = co + "],\"ends\":["
                 if ((array_length c.ringEnds) == 0) {
-                    out = out + (to_string (array_length c.pts))
+                    co = co + (to_string (array_length c.pts))
                 } {
                     def ei:int 0
                     while (ei < (array_length c.ringEnds)) {
                         if (ei > 0) {
-                            out = out + ","
+                            co = co + ","
                         }
-                        out = out + (to_string (itemAt c.ringEnds ei))
+                        co = co + (to_string (itemAt c.ringEnds ei))
                         ei = (ei + 1)
                     }
                 }
-                out = out + "]"
+                co = co + "]"
                 if c.evenOdd {
-                    out = out + ",\"eo\":1"
+                    co = co + ",\"eo\":1"
                 }
             }
-            out = out + "}"
+            co = co + "}"
+            push cparts co
             i = (i + 1)
         }
         ; The build's number and the layers' shifts, AFTER the commands: a
         ; reader that wants only the commands takes the document from its
         ; first byte, and one did.
-        out = (out + "],\"seq\":" + (to_string buildSeq) + ",\"shifts\":[")
+        out = (out + "\"cmds\":[" + (join cparts ",") + "],\"seq\":" + (to_string buildSeq) + ",\"shifts\":[")
         def si:int 0
         while (si < (array_length layerEls)) {
             if (si > 0) {
