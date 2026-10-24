@@ -4372,7 +4372,7 @@ class EVGLayout {
     ; with no inset of its own (static-flex) is aligned in it by
     ; justify-self and align-self as an item would be. Lines left auto are
     ; the grid's own edges.
-    fn layoutGridAbsAreas:void (parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double) {
+    fn layoutGridAbsAreas:void (parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double colShift:double rowShift:double) {
         def n:int (parent.getChildCount())
         def i:int 0
         while (i < n) {
@@ -4382,7 +4382,29 @@ class EVGLayout {
                 def ay:double 0.0
                 def aw:double innerWidth
                 def ah:double contentHeight
-                if ((strlen c.gridColumn) > 0) {
+                def colStarts:[double]
+                def colEnds:[double]
+                def cn:int 0
+                while (cn < (cols.count())) {
+                    push colStarts (colShift + (cols.offsetOf(cn colGap)))
+                    push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap)))
+                    cn = (cn + 1)
+                }
+                def padS:double parent.box.paddingLeftPx
+                def padE:double parent.box.paddingRightPx
+                if parent.resolvedRtl {
+                    padS = parent.box.paddingRightPx
+                    padE = parent.box.paddingLeftPx
+                }
+                def colAuto:[double] (EVGLayout.absAutoArea(c.gridColumn cols colStarts colEnds padS padE innerWidth))
+                if ((array_length colAuto) == 2) {
+                    ax = (itemAt colAuto 0)
+                    aw = (itemAt colAuto 1)
+                    if parent.resolvedRtl {
+                        ax = ((innerWidth - ax) - aw)
+                    }
+                }
+                if (((strlen c.gridColumn) > 0) && ((array_length colAuto) == 0)) {
                     def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
                     cp.resolveNames(cols)
                     if (cp.start > 0) {
@@ -4397,7 +4419,7 @@ class EVGLayout {
                         if ((c0 + cspan) > nc) {
                             cspan = (nc - c0)
                         }
-                        ax = (cols.offsetOf(c0 colGap))
+                        ax = (colShift + (cols.offsetOf(c0 colGap)))
                         aw = 0.0
                         if (cspan > 0) {
                             aw = (cols.extentOf(c0 cspan colGap))
@@ -4409,11 +4431,24 @@ class EVGLayout {
                         }
                     }
                 }
-                if ((strlen c.gridRow) > 0) {
+                def rowStarts:[double]
+                def rowEnds:[double]
+                def rn:int 0
+                while (rn < (array_length rowSizes)) {
+                    push rowStarts (rowShift + (this.gridRowOffset(rowSizes rn rowGap)))
+                    push rowEnds ((rowShift + (this.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn))
+                    rn = (rn + 1)
+                }
+                def rowAuto:[double] (EVGLayout.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds parent.box.paddingTopPx parent.box.paddingBottomPx contentHeight))
+                if ((array_length rowAuto) == 2) {
+                    ay = (itemAt rowAuto 0)
+                    ah = (itemAt rowAuto 1)
+                }
+                if (((strlen c.gridRow) > 0) && ((array_length rowAuto) == 0)) {
                     def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
                     rp.resolveNames(rowTemplate)
                     if (rp.start > 0) {
-                        ay = (this.gridRowOffset(rowSizes (rp.start - 1) rowGap))
+                        ay = (rowShift + (this.gridRowOffset(rowSizes (rp.start - 1) rowGap)))
                         ah = (this.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))
                     }
                 }
@@ -5135,6 +5170,41 @@ class EVGLayout {
             }
         }
 
+        ; justify-content / align-content: the space the tracks leave in
+        ; the grid, before the first one and between them (CSS Grid 1, 11.5)
+        def nColsD:int (cols.count())
+        def colsW:double (cols.extentOf(0 nColsD colGapPx))
+        def jcD:string parent.justifyContent
+        if parent.resolvedRtl {
+            if (jcD == "left") {
+                jcD = "right"
+            } {
+                if (jcD == "right") {
+                    jcD = "left"
+                }
+            }
+        }
+        def colDist:[double] (EVGLayout.contentDistribution(jcD (innerWidth - colsW) nColsD))
+        def colShift:double (itemAt colDist 0)
+        colGapPx = (colGapPx + (itemAt colDist 1))
+        def rowShift:double 0.0
+        if (parent.hasDefiniteHeight && (rowsUsed > 0)) {
+            def rowsH:double rowGapTotal
+            def rh:int 0
+            while (rh < rowsUsed) {
+                rowsH = (rowsH + (itemAt rowSizes rh))
+                rh = (rh + 1)
+            }
+            def acD:string parent.alignContent
+            if ((acD == "left") || (acD == "right")) {
+                acD = "start"
+            }
+            def rowDist:[double] (EVGLayout.contentDistribution(acD (innerHeight - rowsH) rowsUsed))
+            rowShift = (itemAt rowDist 0)
+            rowGapPx = (rowGapPx + (itemAt rowDist 1))
+            rowGapTotal = (rowGapTotal + ((itemAt rowDist 1) * (to_double (rowsUsed - 1))))
+        }
+
         ; --- final placement -------------------------------------------------
         def p:int 0
         while (p < itemCount) {
@@ -5146,8 +5216,8 @@ class EVGLayout {
 
             def cellW:double (cols.extentOf(cIdx cSpan colGapPx))
             def cellH:double (this.gridRowExtent(rowSizes rIdx rSpan rowGapPx))
-            def offX:double (cols.offsetOf(cIdx colGapPx))
-            def offY:double (this.gridRowOffset(rowSizes rIdx rowGapPx))
+            def offX:double (colShift + (cols.offsetOf(cIdx colGapPx)))
+            def offY:double (rowShift + (this.gridRowOffset(rowSizes rIdx rowGapPx)))
 
             el.calculatedX = (startX + offX + el.box.marginLeftPx)
             el.calculatedY = (startY + offY + el.box.marginTopPx)
@@ -5317,7 +5387,7 @@ class EVGLayout {
         if (absH <= 0.0) {
             absH = total
         }
-        this.layoutGridAbsAreas(parent cols colGapPx rowSizes rowGapPx rowTemplate innerWidth absH startX startY)
+        this.layoutGridAbsAreas(parent cols colGapPx rowSizes rowGapPx rowTemplate innerWidth absH startX startY colShift rowShift)
 
         return total
     }
@@ -5341,6 +5411,149 @@ class EVGLayout {
             rr = (rr + 1)
         }
         return false
+    }
+
+    ; an absolutely positioned grid item's area along one axis when a side
+    ; of its placement is auto: that side is the grid container's padding
+    ; edge (CSS Grid 1, 10.1). [from size] from the content edge, or nothing
+    ; when both sides are lines (or the placement is wholly auto, whose
+    ; area is the content box)
+    sfn absAutoArea:[double] (spec0:string tpl:EVGGridTemplate starts:[double] ends:[double] padS:double padE:double inner:double) {
+        def res:[double]
+        def spec:string (trim spec0)
+        if ((strlen spec) == 0) {
+            return res
+        }
+        def lhs:string spec
+        def rhs:string "auto"
+        def slash:int (indexOf spec "/")
+        if (slash >= 0) {
+            lhs = (trim (substring spec 0 slash))
+            rhs = (trim (substring spec (slash + 1) (strlen spec)))
+        } {
+            if ((lhs != "auto") && (EVGGridPlacement.isSpan(lhs) == false)) {
+                return res
+            }
+        }
+        if ((lhs != "auto") && (rhs != "auto")) {
+            if ((EVGGridPlacement.isSpan(lhs) == false) || (EVGGridPlacement.isSpan(rhs) == false)) {
+                return res
+            }
+        }
+        def n:int (array_length starts)
+        if (n == 0) {
+            return res
+        }
+        def lines:int (n + 1)
+        def sLine:int 0
+        def eLine:int 0
+        if ((lhs != "auto") && (EVGGridPlacement.isSpan(lhs) == false)) {
+            sLine = (EVGLayout.lineOf(lhs tpl lines))
+        }
+        if ((rhs != "auto") && (EVGGridPlacement.isSpan(rhs) == false)) {
+            eLine = (EVGLayout.lineOf(rhs tpl lines))
+        }
+        if ((sLine > 0) && EVGGridPlacement.isSpan(rhs)) {
+            eLine = (sLine + (EVGGridPlacement.spanCount(rhs)))
+        }
+        if ((eLine > 0) && EVGGridPlacement.isSpan(lhs)) {
+            sLine = (eLine - (EVGGridPlacement.spanCount(lhs)))
+            if (sLine < 1) {
+                sLine = 0
+            }
+        }
+        ; (a line past the grid's is auto)
+        if (sLine > lines) {
+            sLine = 0
+        }
+        if (eLine > lines) {
+            eLine = 0
+        }
+        def from:double (0.0 - padS)
+        def to:double (inner + padE)
+        if (sLine > 0) {
+            if (sLine <= n) {
+                from = (itemAt starts (sLine - 1))
+            } {
+                from = (itemAt ends (n - 1))
+            }
+        }
+        if (eLine > 0) {
+            if (eLine >= 2) {
+                to = (itemAt ends (eLine - 2))
+            } {
+                to = (itemAt starts 0)
+            }
+        }
+        if (to < from) {
+            to = from
+        }
+        push res from
+        push res (to - from)
+        return res
+    }
+
+    ; a grid line a placement's side names: a number (negative from the
+    ; end) or a name, or 0 when it is none of the grid's
+    sfn lineOf:int (tok:string tpl:EVGGridTemplate lines:int) {
+        if (EVGGridPlacement.isNumericToken(tok)) {
+            def v:int (EVGGridPlacement.lineNumber(tok))
+            if (v < 0) {
+                v = ((lines + 1) + v)
+                if (v < 1) {
+                    return 0
+                }
+            }
+            return v
+        }
+        return (tpl.lineNumberNamed(tok))
+    }
+
+    ; where the tracks start and what is added to each gap between them for
+    ; a justify-content or align-content value, given the free space the
+    ; tracks leave
+    sfn contentDistribution:[double] (mode0:string free:double n:int) {
+        def res:[double]
+        def mode:string (trim mode0)
+        def safe:boolean false
+        if ((indexOf mode "unsafe ") == 0) {
+            mode = (trim (substring mode 7 (strlen mode)))
+        }
+        if ((indexOf mode "safe ") == 0) {
+            safe = true
+            mode = (trim (substring mode 5 (strlen mode)))
+        }
+        def shift:double 0.0
+        def extra:double 0.0
+        if ((mode == "end") || ((mode == "flex-end") || (mode == "right"))) {
+            shift = free
+        }
+        if (mode == "center") {
+            shift = (free / 2.0)
+        }
+        if (free > 0.0) {
+            if ((mode == "space-between") && (n > 1)) {
+                extra = (free / (to_double (n - 1)))
+            }
+            if ((mode == "space-around") && (n > 0)) {
+                extra = (free / (to_double n))
+                shift = (extra / 2.0)
+            }
+            if ((mode == "space-evenly") && (n > 0)) {
+                extra = (free / (to_double (n + 1)))
+                shift = extra
+            }
+        } {
+            if ((mode == "space-around") || (mode == "space-evenly")) {
+                shift = (free / 2.0)
+            }
+            if safe {
+                shift = 0.0
+            }
+        }
+        push res shift
+        push res extra
+        return res
     }
 
     fn gridRowExtent:double (rowSizes:[double] from:int span:int gap:double) {
