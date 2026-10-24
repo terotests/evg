@@ -5432,13 +5432,14 @@ class EVGLayout {
             rhs = (trim (substring spec (slash + 1) (strlen spec)))
         } {
             if ((lhs != "auto") && (EVGGridPlacement.isSpan(lhs) == false)) {
-                return res
+                if (EVGGridPlacement.isNumericToken(lhs) == false) {
+                    return res
+                }
+                rhs = "span 1"
             }
         }
-        if ((lhs != "auto") && (rhs != "auto")) {
-            if ((EVGGridPlacement.isSpan(lhs) == false) || (EVGGridPlacement.isSpan(rhs) == false)) {
-                return res
-            }
+        if ((lhs == "auto") && (rhs == "auto")) {
+            return res
         }
         def n:int (array_length starts)
         if (n == 0) {
@@ -5461,6 +5462,12 @@ class EVGLayout {
             if (sLine < 1) {
                 sLine = 0
             }
+        }
+        if (sLine < 0) {
+            sLine = 0
+        }
+        if (eLine < 0) {
+            eLine = 0
         }
         ; (a line past the grid's is auto)
         if (sLine > lines) {
@@ -5506,7 +5513,11 @@ class EVGLayout {
             }
             return v
         }
-        return (tpl.lineNumberNamed(tok))
+        def named:int (tpl.lineNumberNamed(tok))
+        if (named == 0) {
+            named = (tpl.lineNumberNamed((tok + "-start")))
+        }
+        return named
     }
 
     ; where the tracks start and what is added to each gap between them for
