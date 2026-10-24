@@ -1,0 +1,184 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGDashboardLayoutTest — what a generated dashboard page writes
+; ==============================================================================
+;
+; A dashboard an agent wrote for the M-Files window (a "Vault overview" of five
+; slides) came out as one heap of text. Each case here is one of the reasons,
+; at the sizes Chromium gives the same declarations:
+;
+;   1. grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) was a parse
+;      error, so the grid had no tracks and every tile was 0 x 0 at its corner
+;      (auto-fit as well)
+;   2. align-items: center in a grid kept stretching its items
+;   3. a wrapping row (`flex: 1 1 100px` tiles) grew no line: the free space
+;      was counted for the whole row, so the tiles stayed 100px
+;   4. `position: absolute; inset: 0` (top and bottom) took its content's
+;      height, also inside a `flex: 1` stage
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGUnit.rgr"
+Import "EVGLayout.rgr"
+
+class DashboardLayoutCheck {
+    def passed:int 0
+    def failed:int 0
+
+    Constructor () {
+    }
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:boolean (a:double b:double) {
+        def d:double (a - b)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        return (d < 0.5)
+    }
+
+    fn box:EVGElement (h:string) {
+        def b (EVGElement.createDiv())
+        b.setAttribute("height" h)
+        return b
+    }
+
+    fn layoutAt:void (root:EVGElement w:double h:double) {
+        def lay (new EVGLayout())
+        lay.setPageSize(w h)
+        lay.layout(root)
+    }
+
+    fn run:void () {
+        print "EVGDashboardLayoutTest"
+
+        ; --- 1. auto-fill / auto-fit ----------------------------------------
+        ; 376px with 8px gaps: three 100px+ columns fit, (376 - 16) / 3 = 120
+        def page (EVGElement.createDiv())
+        page.setAttribute("width" "376px")
+        def g (EVGElement.createDiv())
+        g.display = "grid"
+        g.setAttribute("grid-template-columns" "repeat(auto-fill, minmax(100px, 1fr))")
+        g.setAttribute("gap" "8px")
+        def t0:EVGElement (this.box("40px"))
+        def t1:EVGElement (this.box("40px"))
+        def t2:EVGElement (this.box("40px"))
+        def t3:EVGElement (this.box("40px"))
+        g.addChild(t0)
+        g.addChild(t1)
+        g.addChild(t2)
+        g.addChild(t3)
+        page.addChild(g)
+        this.layoutAt(page 376.0 600.0)
+        this.ok("auto-fill: three 120px columns in 376px" ((this.near(t0.calculatedWidth 120.0)) && (this.near(t2.calculatedX 256.0))))
+        this.ok("auto-fill: the fourth tile on a second row" ((this.near(t3.calculatedX 0.0)) && (this.near(t3.calculatedY 48.0))))
+
+        ; auto-fit with two items: the empty repetitions collapse, so the two
+        ; share the row ((376 - 4) / 2 = 186)
+        def page2 (EVGElement.createDiv())
+        page2.setAttribute("width" "376px")
+        def g2 (EVGElement.createDiv())
+        g2.display = "grid"
+        g2.setAttribute("grid-template-columns" "repeat(auto-fit, minmax(80px, 1fr))")
+        g2.setAttribute("gap" "4px")
+        def f0:EVGElement (this.box("20px"))
+        def f1:EVGElement (this.box("20px"))
+        g2.addChild(f0)
+        g2.addChild(f1)
+        page2.addChild(g2)
+        this.layoutAt(page2 376.0 600.0)
+        this.ok("auto-fit: two items share the row" ((this.near(f0.calculatedWidth 186.0)) && (this.near(f1.calculatedX 190.0))))
+
+        ; --- 2. align-items: center in a grid --------------------------------
+        def page3 (EVGElement.createDiv())
+        page3.setAttribute("width" "300px")
+        def row (EVGElement.createDiv())
+        row.display = "grid"
+        row.setAttribute("grid-template-columns" "100px 1fr 40px")
+        row.setAttribute("align-items" "center")
+        def tall:EVGElement (this.box("18px"))
+        def bar:EVGElement (this.box("12px"))
+        def num:EVGElement (this.box("18px"))
+        row.addChild(tall)
+        row.addChild(bar)
+        row.addChild(num)
+        page3.addChild(row)
+        this.layoutAt(page3 300.0 600.0)
+        this.ok("grid align-items: center keeps a 12px bar 12px, 3px down" ((this.near(bar.calculatedHeight 12.0)) && (this.near(bar.calculatedY 3.0))))
+
+        ; --- 3. flex-wrap grows each line --------------------------------------
+        ; 236px, gap 8: two 100px tiles a line, each line's 28px shared out
+        def page4 (EVGElement.createDiv())
+        page4.setAttribute("width" "236px")
+        def kpis (EVGElement.createDiv())
+        kpis.setAttribute("display" "flex")
+        kpis.setAttribute("flex-direction" "row")
+        kpis.setAttribute("flex-wrap" "wrap")
+        kpis.setAttribute("gap" "8px")
+        def tiles:[EVGElement]
+        def i:int 0
+        while (i < 3) {
+            def k:EVGElement (this.box("40px"))
+            k.setAttribute("flex-grow" "1")
+            k.setAttribute("flex-shrink" "1")
+            k.setAttribute("flex-basis" "100px")
+            kpis.addChild(k)
+            push tiles k
+            i = (i + 1)
+        }
+        page4.addChild(kpis)
+        this.layoutAt(page4 236.0 600.0)
+        def k0:EVGElement (itemAt tiles 0)
+        def k1:EVGElement (itemAt tiles 1)
+        def k2:EVGElement (itemAt tiles 2)
+        this.ok("flex-wrap: two tiles of 114px on the first line" ((this.near(k0.calculatedWidth 114.0)) && (this.near(k1.calculatedX 122.0))))
+        this.ok("flex-wrap: the last tile alone fills its line" ((this.near(k2.calculatedWidth 236.0)) && (this.near(k2.calculatedY 48.0))))
+
+        ; --- 4. inset: 0 in a flex: 1 stage ------------------------------------
+        def body (EVGElement.createDiv())
+        body.setAttribute("width" "300px")
+        body.setAttribute("height" "600px")
+        body.setAttribute("display" "flex")
+        body.setAttribute("flex-direction" "column")
+        body.addChild((this.box("40px")))
+        def stage (EVGElement.createDiv())
+        stage.setAttribute("position" "relative")
+        stage.setAttribute("flex-grow" "1")
+        def slide (EVGElement.createDiv())
+        slide.setAttribute("position" "absolute")
+        slide.setAttribute("top" "0px")
+        slide.setAttribute("right" "0px")
+        slide.setAttribute("bottom" "0px")
+        slide.setAttribute("left" "0px")
+        slide.addChild((this.box("50px")))
+        stage.addChild(slide)
+        body.addChild(stage)
+        body.addChild((this.box("30px")))
+        this.layoutAt(body 300.0 600.0)
+        this.ok("inset: 0 fills a flex: 1 stage (530px)" ((this.near(stage.calculatedHeight 530.0)) && (this.near(slide.calculatedHeight 530.0))))
+        this.ok("inset: 0 is as wide as the stage" (this.near(slide.calculatedWidth 300.0)))
+
+        print ""
+        print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
+        if (failed > 0) {
+            print "FAILED"
+        } {
+            print "OK"
+        }
+    }
+
+    sfn m@(main):void () {
+        def c (new DashboardLayoutCheck())
+        c.run()
+    }
+}
