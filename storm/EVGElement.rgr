@@ -652,6 +652,11 @@ class EVGElement {
     ; INHERITED, as CSS has it, so `white-space: nowrap` on the field reaches
     ; the run inside it without every child having to say so.
     def whiteSpace:string "normal"
+    ; Written on the element, so not inherited. `normal` is also the value
+    ; nobody wrote, and without this a box that says `normal` to undo a
+    ; `nowrap` around it — a web page put inside an app whose page is one
+    ; line — took the `nowrap` anyway and none of its text wrapped.
+    def whiteSpaceSet:boolean false
     ; `text-overflow`: `clip` (the default) or `ellipsis`. As in CSS it acts
     ; only where the box clips (`overflow` other than `visible`): a line
     ; wider than the content box is drawn cut at a cluster boundary with "…"
@@ -2294,7 +2299,7 @@ class EVGElement {
         }
         ; `white-space` is inherited, which is what lets a one-line field say
         ; `nowrap` once and have the run inside it obey.
-        if (whiteSpace == "normal") {
+        if (whiteSpaceSet == false) {
             whiteSpace = parentEl.whiteSpace
         }
         fontSizeBase = parentEl.inheritedFontSize
@@ -3378,6 +3383,7 @@ class EVGElement {
         ; forced a fresh layout.
         textShiftY = other.textShiftY
         whiteSpace = other.whiteSpace
+        whiteSpaceSet = other.whiteSpaceSet
         textOverflow = other.textOverflow
         color = other.color
         emojiColor = other.emojiColor
@@ -4661,6 +4667,7 @@ class EVGElement {
         }
         if ((name == "white-space") || (name == "whiteSpace")) {
             whiteSpace = (trim value)
+            whiteSpaceSet = true
             return
         }
         if ((name == "text-overflow") || (name == "textOverflow")) {

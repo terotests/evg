@@ -39,6 +39,15 @@
 ;      longhands parsed and neither was ever read, and the shorthand spaced the
 ;      items on a wrapped row without spacing the rows.
 ;
+;   6. An auto-height item beside a `flex: 1` one in a column is as tall as its
+;      content. It counted as zero, the growing item took the whole column and
+;      a footer under it was pushed out of the box.
+;
+;   7. `position: absolute` with `width: auto` shrinks to its content, held by
+;      its children's `min-width`, and is placed from `right` / `bottom`.
+;
+;   8. `white-space: normal` written on a box stops an inherited `nowrap`.
+;
 ; And the rule under all of them: a declaration this engine cannot use is
 ; REPORTED. `EVGReject` collects them and `EVGLayout` drains them into the
 ; warnings a build already fails on.
@@ -357,6 +366,57 @@ class FlexRulesCheck {
         def lc3 (this.lay(c3))
         this.near("past the line a growing item gets nothing" (this.widthOf(c3 0)) 0.0)
         this.near("and the content-sized one fits the row" (this.widthOf(c3 1)) 300.0)
+
+        ; --- 6. a column's auto-height item beside a growing one -------------
+        print ""
+        print "-- an auto-height item beside a growing one keeps its content's height"
+        def col (EVGElement.createDiv())
+        this.applyDecls(col "display:flex;flex-direction:column;width:200px;height:300px")
+        def grow6 (EVGElement.createDiv())
+        this.applyDecls(grow6 "flex-grow:1")
+        col.addChild(grow6)
+        def foot6 (EVGElement.createDiv())
+        this.applyDecls(foot6 "display:flex;flex-direction:column;flex-shrink:0")
+        def in6 (EVGElement.createDiv())
+        this.applyDecls(in6 "height:40px")
+        foot6.addChild(in6)
+        col.addChild(foot6)
+        def l6 (this.lay(col))
+        this.near("the growing item takes what the footer leaves" grow6.calculatedHeight 260.0)
+        this.near("and the footer stays inside the column" foot6.calculatedY 260.0)
+
+        ; --- 7. an absolute box with no width is as wide as its content -----
+        print ""
+        print "-- position: absolute with width: auto shrinks to fit"
+        def frame (EVGElement.createDiv())
+        this.applyDecls(frame "display:flex;flex-direction:column;width:300px;height:200px")
+        def abs7 (EVGElement.createDiv())
+        this.applyDecls(abs7 "position:absolute;right:10px;bottom:10px;display:flex;flex-direction:row")
+        def btn7 (EVGElement.createDiv())
+        this.applyDecls(btn7 "display:flex;flex-direction:column;min-width:24px;height:24px")
+        def ico7 (EVGElement.createDiv())
+        this.applyDecls(ico7 "width:16px;height:16px")
+        btn7.addChild(ico7)
+        abs7.addChild(btn7)
+        frame.addChild(abs7)
+        def l7 (this.lay(frame))
+        this.near("as wide as the button in it, min-width and all" abs7.calculatedWidth 24.0)
+        this.near("and placed from the right" abs7.calculatedX 266.0)
+        this.near("and from the bottom" abs7.calculatedY 166.0)
+
+        ; --- 8. white-space: normal undoes an inherited nowrap ----------------
+        print ""
+        print "-- `white-space: normal` written on a box is not inherited over"
+        def page8 (EVGElement.createDiv())
+        this.applyDecls(page8 "width:300px;height:100px;white-space:nowrap")
+        def box8 (EVGElement.createDiv())
+        this.applyDecls(box8 "white-space:normal")
+        def txt8 (EVGElement.createDiv())
+        box8.addChild(txt8)
+        page8.addChild(box8)
+        def l8 (this.lay(page8))
+        this.ok("the box keeps normal" (box8.whiteSpace == "normal"))
+        this.ok("and what is in it inherits normal, not the page's nowrap" (txt8.whiteSpace == "normal"))
 
         print ""
         print "-- a declaration the engine cannot use is reported, not swallowed"

@@ -511,17 +511,15 @@ class EVGA11yTree {
         out = (out + (EVGA11yTree.jsonString(rootId)))
         out = (out + ",\"focus\":" + (EVGA11yTree.jsonString(focusId)))
         out = (out + ",\"gen\":" + (to_string generation))
-        out = (out + ",\"nodes\":[")
+        ; the nodes joined once, not appended one by one to a growing string
+        def parts:[string]
         def i:int 0
         while (i < (array_length nodes)) {
             def n:EVGA11yNode (itemAt nodes i)
-            if (i > 0) {
-                out = (out + ",")
-            }
-            out = (out + (this.nodeJson(n)))
+            push parts (this.nodeJson(n))
             i = (i + 1)
         }
-        return (out + "]}")
+        return (out + ",\"nodes\":[" + (join parts ",") + "]}")
     }
 
     fn nodeJson:string (n:EVGA11yNode) {
@@ -857,40 +855,47 @@ class EVGA11yTree {
         return out
     }
 
+    ; Runs of plain characters are copied in one piece: adding one character
+    ; at a time copied the whole string so far each time, and a long name
+    ; (a preview's text) made every frame's tree take seconds.
     sfn jsonString:string (v:string) {
         def out:string "\""
+        def n:int (strlen v)
+        def start:int 0
         def i:int 0
-        while (i < (strlen v)) {
+        while (i < n) {
             def ch:int (charAt v i)
-            if (ch == 34) {
-                out = (out + "\\\"")
-            } {
-                if (ch == 92) {
-                    out = (out + "\\\\")
+            if ((ch == 34) || ((ch == 92) || (ch < 32))) {
+                if (i > start) {
+                    out = (out + (substring v start i))
+                }
+                if (ch == 34) {
+                    out = (out + "\\\"")
                 } {
-                    if (ch == 10) {
-                        out = (out + "\\n")
+                    if (ch == 92) {
+                        out = (out + "\\\\")
                     } {
-                        if (ch == 13) {
-                            out = (out + "\\r")
+                        if (ch == 10) {
+                            out = (out + "\\n")
                         } {
-                            if (ch == 9) {
-                                out = (out + "\\t")
+                            if (ch == 13) {
+                                out = (out + "\\r")
                             } {
-                                if (ch < 32) {
-                                    out = (out + " ")
+                                if (ch == 9) {
+                                    out = (out + "\\t")
                                 } {
-                                    ; the character as it is: in Go charAt is one
-                                    ; byte of UTF-8, which strfromcode would turn
-                                    ; into a code point of its own
-                                    out = (out + (substring v i (i + 1)))
+                                    out = (out + " ")
                                 }
                             }
                         }
                     }
                 }
+                start = (i + 1)
             }
             i = (i + 1)
+        }
+        if (n > start) {
+            out = (out + (substring v start n))
         }
         return (out + "\"")
     }

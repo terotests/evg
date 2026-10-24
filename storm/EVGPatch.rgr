@@ -1255,6 +1255,7 @@ class EVGPatch {
         }
         if (n == "white-space") {
             el.whiteSpace = "normal"
+            el.whiteSpaceSet = false
             return true
         }
         if (n == "text-overflow") {
