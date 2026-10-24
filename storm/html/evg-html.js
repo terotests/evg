@@ -240,6 +240,30 @@ function radiiOf(c) {
 const uniform = (r) => r[0] === r[1] && r[1] === r[2] && r[2] === r[3];
 
 /**
+ * An SVG gradient from the display list ("gr" on a PATH or STROKE): its own
+ * coordinates, the matrix from them to the page, the spread and the stops.
+ * Put in `defs` under `id`; the paint to use is returned. The page is the
+ * user space of every path here, so the matrix is gradientTransform and the
+ * units are userSpaceOnUse, as SVG writes the same thing.
+ */
+function svgGradient(g, defs, id) {
+  const m = (g.m || [1, 0, 0, 1, 0, 0]).map(n4).join(" ");
+  const geo = g.t === "r"
+    ? `cx="${n4(g.cx)}" cy="${n4(g.cy)}" r="${n4(g.r)}" fx="${n4(g.fx)}" fy="${n4(g.fy)}"`
+    : `x1="${n4(g.x1)}" y1="${n4(g.y1)}" x2="${n4(g.x2)}" y2="${n4(g.y2)}"`;
+  const stops = (g.st || []).map((s) =>
+    `<stop offset="${n4(s[0])}" stop-color="rgb(${s[1]},${s[2]},${s[3]})"${s[4] < 1 ? ` stop-opacity="${n4(s[4])}"` : ""}/>`).join("");
+  const spread = g.sp && g.sp !== "pad" ? ` spreadMethod="${g.sp}"` : "";
+  const tag = g.t === "r" ? "radialGradient" : "linearGradient";
+  defs.push(`<${tag} id="${id}" gradientUnits="userSpaceOnUse" gradientTransform="matrix(${m})" ${geo}${spread}>${stops}</${tag}>`);
+  return `url(#${id})`;
+}
+
+function n4(v) {
+  return Number.isFinite(v) ? String(Math.round(v * 10000) / 10000) : "0";
+}
+
+/**
  * A rounded rectangle as a path, for the case `rx` cannot express.
  *
  * Corners are TL, TR, BR, BL — the order `border-radius` writes them in, which
@@ -544,7 +568,9 @@ export function renderDisplayList(target, doc, opts = {}) {
         // command's own rectangle, which is what the GL side hands its path
         // shader as a uniform; `userSpaceOnUse` is how SVG says the same.
         let pfill = rgba(c.c);
-        if (c.c2) {
+        if (c.gr) {
+          pfill = svgGradient(c.gr, defs, `evgsgrad${uid++}`);
+        } else if (c.c2) {
           const id = `evgpgrad${uid++}`;
           const across = c.gd === 1;
           const x0 = c.x, y0 = c.y, x1 = c.x + (across ? c.w : 0), y1 = c.y + (across ? 0 : c.h);
@@ -564,7 +590,8 @@ export function renderDisplayList(target, doc, opts = {}) {
       case KIND.STROKE: {
         const d = ringsPath(c, false);
         if (!d) break;
-        body.push(`<path d="${d}" fill="none" stroke="${rgba(c.c)}" stroke-width="${n(c.t || 1)}"` +
+        const pstroke = c.gr ? svgGradient(c.gr, defs, `evgsgrad${uid++}`) : rgba(c.c);
+        body.push(`<path d="${d}" fill="none" stroke="${pstroke}" stroke-width="${n(c.t || 1)}"` +
                   ` stroke-linejoin="round" stroke-linecap="round"${rotAttr(c)}/>`);
         paths += 1;
         drawn += 1;
