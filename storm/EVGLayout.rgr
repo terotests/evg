@@ -1407,7 +1407,7 @@ class EVGLayout {
                 if ((child.bottom.isSet && (child.top.isSet == false)) && ((child.y.isSet == false) && (child.height.isSet == false))) {
                     fixY = ((((innerHeight - child.bottom.pixels) - child.calculatedHeight) - child.box.marginBottomPx) - child.calculatedY)
                 }
-                if child.staticFlex {
+                if (child.staticFlex && (parent.display != "grid")) {
                     def outW:double ((child.calculatedWidth + child.box.marginLeftPx) + child.box.marginRightPx)
                     def outH:double ((child.calculatedHeight + child.box.marginTopPx) + child.box.marginBottomPx)
                     def mainFree:double (innerWidth - outW)
@@ -4126,6 +4126,90 @@ class EVGLayout {
         }
     }
 
+    ; The out-of-flow children once the tracks are sized. One with grid
+    ; lines has its grid area for its containing block (CSS Grid 9.1): it is
+    ; laid out against the area and placed from the area's corner, and one
+    ; with no inset of its own (static-flex) is aligned in it by
+    ; justify-self and align-self as an item would be. Lines left auto are
+    ; the grid's own edges.
+    fn layoutGridAbsAreas:void (parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double) {
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if c.isAbsolute {
+                def ax:double 0.0
+                def ay:double 0.0
+                def aw:double innerWidth
+                def ah:double contentHeight
+                if ((strlen c.gridColumn) > 0) {
+                    def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+                    cp.resolveNames(cols)
+                    if (cp.start > 0) {
+                        ax = (cols.offsetOf((cp.start - 1) colGap))
+                        aw = (cols.extentOf((cp.start - 1) cp.span colGap))
+                        ; (right to left the in-flow items are mirrored
+                        ; afterwards; an area is mirrored here)
+                        if parent.resolvedRtl {
+                            ax = ((innerWidth - ax) - aw)
+                        }
+                    }
+                }
+                if ((strlen c.gridRow) > 0) {
+                    def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+                    rp.resolveNames(rowTemplate)
+                    if (rp.start > 0) {
+                        ay = (this.gridRowOffset(rowSizes (rp.start - 1) rowGap))
+                        ah = (this.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))
+                    }
+                }
+                c.unitsResolved = false
+                c.resolveUnits(aw ah)
+                this.layoutOutOfFlowChild(parent c aw ah (startX + ax) (startY + ay) true)
+                if c.staticFlex {
+                    def outW:double ((c.calculatedWidth + c.box.marginLeftPx) + c.box.marginRightPx)
+                    def outH:double ((c.calculatedHeight + c.box.marginTopPx) + c.box.marginBottomPx)
+                    def gj:string c.justifySelf
+                    if ((strlen gj) == 0) {
+                        gj = parent.justifyItems
+                    }
+                    def ga:string c.alignSelf
+                    if ((strlen ga) == 0) {
+                        ga = parent.alignItems
+                    }
+                    def dx:double 0.0
+                    def dy:double 0.0
+                    def toEndA:boolean ((gj == "end") || ((gj == "flex-end") || (gj == "self-end")))
+                    if parent.resolvedRtl {
+                        toEndA = ((toEndA == false) && (gj != "center"))
+                    }
+                    if (gj == "right") {
+                        toEndA = true
+                    }
+                    if (gj == "left") {
+                        toEndA = false
+                    }
+                    if (gj == "center") {
+                        dx = ((aw - outW) / 2.0)
+                    }
+                    if toEndA {
+                        dx = (aw - outW)
+                    }
+                    if (ga == "center") {
+                        dy = ((ah - outH) / 2.0)
+                    }
+                    if ((ga == "end") || ((ga == "flex-end") || (ga == "self-end"))) {
+                        dy = (ah - outH)
+                    }
+                    if ((dx != 0.0) || (dy != 0.0)) {
+                        this.translateSubtree(c dx dy)
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
     fn layoutGrid:double (parent:EVGElement) {
         def innerWidth:double parent.calculatedInnerWidth
         def innerHeight:double parent.calculatedInnerHeight
@@ -4307,7 +4391,12 @@ class EVGLayout {
             i = (i + 1)
         }
         def itemCount:int (array_length items)
-        if (itemCount == 0) {
+        ; the explicit rows are there with no item in them (CSS Grid 7.1)
+        def explicitRows:int 0
+        if ((parent.gridTemplateRows != "subgrid") && ((strlen parent.gridTemplateRows) > 0)) {
+            explicitRows = (rowTemplate.count())
+        }
+        if ((itemCount == 0) && (explicitRows == 0)) {
             ; No tracks to size, but an overlay or a connector may still be
             ; sitting here out of flow.
             this.layoutGridOutOfFlow(parent innerWidth innerHeight startX startY)
@@ -4423,6 +4512,9 @@ class EVGLayout {
         ; occupy a single column contribute: an item spanning several has no
         ; one track to charge, and CSS distributes it in a later step this
         ; engine does not have — so it is left out rather than guessed at.
+        if (rowsUsed < explicitRows) {
+            rowsUsed = explicitRows
+        }
         def colContent:[double]
         def colMinContent:[double]
         def ci:int 0
@@ -4768,7 +4860,7 @@ class EVGLayout {
         if (absH <= 0.0) {
             absH = total
         }
-        this.layoutGridOutOfFlow(parent innerWidth absH startX startY)
+        this.layoutGridAbsAreas(parent cols colGapPx rowSizes rowGapPx rowTemplate innerWidth absH startX startY)
 
         return total
     }
