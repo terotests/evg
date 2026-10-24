@@ -706,6 +706,8 @@ class EVGElement {
     ; not say" — CSS spells that `auto`, and both are accepted — so an item
     ; that never mentions it costs one string comparison and nothing else.
     def alignSelf:string ""
+    def justifySelf:string ""
+    def justifyItems:string ""
     ; align-content: how WRAPPED LINES are distributed along the cross axis,
     ; as opposed to alignItems which positions children within one line. Only
     ; meaningful when the content wraps and the container has room to spare.
@@ -803,6 +805,11 @@ class EVGElement {
     ; Image sizing: "cover", "contain", "fill", "none"
     ; Default is "cover" - preserves aspect ratio, fills container, clips overflow
     def objectFit:string "cover"
+    ; aspect-ratio as width / height; 0 for none
+    def aspectRatio:double 0.0
+    ; box-sizing: content-box: width, height and their limits are the
+    ; content box's (EVG's own default is the border box)
+    def contentBox:boolean false
     ; Original image dimensions (set by image loader)
     def sourceWidth:double 0.0
     def sourceHeight:double 0.0
@@ -2421,6 +2428,31 @@ class EVGElement {
         
         ; Box model
         box.resolveUnits(parentWidth parentHeight fs rfs vpw vph)
+        if contentBox {
+            def ex:double ((box.paddingLeftPx + box.paddingRightPx) + (box.borderWidthPx * 2.0))
+            def ey:double ((box.paddingTopPx + box.paddingBottomPx) + (box.borderWidthPx * 2.0))
+            if width.isSet {
+                width.pixels = (width.pixels + ex)
+            }
+            if minWidth.isSet {
+                minWidth.pixels = (minWidth.pixels + ex)
+            }
+            if maxWidth.isSet {
+                maxWidth.pixels = (maxWidth.pixels + ex)
+            }
+            if flexBasis.isSet {
+                flexBasis.pixels = (flexBasis.pixels + ex)
+            }
+            if height.isSet {
+                height.pixels = (height.pixels + ey)
+            }
+            if minHeight.isSet {
+                minHeight.pixels = (minHeight.pixels + ey)
+            }
+            if maxHeight.isSet {
+                maxHeight.pixels = (maxHeight.pixels + ey)
+            }
+        }
         
         ; Shadow
         shadowRadius.resolve(parentWidth fs)
@@ -3298,6 +3330,10 @@ class EVGElement {
         ; the page to say it ever was one.
         href = other.href
         marginAutoTop = other.marginAutoTop
+        justifySelf = other.justifySelf
+        aspectRatio = other.aspectRatio
+        contentBox = other.contentBox
+        justifyItems = other.justifyItems
         marginAutoRight = other.marginAutoRight
         marginAutoBottom = other.marginAutoBottom
         marginAutoLeft = other.marginAutoLeft
@@ -4310,6 +4346,14 @@ class EVGElement {
         }
         
         ; Image properties
+        if ((name == "box-sizing") || (name == "boxSizing")) {
+            contentBox = (value == "content-box")
+            return
+        }
+        if ((name == "aspect-ratio") || (name == "aspectRatio")) {
+            aspectRatio = (EVGElement.ratioOf(value))
+            return
+        }
         if ((name == "object-fit") || (name == "objectFit")) {
             objectFit = value
             return
@@ -4674,6 +4718,18 @@ class EVGElement {
             alignContent = value
             return
         }
+        if ((name == "justify-self") || (name == "justifySelf")) {
+            if (value == "auto") {
+                justifySelf = ""
+            } {
+                justifySelf = value
+            }
+            return
+        }
+        if ((name == "justify-items") || (name == "justifyItems")) {
+            justifyItems = value
+            return
+        }
         if ((name == "align-self") || (name == "alignSelf")) {
             if (value == "auto") {
                 alignSelf = ""
@@ -4933,6 +4989,34 @@ class EVGElement {
         if ((EVGElement.isHostProp(name)) == false) {
             EVGReject.note("unknown property" name value)
         }
+    }
+
+    ; `aspect-ratio`: "16 / 9", "1.5", "auto 2 / 1"; 0 for auto or junk
+    sfn ratioOf:double (value:string) {
+        def v:string (trim value)
+        if ((indexOf v "auto") == 0) {
+            v = (trim (substring v 4 (strlen v)))
+        }
+        if ((strlen v) == 0) {
+            return 0.0
+        }
+        def slash:int (indexOf v "/")
+        if (slash < 0) {
+            def one@(optional):double (to_double v)
+            if one {
+                return (unwrap one)
+            }
+            return 0.0
+        }
+        def a@(optional):double (to_double (trim (substring v 0 slash)))
+        def b@(optional):double (to_double (trim (substring v (slash + 1) (strlen v))))
+        if (a && b) {
+            def bv:double (unwrap b)
+            if (bv > 0.0) {
+                return ((unwrap a) / bv)
+            }
+        }
+        return 0.0
     }
 
     ; Names that reach `setAttribute` from an authoring layer and are NOT

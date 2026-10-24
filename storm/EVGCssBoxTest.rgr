@@ -1,0 +1,156 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGCssBoxTest — CSS box rules the W3C WPT layout tests check
+; ==============================================================================
+;
+; Each case is a rule a WPT check-layout test (css-grid, css-flexbox, CSS2)
+; found missing, at the sizes Chromium gives:
+;
+;   1. justify-self / justify-items and auto margins in a grid cell
+;   2. aspect-ratio: an auto height from the width
+;   3. box-sizing: content-box, with a percentage padding
+;   4. align-content: stretch in a wrapping row sizes each line from its
+;      items and shares the free space between the lines
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGUnit.rgr"
+Import "EVGLayout.rgr"
+
+class CssBoxCheck {
+    def passed:int 0
+    def failed:int 0
+
+    Constructor () {
+    }
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:boolean (a:double b:double) {
+        def d:double (a - b)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        return (d < 0.5)
+    }
+
+    fn layoutAt:void (root:EVGElement w:double h:double) {
+        def lay (new EVGLayout())
+        lay.setPageSize(w h)
+        lay.layout(root)
+    }
+
+    ; a one-column 300px grid holding one item of the given width
+    fn cellGrid:EVGElement (item:EVGElement) {
+        def page (EVGElement.createDiv())
+        page.setAttribute("width" "300px")
+        def g (EVGElement.createDiv())
+        g.display = "grid"
+        g.setAttribute("grid-template-columns" "300px")
+        g.setAttribute("grid-template-rows" "100px")
+        g.addChild(item)
+        page.addChild(g)
+        return page
+    }
+
+    fn run:void () {
+        print "EVGCssBoxTest"
+
+        ; --- 1. placing in a grid cell -----------------------------------------
+        def c1 (EVGElement.createDiv())
+        c1.setAttribute("width" "50px")
+        c1.setAttribute("height" "20px")
+        c1.setAttribute("justify-self" "center")
+        def p1:EVGElement (this.cellGrid(c1))
+        this.layoutAt(p1 300.0 600.0)
+        this.ok("justify-self: center puts a 50px item 125px in" (this.near(c1.calculatedX 125.0)))
+
+        def c2 (EVGElement.createDiv())
+        c2.setAttribute("height" "20px")
+        c2.setAttribute("justify-self" "end")
+        c2.setAttribute("display" "flex")
+        c2.setAttribute("flex-direction" "column")
+        def kid (EVGElement.createDiv())
+        kid.setAttribute("width" "40px")
+        kid.setAttribute("height" "10px")
+        c2.addChild(kid)
+        def p2:EVGElement (this.cellGrid(c2))
+        this.layoutAt(p2 300.0 600.0)
+        this.ok("justify-self: end keeps a width-less item its content's 40px, at the end" ((this.near(c2.calculatedWidth 40.0)) && (this.near(c2.calculatedX 260.0))))
+
+        def c3 (EVGElement.createDiv())
+        c3.setAttribute("width" "60px")
+        c3.setAttribute("height" "20px")
+        c3.setAttribute("margin" "auto")
+        def p3:EVGElement (this.cellGrid(c3))
+        this.layoutAt(p3 300.0 600.0)
+        this.ok("margin: auto centres an item in its cell" ((this.near(c3.calculatedX 120.0)) && (this.near(c3.calculatedY 40.0))))
+
+        ; --- 2. aspect-ratio ----------------------------------------------------
+        def page4 (EVGElement.createDiv())
+        page4.setAttribute("width" "400px")
+        def r4 (EVGElement.createDiv())
+        r4.setAttribute("width" "200px")
+        r4.setAttribute("aspect-ratio" "2 / 1")
+        page4.addChild(r4)
+        this.layoutAt(page4 400.0 600.0)
+        this.ok("aspect-ratio: 2 / 1 makes a 200px box 100px tall" (this.near(r4.calculatedHeight 100.0)))
+
+        ; --- 3. box-sizing: content-box ----------------------------------------
+        def page5 (EVGElement.createDiv())
+        page5.setAttribute("width" "500px")
+        def b5 (EVGElement.createDiv())
+        b5.setAttribute("box-sizing" "content-box")
+        b5.setAttribute("width" "50px")
+        b5.setAttribute("height" "100px")
+        b5.setAttribute("padding-left" "10%")
+        page5.addChild(b5)
+        this.layoutAt(page5 500.0 600.0)
+        this.ok("content-box: 50px and 10% of 500px padding is 100px wide" ((this.near(b5.calculatedWidth 100.0)) && (this.near(b5.calculatedHeight 100.0))))
+
+        ; --- 4. align-content: stretch -----------------------------------------
+        def page6 (EVGElement.createDiv())
+        page6.setAttribute("width" "200px")
+        def w6 (EVGElement.createDiv())
+        w6.setAttribute("display" "flex")
+        w6.setAttribute("flex-direction" "row")
+        w6.setAttribute("flex-wrap" "wrap")
+        w6.setAttribute("align-content" "stretch")
+        w6.setAttribute("width" "200px")
+        w6.setAttribute("height" "100px")
+        def l1 (EVGElement.createDiv())
+        l1.setAttribute("width" "100%")
+        def l1k (EVGElement.createDiv())
+        l1k.setAttribute("height" "10px")
+        l1.addChild(l1k)
+        def l2 (EVGElement.createDiv())
+        l2.setAttribute("width" "100%")
+        w6.addChild(l1)
+        w6.addChild(l2)
+        page6.addChild(w6)
+        this.layoutAt(page6 200.0 600.0)
+        this.ok("align-content: stretch gives each line its share: 55 and 45" ((this.near(l1.calculatedHeight 55.0)) && ((this.near(l2.calculatedHeight 45.0)) && (this.near(l2.calculatedY 55.0)))))
+
+        print ""
+        print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
+        if (failed > 0) {
+            print "FAILED"
+        } {
+            print "OK"
+        }
+    }
+
+    sfn m@(main):void () {
+        def c (new CssBoxCheck())
+        c.run()
+    }
+}

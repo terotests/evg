@@ -570,6 +570,17 @@ class EVGLayout {
             height = element.height.pixels
             autoHeight = false
         }
+        ; aspect-ratio: an auto height from the width, the content box's
+        if ((element.height.isSet == false) && (element.aspectRatio > 0.0)) {
+            def edgeX:double ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
+            def edgeY:double ((element.box.paddingTopPx + element.box.paddingBottomPx) + (element.box.borderWidthPx * 2.0))
+            def innerW:double (width - edgeX)
+            if (innerW < 0.0) {
+                innerW = 0.0
+            }
+            height = ((innerW / element.aspectRatio) + edgeY)
+            autoHeight = false
+        }
         ; Column-axis flex grow / row alignItems:stretch: EVGLayout resolved a
         ; target height for this child (height not explicitly set) — adopt it.
         if (element.height.isSet == false) {
@@ -2044,7 +2055,9 @@ class EVGLayout {
             ; parent's cross (height) extent.
             if (isColumn == false) {
                 if ((this.crossAlignOf(child parent.alignItems)) == "stretch") {
-                    if (child.height.isSet == false) {
+                    ; (a wrapping one with align-content: stretch sizes
+                    ; its lines first, then grows them)
+                    if ((child.height.isSet == false) && ((parent.flexWrap == "nowrap") || (parent.alignContent != "stretch"))) {
                         child.calculatedFlexHeight = innerHeight
                     }
                 }
@@ -2369,7 +2382,8 @@ class EVGLayout {
 
     fn applyAlignContent:void (parent:EVGElement members:[EVGElement] counts:[int] heights:[double] contentHeight:double innerHeight:double) {
         def lineCount:int (array_length counts)
-        if (lineCount < 2) {
+        ; a wrapping container is multi-line even with one line in it
+        if ((lineCount < 2) && ((lineCount < 1) || (parent.flexWrap == "nowrap"))) {
             return
         }
         if ((parent.hasDefiniteHeight) == false) {
@@ -2760,7 +2774,8 @@ class EVGLayout {
                 crossBox = parent.calculatedInnerHeight
             }
         } {
-            if parent.height.isSet {
+            ; align-content: stretch grows the lines afterwards
+            if (parent.height.isSet && (parent.alignContent != "stretch")) {
                 crossBox = parent.calculatedInnerHeight
             }
         }
@@ -4533,6 +4548,24 @@ class EVGLayout {
                 ga = parent.alignItems
             }
             def placedV:boolean ((ga == "center") || ((ga == "end") || ((ga == "flex-end") || ((ga == "start") || (ga == "self-end")))))
+            if (el.marginAutoTop || el.marginAutoBottom) {
+                placedV = true
+            }
+            ; normal is start for a box with an aspect ratio (CSS Align 3,
+            ; 6.1): only an explicit stretch stretches it
+            if ((el.aspectRatio > 0.0) && (ga != "stretch")) {
+                placedV = true
+            }
+            ; justify-self / justify-items, and auto margins, along the row:
+            ; the item keeps its fit-content width and is placed in the cell
+            def gj:string el.justifySelf
+            if (((strlen gj) == 0) || (gj == "auto")) {
+                gj = parent.justifyItems
+            }
+            def placedH:boolean ((gj == "center") || ((gj == "end") || ((gj == "flex-end") || ((gj == "start") || ((gj == "flex-start") || ((gj == "left") || ((gj == "right") || ((gj == "self-start") || (gj == "self-end")))))))))
+            if (el.marginAutoLeft || el.marginAutoRight) {
+                placedH = true
+            }
             if ((boxH > 0.0) && (placedV == false)) {
                 el.calculatedFlexHeight = boxH
             }
@@ -4575,10 +4608,34 @@ class EVGLayout {
             def wasRowG:boolean layingOutAlongRow
             def wasShrinkG:boolean columnCrossShrinks
             layingOutAlongRow = false
-            columnCrossShrinks = false
+            columnCrossShrinks = placedH
             this.layoutElement(el el.calculatedX el.calculatedY boxW boxH)
             layingOutAlongRow = wasRowG
             columnCrossShrinks = wasShrinkG
+            if placedH {
+                def freeX:double (boxW - el.calculatedWidth)
+                if (freeX > 0.0) {
+                    def dx:double 0.0
+                    if (el.marginAutoLeft || el.marginAutoRight) {
+                        if el.marginAutoLeft {
+                            dx = freeX
+                            if el.marginAutoRight {
+                                dx = (freeX / 2.0)
+                            }
+                        }
+                    } {
+                        if (gj == "center") {
+                            dx = (freeX / 2.0)
+                        }
+                        if ((gj == "end") || ((gj == "flex-end") || ((gj == "right") || (gj == "self-end")))) {
+                            dx = freeX
+                        }
+                    }
+                    if (dx != 0.0) {
+                        this.translateSubtree(el dx 0.0)
+                    }
+                }
+            }
             if placedV {
                 def free:double ((boxH - el.calculatedHeight) - 0.0)
                 if (free > 0.0) {
@@ -4586,8 +4643,17 @@ class EVGLayout {
                     if (ga == "center") {
                         dy = (free / 2.0)
                     }
-                    if (ga == "start") {
+                    if ((ga == "start") || ((placedV == true) && ((ga != "center") && ((ga != "end") && ((ga != "flex-end") && (ga != "self-end")))))) {
                         dy = 0.0
+                    }
+                    if (el.marginAutoTop || el.marginAutoBottom) {
+                        dy = 0.0
+                        if el.marginAutoTop {
+                            dy = free
+                            if el.marginAutoBottom {
+                                dy = (free / 2.0)
+                            }
+                        }
                     }
                     if (dy != 0.0) {
                         this.translateSubtree(el 0.0 dy)

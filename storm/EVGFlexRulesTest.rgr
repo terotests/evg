@@ -429,7 +429,7 @@ class FlexRulesCheck {
 
         EVGReject.clearNotes()
         def ar:[string]
-        push ar "width:200px;aspect-ratio:2/1"
+        push ar "width:200px;height:40px;shape-outside:circle(50%)"
         def r14 (this.row("600px" ar))
         def l14 (this.lay(r14))
         this.ok("an unimplemented property is a warning" ((l14.warningCount()) > 0))
