@@ -1054,6 +1054,23 @@ class EVGGridPlacement {
     ; and is reported, the same as any other declaration the engine cannot
     ; honour.
     fn resolveNames:void (tpl:EVGGridTemplate) {
+        ; line -1 is the explicit grid's last line
+        def lines:int ((tpl.count()) + 1)
+        if (start < 0) {
+            start = ((lines + 1) + start)
+            if (start < 1) {
+                start = 1
+            }
+            if ((endLine == 0) && (spanExplicit == false)) {
+                span = 1
+            }
+        }
+        if (endLine < 0) {
+            endLine = ((lines + 1) + endLine)
+            if (endLine < 1) {
+                endLine = 1
+            }
+        }
         if ((strlen startName) > 0) {
             def n:int (tpl.lineNumberNamed(startName))
             if (n > 0) {
@@ -1127,7 +1144,9 @@ class EVGGridPlacement {
         def v@(optional):double (to_double s)
         if v {
             def n:int (to_int (unwrap v))
-            if (n >= 1) {
+            ; (a negative line counts from the explicit grid's end, which
+            ; resolveNames knows)
+            if ((n >= 1) || (n <= -1)) {
                 return n
             }
         }

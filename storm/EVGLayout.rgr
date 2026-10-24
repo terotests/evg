@@ -526,6 +526,15 @@ class EVGLayout {
                     def measuredW:double (contentW + element.box.paddingLeftPx + element.box.paddingRightPx + (element.box.borderWidthPx * 2.0))
                     if (measuredW < parentWidth) {
                         width = measuredW
+                    } {
+                        ; (but never under its longest word, which overflows)
+                        def minW:double ((textEngine.minLineWidthSpaced(textContent (element.effectiveFontFamily()) fontSize element.letterSpacing)) + ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0)))
+                        ; (a line that does not wrap keeps the box's width,
+                        ; where text-overflow cuts it)
+                        def ws0:string element.whiteSpace
+                        if ((minW > width) && ((ws0 != "nowrap") && (ws0 != "pre"))) {
+                            width = minW
+                        }
                     }
                 }
             } {
@@ -542,10 +551,21 @@ class EVGLayout {
                 ; the axis it was written for and wrong on the other one.
                 if (element.display == "flex") {
                     if (this.crossAxisFits(element)) {
-                        def intrinsic:double (this.intrinsicWidth(element false))
+                        ; (the intrinsic width is the margin box's; the
+                        ; width is the border box's)
+                        def intrinsic:double (((this.intrinsicWidth(element false)) - element.box.marginLeftPx) - element.box.marginRightPx)
                         if (intrinsic > 0.0) {
                             if (intrinsic < parentWidth) {
                                 width = intrinsic
+                            } {
+                                ; fit-content is never under the min-content
+                                ; width: a word wider than the room overflows
+                                ; (a box that clips, or one whose min-width
+                                ; is set, is narrowed as it is told)
+                                def narrow:double (((this.intrinsicWidth(element true)) - element.box.marginLeftPx) - element.box.marginRightPx)
+                                if (((narrow > width) && ((element.clipsContent()) == false)) && (element.minWidth.isSet == false)) {
+                                    width = narrow
+                                }
                             }
                         }
                     }
@@ -887,7 +907,8 @@ class EVGLayout {
         ; A dashboard's slides, `inset: 0` in a `flex: 1` stage, were each
         ; as tall as their text, so their scroll areas and backgrounds ended
         ; halfway down. Lay those children out again against this height.
-        if (autoHeight && ((childCount > 0) && (innerBefore != element.calculatedInnerHeight))) {
+        ; (a grid's are in their grid areas, laid out against the rows)
+        if ((autoHeight && ((childCount > 0) && (innerBefore != element.calculatedInnerHeight))) && (element.display != "grid")) {
             def ai:int 0
             while (ai < childCount) {
                 def ac:EVGElement (element.getChild(ai))
@@ -2172,7 +2193,9 @@ class EVGLayout {
             ; does not fit misses the line by whole pixels and still wraps.
             if (isColumn == false) {
                 def availableWidth:double (((startX + innerWidth) - currentX) + 0.01)
-                if (((childTotalWidth > availableWidth) && ((array_length rowElements) > 0)) && (parent.flexWrap != "nowrap")) {
+                ; (an item that takes no room, a line break, stays on the
+                ; line however full it is)
+                if ((((childTotalWidth > availableWidth) && ((array_length rowElements) > 0)) && (parent.flexWrap != "nowrap")) && (childTotalWidth > 0.0)) {
                     ; Wrap to next row
                     rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
                     this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
@@ -4363,8 +4386,22 @@ class EVGLayout {
                     def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
                     cp.resolveNames(cols)
                     if (cp.start > 0) {
-                        ax = (cols.offsetOf((cp.start - 1) colGap))
-                        aw = (cols.extentOf((cp.start - 1) cp.span colGap))
+                        ; (lines past the tracks there are, the collapsed
+                        ; ones of an auto-fit repeat, are at the grid's end)
+                        def nc:int (cols.count())
+                        def c0:int (cp.start - 1)
+                        def cspan:int cp.span
+                        if (c0 > nc) {
+                            c0 = nc
+                        }
+                        if ((c0 + cspan) > nc) {
+                            cspan = (nc - c0)
+                        }
+                        ax = (cols.offsetOf(c0 colGap))
+                        aw = 0.0
+                        if (cspan > 0) {
+                            aw = (cols.extentOf(c0 cspan colGap))
+                        }
                         ; (right to left the in-flow items are mirrored
                         ; afterwards; an area is mirrored here)
                         if parent.resolvedRtl {
@@ -4467,6 +4504,10 @@ class EVGLayout {
         def colSpec:string parent.gridTemplateColumns
         if ((strlen colSpec) == 0) {
             colSpec = "1fr"
+            ; (no explicit column: the implicit ones are grid-auto-columns)
+            if ((strlen parent.gridAutoColumns) > 0) {
+                colSpec = parent.gridAutoColumns
+            }
         }
 
         ; grid-template-columns: subgrid — adopt the enclosing grid's tracks for
@@ -4514,10 +4555,26 @@ class EVGLayout {
                         if (dc > 0) {
                             derived = derived + " "
                         }
-                        derived = derived + "1fr"
+                        if ((strlen parent.gridAutoColumns) > 0) {
+                            derived = derived + parent.gridAutoColumns
+                        } {
+                            derived = derived + "1fr"
+                        }
                         dc = (dc + 1)
                     }
                     colSpec = derived
+                } {
+                    ; more columns in the picture than the template has:
+                    ; the rest are grid-auto-columns
+                    def have0:int ((EVGGridTemplate.parse(colSpec)).count())
+                    def ac0:string parent.gridAutoColumns
+                    if ((strlen ac0) == 0) {
+                        ac0 = "auto"
+                    }
+                    while (have0 < areas.columns) {
+                        colSpec = (colSpec + " " + ac0)
+                        have0 = (have0 + 1)
+                    }
                 }
             }
         }
@@ -4530,7 +4587,34 @@ class EVGLayout {
             }
             ci = (ci + 1)
         }
-        colSpec = (EVGGridTemplate.resolveAutoRepeat(colSpec innerWidth colGapPx inFlow parent.inheritedFontSize))
+        ; auto-fit: as many repetitions as auto-fill, the ones no item
+        ; lands in collapsed after placement (CSS Grid 7.2.3.2)
+        def fitStart:int -1
+        def fitOthers:int 0
+        def ftoks:[string] (EVGGridTemplate.tokenize(colSpec))
+        def ft:int 0
+        while (ft < (array_length ftoks)) {
+            def ftok:string (itemAt ftoks ft)
+            if ((EVGGridTemplate.isLineNameToken(ftok)) == false) {
+                if ((EVGGridTemplate.autoRepeatKind(ftok)) == "auto-fit") {
+                    fitStart = fitOthers
+                } {
+                    if ((EVGGridTemplate.autoRepeatKind(ftok)) == "") {
+                        fitOthers = (fitOthers + ((EVGGridTemplate.parse(ftok)).count()))
+                    }
+                }
+            }
+            ft = (ft + 1)
+        }
+        def fitItems:int inFlow
+        if (fitStart >= 0) {
+            fitItems = 0
+        }
+        colSpec = (EVGGridTemplate.resolveAutoRepeat(colSpec innerWidth colGapPx fitItems parent.inheritedFontSize))
+        def fitCount:int 0
+        if (fitStart >= 0) {
+            fitCount = (((EVGGridTemplate.parse(colSpec)).count()) - fitOthers)
+        }
         ; an item placed past the explicit columns makes implicit ones, as
         ; grid-auto-columns has them (CSS Grid 7.5)
         def lastLine:int 0
@@ -4589,6 +4673,24 @@ class EVGLayout {
         if (rowTemplateSpec == "subgrid") {
             ; Inherited tracks carry no names of their own.
             rowTemplateSpec = ""
+        }
+        ; repeat(auto-fill / auto-fit) down the rows: as many as the height
+        ; holds, a definite one, else max-height, else min-height
+        if (((indexOf rowTemplateSpec "auto-fill") >= 0) || ((indexOf rowTemplateSpec "auto-fit") >= 0)) {
+            def room:double innerHeight
+            if (parent.hasDefiniteHeight == false) {
+                room = 0.0
+                def vch:double (parent.box.getVerticalChrome())
+                if (parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) {
+                    room = (parent.maxHeight.pixels - vch)
+                }
+                if (parent.minHeight.isSet && ((parent.minHeight.isPercent()) == false)) {
+                    if ((parent.minHeight.pixels - vch) > room) {
+                        room = (parent.minHeight.pixels - vch)
+                    }
+                }
+            }
+            rowTemplateSpec = (EVGGridTemplate.resolveAutoRepeat(rowTemplateSpec room rowGapPx 0 parent.inheritedFontSize))
         }
         def rowTemplate:EVGGridTemplate (EVGGridTemplate.parse(rowTemplateSpec))
 
@@ -4656,6 +4758,10 @@ class EVGLayout {
         def explicitRows:int 0
         if ((parent.gridTemplateRows != "subgrid") && ((strlen parent.gridTemplateRows) > 0)) {
             explicitRows = (rowTemplate.count())
+        }
+        ; (and the rows of grid-template-areas)
+        if (hasAreas && (areas.rows > explicitRows)) {
+            explicitRows = areas.rows
         }
         if ((itemCount == 0) && (explicitRows == 0)) {
             ; No tracks to size, but an overlay or a connector may still be
@@ -4804,10 +4910,44 @@ class EVGLayout {
                 ic = (ic + 1)
             }
         }
-        cols.resolveWithContent((innerWidth - colGapTotal) colContent colMinContent)
+        ; auto-fit: a repetition no item lands in collapses, a 0 track
+        ; whose gap is given back (CSS Grid 7.2.3.2)
+        def collapsed:[int]
+        if (fitCount > 0) {
+            def fk:int fitStart
+            while ((fk < (fitStart + fitCount)) && (fk < (cols.count()))) {
+                def used:boolean false
+                def fm:int 0
+                while (fm < itemCount) {
+                    def fc0:int (itemAt placedCol fm)
+                    if ((fc0 <= fk) && (fk < (fc0 + (itemAt colSpans fm)))) {
+                        used = true
+                    }
+                    fm = (fm + 1)
+                }
+                if (used == false) {
+                    def ftk:EVGGridTrack (cols.trackAt(fk))
+                    ftk.kind = 0
+                    ftk.value = 0.0
+                    ftk.hasMin = false
+                    ftk.hasMax = false
+                    push collapsed fk
+                }
+                fk = (fk + 1)
+            }
+        }
+        def giveBack:double ((to_double (array_length collapsed)) * colGapPx)
+        cols.resolveWithContent(((innerWidth - colGapTotal) + giveBack) colContent colMinContent)
+        for collapsed ck:int cki {
+            def ctk:EVGGridTrack (cols.trackAt(ck))
+            ctk.sizePx = (0.0 - colGapPx)
+        }
 
         ; --- row sizing ------------------------------------------------------
         def rowSpec:string parent.gridTemplateRows
+        if ((rowSpec != "subgrid") && (rowSpec != rowTemplateSpec)) {
+            rowSpec = rowTemplateSpec
+        }
         def rowSizes:[double]
         def rowGapTotal:double 0.0
         if (rowsUsed > 1) {
@@ -4950,13 +5090,17 @@ class EVGLayout {
 
         ; grid-auto-rows with a fixed size sets every implicit row.
         def autoRowFixed:boolean false
-        if ((haveTemplateRows == false) && ((strlen rowSpec) == 0) && ((strlen parent.gridAutoRows) > 0)) {
+        def tplRows:int 0
+        if ((strlen rowSpec) > 0) {
+            tplRows = ((EVGGridTemplate.parse(rowSpec)).count())
+        }
+        if ((rowsUsed > tplRows) && ((strlen parent.gridAutoRows) > 0)) {
             def ar:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
             if ((ar.hadError == false) && ((ar.count()) > 0)) {
                 def at0:EVGGridTrack (ar.trackAt(0))
                 if (at0.kind == 0) {
                     autoRowFixed = true
-                    def ra:int 0
+                    def ra:int tplRows
                     while (ra < rowsUsed) {
                         def atk:EVGGridTrack (ar.trackAt((ra % (ar.count()))))
                         if (atk.kind == 0) {
