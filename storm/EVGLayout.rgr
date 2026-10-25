@@ -594,6 +594,16 @@ class EVGLayout {
         if element.height.isSet {
             height = element.height.pixels
             autoHeight = false
+            ; aspect-ratio: an auto width from a set height
+            if (((element.width.isSet == false) && (element.hasFlexWidth == false)) && ((element.aspectRatio > 0.0) && (keywordW == false))) {
+                def edgeXa:double ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
+                def edgeYa:double ((element.box.paddingTopPx + element.box.paddingBottomPx) + (element.box.borderWidthPx * 2.0))
+                def innerHa:double (height - edgeYa)
+                if (innerHa < 0.0) {
+                    innerHa = 0.0
+                }
+                width = ((innerHa * element.aspectRatio) + edgeXa)
+            }
         }
         ; aspect-ratio: an auto height from the width, the content box's
         if ((element.height.isSet == false) && (element.aspectRatio > 0.0)) {
@@ -783,6 +793,10 @@ class EVGLayout {
         if (autoHeight == false) {
             element.calculatedHeight = height
             element.calculatedInnerHeight = (element.box.getInnerHeight(height))
+        } {
+            if element.heightThrough {
+                element.calculatedInnerHeight = parentHeight
+            }
         }
         
         ; Handle absolute positioning
@@ -800,7 +814,8 @@ class EVGLayout {
         def childCount:int (element.getChildCount())
         def contentHeight:double 0.0
         
-        if (childCount > 0) {
+        ; (an empty grid is as tall as its rows)
+        if ((childCount > 0) || (element.display == "grid")) {
             contentHeight = (this.layoutChildren(element))
             ; Right to left, after the fact.
             ;
@@ -1035,6 +1050,12 @@ class EVGLayout {
             this.inheritBaselineFromFirstChild(element)
         }
 
+        ; the absolute boxes inside whose parents are not positioned: this
+        ; is their containing block
+        if (element.isCb && (childCount > 0)) {
+            this.placeOuterAbs(element element)
+        }
+
         ; --- SCROLLING --------------------------------------------------------
         ;
         ; The last thing that happens to an element, and it has to be: the
@@ -1050,6 +1071,43 @@ class EVGLayout {
         }
     }
     
+    ; Lays the absolute boxes under `node` whose containing block is `cb`
+    ; (cb-outer) out again in it, along the axes they have an inset on; the
+    ; other axis keeps the static place they got in their parent. A box
+    ; that is positioned itself is the containing block of what is in it.
+    fn placeOuterAbs:void (cb:EVGElement node:EVGElement) {
+        def n:int (node.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (node.getChild(i))
+            if ((c.cbOuterX || c.cbOuterY) && c.isAbsolute) {
+                def oldX:double c.calculatedX
+                def oldY:double c.calculatedY
+                def sx:double ((cb.calculatedX + cb.box.borderWidthPx) + cb.box.paddingLeftPx)
+                def sy:double ((cb.calculatedY + cb.box.borderWidthPx) + cb.box.paddingTopPx)
+                c.unitsResolved = false
+                c.resolveUnits(cb.calculatedInnerWidth cb.calculatedInnerHeight)
+                this.layoutOutOfFlowChild(cb c cb.calculatedInnerWidth cb.calculatedInnerHeight sx sy true)
+                def dx:double 0.0
+                def dy:double 0.0
+                if (c.cbOuterX == false) {
+                    dx = (oldX - c.calculatedX)
+                }
+                if (c.cbOuterY == false) {
+                    dy = (oldY - c.calculatedY)
+                }
+                if ((dx != 0.0) || (dy != 0.0)) {
+                    c.moveSubtree(dx dy)
+                }
+            } {
+                if ((c.isCb == false) && ((c.isHidden()) == false)) {
+                    this.placeOuterAbs(cb c)
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
     ; What a scroll container owes: how big its content is, and where the
     ; content currently sits.
     ;
@@ -1490,6 +1548,18 @@ class EVGLayout {
                 ; the parent, a send button written `right: 5px; bottom: 5px`
                 ; was as wide as the text field it sits in and drawn at its
                 ; left edge.
+                ; (with no positioned box around it, an inset is from the
+                ; page's corner: the initial containing block)
+                if (child.icb && (child.viewportW > 0.0)) {
+                    if child.icbX {
+                        startX = child.viewportX
+                        innerWidth = child.viewportW
+                    }
+                    if child.icbY {
+                        startY = child.viewportY
+                        innerHeight = child.viewportH
+                    }
+                }
                 def wasRow0:boolean layingOutAlongRow
                 def wasShrink0:boolean columnCrossShrinks
                 layingOutAlongRow = (alongRow || ((child.left.isSet && child.right.isSet) == false))
@@ -1497,16 +1567,17 @@ class EVGLayout {
                 this.layoutElement(child 0.0 0.0 innerWidth innerHeight)
                 layingOutAlongRow = wasRow0
                 columnCrossShrinks = wasShrink0
-                ; Placed from the far edge with a size its content gave it:
+                ; Placed from the far edge with a size its content gave it
+                ; (or its min- and max- sizes, after a set one):
                 ; `layoutAbsolute` ran before the content was laid out and
                 ; placed it as if it were 0 wide or tall, so a box written
                 ; `bottom: 10px` hung its whole height below the line.
                 def fixX:double 0.0
                 def fixY:double 0.0
-                if ((child.right.isSet && (child.left.isSet == false)) && ((child.x.isSet == false) && (child.width.isSet == false))) {
+                if ((child.right.isSet && (child.left.isSet == false)) && (child.x.isSet == false)) {
                     fixX = ((((innerWidth - child.right.pixels) - child.calculatedWidth) - child.box.marginRightPx) - child.calculatedX)
                 }
-                if ((child.bottom.isSet && (child.top.isSet == false)) && ((child.y.isSet == false) && (child.height.isSet == false))) {
+                if ((child.bottom.isSet && (child.top.isSet == false)) && (child.y.isSet == false)) {
                     fixY = ((((innerHeight - child.bottom.pixels) - child.calculatedHeight) - child.box.marginBottomPx) - child.calculatedY)
                 }
                 if (child.staticFlex && (parent.display != "grid")) {
@@ -1607,7 +1678,8 @@ class EVGLayout {
         ; Returns total content height
         
         def childCount:int (parent.getChildCount())
-        if (childCount == 0) {
+        ; (an empty grid is as tall as its rows)
+        if ((childCount == 0) && (parent.display != "grid")) {
             return 0.0
         }
         
@@ -2232,7 +2304,25 @@ class EVGLayout {
             ; Out of flow: fixed, a Layer, or absolutely positioned. One pass,
             ; shared with the grid — see `layoutOutOfFlowChild`.
             if child.isAbsolute {
-                this.layoutOutOfFlowChild(parent child innerWidth innerHeight startX startY (isColumn == false))
+                ; (in a block, under what came before it)
+                def staticY:double startY
+                if (child.staticFlow && isColumn) {
+                    staticY = currentY
+                    ; (and the margin under the last of them)
+                    def pi:int (i - 1)
+                    while (pi >= 0) {
+                        def pc:EVGElement (parent.getChild(pi))
+                        if ((pc.isAbsolute == false) && ((pc.isHidden()) == false)) {
+                            def pb:double (((pc.calculatedY + pc.calculatedHeight) + pc.box.marginBottomPx))
+                            if (pb > staticY) {
+                                staticY = pb
+                            }
+                            pi = -1
+                        }
+                        pi = (pi - 1)
+                    }
+                }
+                this.layoutOutOfFlowChild(parent child innerWidth innerHeight startX staticY (isColumn == false))
                 i = i + 1
                 continue
             }
@@ -4493,6 +4583,23 @@ class EVGLayout {
         def spec:string el.gridTemplateColumns
         if ((strlen spec) == 0) {
             spec = "1fr"
+            ; (the one implicit column is grid-auto-columns'; with no item
+            ; there is none)
+            if ((strlen el.gridAutoColumns) > 0) {
+                spec = el.gridAutoColumns
+            }
+            def inFlowG:int 0
+            def gk:int 0
+            while (gk < (el.getChildCount())) {
+                def gc:EVGElement (el.getChild(gk))
+                if ((gc.isAbsolute == false) && ((gc.isHidden()) == false)) {
+                    inFlowG = (inFlowG + 1)
+                }
+                gk = (gk + 1)
+            }
+            if (inFlowG == 0) {
+                return (el.box.getHorizontalChrome())
+            }
         }
         def gapPx:double 0.0
         if el.gap.isSet {
@@ -5724,7 +5831,16 @@ class EVGLayout {
                     while (ra < rowsUsed) {
                         def atk:EVGGridTrack (ar.trackAt((ra % (ar.count()))))
                         if (atk.kind == 0) {
-                            set rowSizes ra atk.value
+                            ; (a minmax() min floors it: a percentage of the
+                            ; grid's height)
+                            def asz:double atk.value
+                            if atk.hasMin {
+                                atk.minUnit.resolveForHeight(innerHeight innerHeight parent.inheritedFontSize)
+                                if (atk.minUnit.pixels > asz) {
+                                    asz = atk.minUnit.pixels
+                                }
+                            }
+                            set rowSizes ra asz
                         }
                         ra = (ra + 1)
                     }
@@ -5886,6 +6002,11 @@ class EVGLayout {
             }
             if ((boxH > 0.0) && (placedV == false)) {
                 el.calculatedFlexHeight = boxH
+            }
+            ; (stretched in an empty row it is not as tall as its content)
+            if (((boxH <= 0.0) && (placedV == false)) && (el.height.isSet == false)) {
+                el.calculatedFlexHeight = 0.0
+                el.hasFlexHeight = true
             }
             ; stretched down its area with no width of its own: a box with an
             ; aspect ratio is as wide as the ratio makes that height

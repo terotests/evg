@@ -257,6 +257,10 @@ class EVGElement {
     ; row's column-gap back, which at the start of a wrapped line there is
     ; none to take (line-join: true)
     def lineJoin:boolean false
+    ; a box that is not a containing block for percentage heights (a line):
+    ; its children's percentages are of its parent's height
+    ; (height-through: true)
+    def heightThrough:boolean false
     def overflow:string "visible"
 
     ; `cursor`, and it INHERITS, like the CSS property it is: a title bar says
@@ -823,6 +827,22 @@ class EVGElement {
     ; its static position is where justify-content and align-self put it
     ; as the container's only item (CSS Flexbox 4.1)
     def staticFlex:boolean false
+    ; an absolutely positioned child of a block with no inset: its static
+    ; place is under the in-flow boxes before it (static-flow: true)
+    def staticFlow:boolean false
+    ; an absolutely positioned box with no positioned box around it: its
+    ; insets are from the page's corner (icb: true)
+    def icb:boolean false
+    def icbX:boolean false
+    def icbY:boolean false
+    ; a positioned box: the containing block of the absolute boxes inside
+    ; it whose own parent is not (cb: true)
+    def isCb:boolean false
+    ; an absolute box whose containing block is a positioned box further
+    ; up, laid out again in it along the axes with an inset (cb-outer: x, y
+    ; or xy)
+    def cbOuterX:boolean false
+    def cbOuterY:boolean false
     ; in a grid area, the one axis ("x" or "y") with no inset, which
     ; justify-self / align-self place along
     def staticAxis:string ""
@@ -3353,6 +3373,13 @@ class EVGElement {
         aspectRatio = other.aspectRatio
         contentBox = other.contentBox
         staticFlex = other.staticFlex
+        staticFlow = other.staticFlow
+        icb = other.icb
+        icbX = other.icbX
+        icbY = other.icbY
+        isCb = other.isCb
+        cbOuterX = other.cbOuterX
+        cbOuterY = other.cbOuterY
         staticAxis = other.staticAxis
         justifyItems = other.justifyItems
         marginAutoRight = other.marginAutoRight
@@ -3398,6 +3425,7 @@ class EVGElement {
         isInline = other.isInline
         lineBreak = other.lineBreak
         lineJoin = other.lineJoin
+        heightThrough = other.heightThrough
         overflow = other.overflow
         cursor = other.cursor
         surfaceEffect = other.surfaceEffect
@@ -4372,6 +4400,25 @@ class EVGElement {
         }
         
         ; Image properties
+        if (name == "cb") {
+            isCb = (value == "true")
+            return
+        }
+        if ((name == "cb-outer") || (name == "cbOuter")) {
+            cbOuterX = ((indexOf value "x") >= 0)
+            cbOuterY = ((indexOf value "y") >= 0)
+            return
+        }
+        if (name == "icb") {
+            icbX = ((indexOf value "x") >= 0)
+            icbY = ((indexOf value "y") >= 0)
+            icb = (icbX || icbY)
+            return
+        }
+        if ((name == "static-flow") || (name == "staticFlow")) {
+            staticFlow = (value == "true")
+            return
+        }
         if ((name == "static-flex") || (name == "staticFlex")) {
             staticFlex = (value == "true")
             if ((value == "x") || (value == "y")) {
@@ -4443,6 +4490,10 @@ class EVGElement {
         }
         if ((name == "line-join") || (name == "lineJoin")) {
             lineJoin = (value == "true")
+            return
+        }
+        if ((name == "height-through") || (name == "heightThrough")) {
+            heightThrough = (value == "true")
             return
         }
         if ((name == "letter-spacing") || (name == "letterSpacing")) {
