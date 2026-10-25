@@ -4287,11 +4287,41 @@ class EVGLayout {
             }
             i = (i + 1)
         }
+        ; (fr tracks share one size per fr, the largest any of them
+        ; needs: CSS Grid 12.7.1 with no free space to divide)
+        def frUnit:double 0.0
+        def cf:int 0
+        while (cf < nc) {
+            def ft2:EVGGridTrack (tpl.trackAt(cf))
+            if ((ft2.kind == 2) && (ft2.value > 0.0)) {
+                def need:double (itemAt widths cf)
+                if ft2.hasMin {
+                    ft2.minUnit.resolve(0.0 el.inheritedFontSize)
+                    if (ft2.minUnit.pixels > need) {
+                        need = ft2.minUnit.pixels
+                    }
+                }
+                def per:double need
+                if (ft2.value > 1.0) {
+                    per = (need / ft2.value)
+                }
+                if (per > frUnit) {
+                    frUnit = per
+                }
+            }
+            cf = (cf + 1)
+        }
         def total:double 0.0
         def c:int 0
         def ncAll:int (array_length widths)
         while (c < ncAll) {
             def tw:double (itemAt widths c)
+            if ((c < nc) && (frUnit > 0.0)) {
+                def ft3:EVGGridTrack (tpl.trackAt(c))
+                if ((ft3.kind == 2) && ((ft3.value * frUnit) > tw)) {
+                    tw = (ft3.value * frUnit)
+                }
+            }
             if (c >= nc) {
                 if (c > 0) {
                     total = (total + gapPx)
