@@ -2151,6 +2151,10 @@ class EVGLayout {
                     ; tall as its line, alignRow)
                     if ((child.height.isSet == false) && (parent.flexWrap == "nowrap")) {
                         child.calculatedFlexHeight = innerHeight
+                        ; (its margins stay inside the line)
+                        if ((innerHeight > 0.0) && ((child.box.marginTopPx + child.box.marginBottomPx) > 0.0)) {
+                            child.calculatedFlexHeight = ((innerHeight - child.box.marginTopPx) - child.box.marginBottomPx)
+                        }
                     }
                 }
             }
@@ -3204,6 +3208,11 @@ class EVGLayout {
         ; (a wrapping one's line is as tall as its items, and align-content
         ; places and grows the lines afterwards, CSS Flexbox 9.4)
         if (crossBox > rowHeight) {
+            effectiveRowHeight = crossBox
+        }
+        ; (a single line in a box of a declared height is that height, even
+        ; when an item is taller: CSS Flexbox 9.4 step 15)
+        if ((crossBox > 0.0) && parent.height.isSet) {
             effectiveRowHeight = crossBox
         }
 
@@ -6136,6 +6145,10 @@ class EVGLayout {
             return fw
         }
         if ((child.display == "flex") && alongRow) {
+            ; (an empty box is as wide as its padding and border)
+            if (((child.getChildCount()) == 0) && (((strlen child.textContent) == 0) && (((strlen child.svgSource) == 0) && ((strlen child.src) == 0)))) {
+                return ((child.box.paddingLeftPx + child.box.paddingRightPx) + (child.box.borderWidthPx * 2.0))
+            }
             def intrinsic:double (this.intrinsicWidth(child false))
             if (intrinsic > 0.0) {
                 if (intrinsic < maxInnerWidth) {
