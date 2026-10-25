@@ -1088,6 +1088,24 @@ class CssBoxCheck {
         this.layoutAt(page51 300.0 600.0)
         this.ok("a block beside a 100px left float: its content at 100, the block at 0" ((this.near((k51.calculatedX - page51.calculatedX) 100.0)) && (this.near((b51.calculatedX - page51.calculatedX) 0.0))))
 
+        ; --- 48. a grid held by its max-height aligns its tracks in that ---
+        def page52 (EVGElement.createDiv())
+        page52.setAttribute("width" "300px")
+        def g52 (EVGElement.createDiv())
+        g52.setAttribute("display" "grid")
+        g52.setAttribute("width" "100px")
+        g52.setAttribute("max-height" "100px")
+        g52.setAttribute("grid-template-columns" "100px")
+        g52.setAttribute("grid-template-rows" "150px 100px")
+        g52.setAttribute("align-content" "unsafe end")
+        def a52 (EVGElement.createDiv())
+        g52.addChild(a52)
+        def b52 (EVGElement.createDiv())
+        g52.addChild(b52)
+        page52.addChild(g52)
+        this.layoutAt(page52 300.0 600.0)
+        this.ok("rows of 250px in a max-height 100px grid, unsafe end: the first at -150" (this.near((a52.calculatedY - g52.calculatedY) (0.0 - 150.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

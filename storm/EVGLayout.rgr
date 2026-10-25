@@ -5759,18 +5759,34 @@ class EVGLayout {
         def colShift:double (itemAt colDist 0)
         colGapPx = (colGapPx + (itemAt colDist 1))
         def rowShift:double 0.0
-        if (parent.hasDefiniteHeight && (rowsUsed > 0)) {
-            def rowsH:double rowGapTotal
-            def rh:int 0
-            while (rh < rowsUsed) {
-                rowsH = (rowsH + (itemAt rowSizes rh))
-                rh = (rh + 1)
+        def rowsH:double rowGapTotal
+        def rh:int 0
+        while (rh < rowsUsed) {
+            rowsH = (rowsH + (itemAt rowSizes rh))
+            rh = (rh + 1)
+        }
+        ; (a grid of no definite height is as tall as its rows, held by its
+        ; min- and max-height: the tracks are aligned in that)
+        def alignRoom:double innerHeight
+        def alignKnown:boolean parent.hasDefiniteHeight
+        if (alignKnown == false) {
+            def avch:double (parent.box.getVerticalChrome())
+            alignRoom = rowsH
+            if ((parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) && ((parent.maxHeight.pixels - avch) < alignRoom)) {
+                alignRoom = (parent.maxHeight.pixels - avch)
+                alignKnown = true
             }
+            if ((parent.minHeight.isSet && ((parent.minHeight.isPercent()) == false)) && ((parent.minHeight.pixels - avch) > alignRoom)) {
+                alignRoom = (parent.minHeight.pixels - avch)
+                alignKnown = true
+            }
+        }
+        if (alignKnown && (rowsUsed > 0)) {
             def acD:string parent.alignContent
             if ((acD == "left") || (acD == "right")) {
                 acD = "start"
             }
-            def rowDist:[double] (EVGLayout.contentDistribution(acD (innerHeight - rowsH) rowsUsed))
+            def rowDist:[double] (EVGLayout.contentDistribution(acD (alignRoom - rowsH) rowsUsed))
             rowShift = (itemAt rowDist 0)
             rowGapPx = (rowGapPx + (itemAt rowDist 1))
             rowGapTotal = (rowGapTotal + ((itemAt rowDist 1) * (to_double (rowsUsed - 1))))
