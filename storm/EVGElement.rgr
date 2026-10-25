@@ -838,6 +838,12 @@ class EVGElement {
     ; a positioned box: the containing block of the absolute boxes inside
     ; it whose own parent is not (cb: true)
     def isCb:boolean false
+    ; a CSS flex container (flex-box: true): its baseline is its first
+    ; item's, synthesized from that item's border box when it has none
+    def flexBox:boolean false
+    ; a line with no text: its baseline this far above its bottom
+    ; (baseline-from-bottom; -1 when not said)
+    def baseFromBottom:double -1.0
     ; an absolute box whose containing block is a positioned box further
     ; up, laid out again in it along the axes with an inset (cb-outer: x, y
     ; or xy)
@@ -3378,6 +3384,8 @@ class EVGElement {
         icbX = other.icbX
         icbY = other.icbY
         isCb = other.isCb
+        flexBox = other.flexBox
+        baseFromBottom = other.baseFromBottom
         cbOuterX = other.cbOuterX
         cbOuterY = other.cbOuterY
         staticAxis = other.staticAxis
@@ -4400,6 +4408,17 @@ class EVGElement {
         }
         
         ; Image properties
+        if (name == "baseline-from-bottom") {
+            def bfb@(optional):double (str2double value)
+            if (!null? bfb) {
+                baseFromBottom = (unwrap bfb)
+            }
+            return
+        }
+        if ((name == "flex-box") || (name == "flexBox")) {
+            flexBox = (value == "true")
+            return
+        }
         if (name == "cb") {
             isCb = (value == "true")
             return

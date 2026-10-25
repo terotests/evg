@@ -1046,6 +1046,11 @@ class EVGLayout {
 
         ; A container inherits the baseline of its first in-flow child (CSS
         ; "first baseline"), so a Label wrapped in a View still aligns.
+        if ((element.hasBaseline == false) && (element.baseFromBottom >= 0.0)) {
+            element.calculatedBaseline = (element.calculatedHeight - element.baseFromBottom)
+            element.calculatedDescent = element.baseFromBottom
+            element.hasBaseline = true
+        }
         if ((element.hasBaseline == false) && (childCount > 0)) {
             this.inheritBaselineFromFirstChild(element)
         }
@@ -1385,6 +1390,28 @@ class EVGLayout {
     ; `realtrainer.css` has been writing `align-self` since before the property
     ; existed here, which is the usual way a gap gets found: somebody assumed
     ; the CSS they know, and the declaration went nowhere.
+    ; crossAlignOf along a row, `first baseline` being the baseline
+    fn rowAlignOf:string (child:EVGElement parentAlign:string) {
+        def a:string (this.crossAlignOf(child parentAlign))
+        if (a == "first baseline") {
+            return "baseline"
+        }
+        return a
+    }
+
+    ; Distance from the top margin edge to the last baseline, synthesized
+    ; from the bottom edge when there is none (baselineOffsetOf's rule)
+    fn lastBaselineOf:double (el:EVGElement) {
+        def lb:double (this.lastBaselineOffsetOf(el))
+        if (lb >= 0.0) {
+            return lb
+        }
+        if synthBorder {
+            return (el.box.marginTopPx + el.calculatedHeight)
+        }
+        return ((el.box.marginTopPx + el.calculatedHeight) + el.box.marginBottomPx)
+    }
+
     fn crossAlignOf:string (child:EVGElement parentAlign:string) {
         return (this.crossAlignIn(false child parentAlign))
     }
@@ -3259,6 +3286,24 @@ class EVGLayout {
     fn inheritBaselineFromFirstChild:void (element:EVGElement) {
         def i:int 0
         def n:int (element.getChildCount())
+        if (element.flexBox && (element.display == "flex")) {
+            while (i < n) {
+                def f:EVGElement (element.getChild(i))
+                if ((f.isAbsolute == false) && ((f.isHidden()) == false)) {
+                    if f.hasBaseline {
+                        element.calculatedBaseline = ((f.calculatedY - element.calculatedY) + f.calculatedBaseline)
+                        element.calculatedDescent = f.calculatedDescent
+                    } {
+                        element.calculatedBaseline = ((f.calculatedY - element.calculatedY) + f.calculatedHeight)
+                        element.calculatedDescent = 0.0
+                    }
+                    element.hasBaseline = true
+                    return
+                }
+                i = (i + 1)
+            }
+            return
+        }
         while (i < n) {
             def c:EVGElement (element.getChild(i))
             if (c.isAbsolute == false) {
@@ -3291,9 +3336,16 @@ class EVGLayout {
     ; Distance from an element's top MARGIN edge to its baseline. CSS gives a
     ; box with no text baseline the bottom of its margin box, which is what
     ; makes an image in a row of captions sit on the text baseline.
+    ; (A flex or grid item's is synthesized from its border box instead,
+    ; CSS Align 9.1: `synthBorder` while a flex row that is not a line of
+    ; text aligns its items.)
+    def synthBorder:boolean false
     fn baselineOffsetOf:double (el:EVGElement) {
         if el.hasBaseline {
             return (el.box.marginTopPx + el.calculatedBaseline)
+        }
+        if synthBorder {
+            return (el.box.marginTopPx + el.calculatedHeight)
         }
         return (el.box.marginTopPx + el.calculatedHeight + el.box.marginBottomPx)
     }
@@ -3306,6 +3358,23 @@ class EVGLayout {
         def best:double -1.0
         def bestBottom:double -1.0
         def i:int 0
+        ; (a flex container's is its last item's, synthesized from that
+        ; item's border box when it has none)
+        if (el.flexBox && (el.display == "flex")) {
+            def li:int (n - 1)
+            while (li >= 0) {
+                def lc:EVGElement (el.getChild(li))
+                if ((lc.isAbsolute == false) && ((lc.isHidden()) == false)) {
+                    def lcb:double (this.lastBaselineOffsetOf(lc))
+                    if (lcb < 0.0) {
+                        lcb = (lc.box.marginTopPx + lc.calculatedHeight)
+                    }
+                    return ((((lc.calculatedY - lc.box.marginTopPx) - el.calculatedY) + lcb) + el.box.marginTopPx)
+                }
+                li = (li - 1)
+            }
+            return -1.0
+        }
         while (i < n) {
             def c:EVGElement (el.getChild(i))
             if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
@@ -3543,11 +3612,19 @@ class EVGLayout {
         def useBaseline:boolean false
         def maxBaseline:double 0.0
         def maxBelow:double 0.0
+        def wasSynth:boolean synthBorder
+        synthBorder = (parent.heightThrough == false)
+        ; (last baseline: the items' last baselines in line, the group
+        ; packed to the line's end)
+        def useLast:boolean false
+        def maxAboveL:double 0.0
+        def maxBelowL:double 0.0
         if (isColumn == false) {
             def b:int 0
             while (b < elementCount) {
                 def bel:EVGElement (itemAt rowElements b)
-                if ((this.crossAlignOf(bel verticalAlignVal)) == "baseline") {
+                def bal:string (this.rowAlignOf(bel verticalAlignVal))
+                if (bal == "baseline") {
                     useBaseline = true
                     def bo:double (this.baselineOffsetOf(bel))
                     if (bo > maxBaseline) {
@@ -3558,12 +3635,29 @@ class EVGLayout {
                         maxBelow = under
                     }
                 }
+                if (bal == "last baseline") {
+                    useLast = true
+                    def lo:double (this.lastBaselineOf(bel))
+                    if (lo > maxAboveL) {
+                        maxAboveL = lo
+                    }
+                    def underL:double (((bel.calculatedHeight + bel.box.marginTopPx) + bel.box.marginBottomPx) - lo)
+                    if (underL > maxBelowL) {
+                        maxBelowL = underL
+                    }
+                }
                 b = (b + 1)
             }
         }
         def lineOut:double rowHeight
         if (useBaseline && ((maxBaseline + maxBelow) > lineOut)) {
             lineOut = (maxBaseline + maxBelow)
+            if (effectiveRowHeight < lineOut) {
+                effectiveRowHeight = lineOut
+            }
+        }
+        if (useLast && ((maxAboveL + maxBelowL) > lineOut)) {
+            lineOut = (maxAboveL + maxBelowL)
             if (effectiveRowHeight < lineOut) {
                 effectiveRowHeight = lineOut
             }
@@ -3601,7 +3695,10 @@ class EVGLayout {
             def offsetY:double 0.0
             def elAlign:string verticalAlignVal
             if (isColumn == false) {
-                elAlign = (this.crossAlignOf(el verticalAlignVal))
+                elAlign = (this.rowAlignOf(el verticalAlignVal))
+            }
+            if ((elAlign == "last baseline") && useLast) {
+                offsetY = ((effectiveRowHeight - maxBelowL) - (this.lastBaselineOf(el)))
             }
             
             if (elAlign == "center") {
@@ -3624,6 +3721,7 @@ class EVGLayout {
             
             i = i + 1
         }
+        synthBorder = wasSynth
         return lineOut
     }
     
@@ -6571,7 +6669,9 @@ class EVGLayout {
             if (((child.getChildCount()) == 0) && (((strlen child.textContent) == 0) && (((strlen child.svgSource) == 0) && ((strlen child.src) == 0)))) {
                 return ((child.box.paddingLeftPx + child.box.paddingRightPx) + (child.box.borderWidthPx * 2.0))
             }
-            def intrinsic:double (this.intrinsicWidth(child false))
+            ; (the intrinsic width is the margin box's, the width the
+            ; border box's)
+            def intrinsic:double (((this.intrinsicWidth(child false)) - child.box.marginLeftPx) - child.box.marginRightPx)
             if (intrinsic > 0.0) {
                 if (intrinsic < maxInnerWidth) {
                     return intrinsic
