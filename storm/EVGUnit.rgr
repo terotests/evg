@@ -27,7 +27,7 @@
 ;
 ; Not supported, deliberately: vmin / vmax (nothing has asked, and they are two
 ; more lines the day something does), ch/ex (they need font metrics the unit
-; layer has no access to), and calc().
+; layer has no access to), and calc() beyond px and % terms added together.
 ; An unrecognised suffix leaves the unit UNSET — i.e. auto, the way a browser
 ; drops a declaration it cannot parse. It must not fall through to the bare
 ; number path, because to_double("10ch") is 10 and the length would silently
@@ -77,6 +77,9 @@ class EVGUnit {
     ; a viewport length then comes out zero — see the note at the top.
     def viewportW:double 0.0
     def viewportH:double 0.0
+    ; calc() of pixels and a percentage: a percent unit whose pixels add
+    ; this on top (calc(200px + 20%))
+    def calcPx:double 0.0
     
     Constructor () {
         value = 0.0
@@ -226,6 +229,11 @@ class EVGUnit {
         ; Check for "auto" - return unset unit (auto sizing)
         if (trimmed == "auto") {
             return unit
+        }
+        ; calc() of px and % terms joined by + and -: a percentage with a
+        ; pixel offset (any other term leaves the unit unset)
+        if ((indexOf trimmed "calc(") == 0) {
+            return (EVGUnit.parseCalc(trimmed))
         }
 
         ; fit-content: the box is as wide as what it holds. Not the same as
@@ -396,6 +404,67 @@ class EVGUnit {
         return unit
     }
     
+    sfn parseCalc:EVGUnit (str:string) {
+        def unit (new EVGUnit())
+        def n:int (strlen str)
+        if ((charAt str (n - 1)) != 41) {
+            return unit
+        }
+        def body:string (substring str 5 (n - 1))
+        def pct:double 0.0
+        def px:double 0.0
+        def sign:double 1.0
+        def tok:string ""
+        def ok:boolean true
+        def i:int 0
+        def m:int (strlen body)
+        while (i <= m) {
+            def c:int 32
+            if (i < m) {
+                c = (charAt body i)
+            }
+            if ((c == 32) || (i == m)) {
+                if ((strlen tok) > 0) {
+                    if ((tok == "+") || (tok == "-")) {
+                        sign = 1.0
+                        if (tok == "-") {
+                            sign = -1.0
+                        }
+                    } {
+                        def t:EVGUnit (EVGUnit.parse(tok))
+                        if ((t.isSet == false) || ((t.unitType != 0) && (t.unitType != 1))) {
+                            ok = false
+                        } {
+                            if (t.unitType == 0) {
+                                px = (px + (sign * t.value))
+                            } {
+                                pct = (pct + (sign * t.value))
+                            }
+                        }
+                        sign = 1.0
+                    }
+                }
+                tok = ""
+            } {
+                tok = (tok + (substring body i (i + 1)))
+            }
+            i = (i + 1)
+        }
+        if (ok == false) {
+            return unit
+        }
+        unit.isSet = true
+        unit.value = pct
+        unit.unitType = 1
+        unit.calcPx = px
+        if (pct == 0.0) {
+            unit.unitType = 0
+            unit.value = px
+            unit.calcPx = 0.0
+        }
+        return unit
+    }
+
     fn resolve:void (parentSize:double fontSize:double) {
         ; Resolve unit to actual pixel value
         if (isSet == false) {
@@ -416,7 +485,7 @@ class EVGUnit {
         
         ; PERCENT
         if (unitType == 1) {
-            pixels = ((parentSize * value) / 100.0)
+            pixels = (((parentSize * value) / 100.0) + calcPx)
             return
         }
         
@@ -477,7 +546,11 @@ class EVGUnit {
         
         ; For percentage on height property, use parentHeight
         if (unitType == 1) {
-            pixels = ((parentHeight * value) / 100.0)
+            pixels = (((parentHeight * value) / 100.0) + calcPx)
+            ; (of a height still unknown it is nothing, as a bare % is)
+            if (parentHeight <= 0.0) {
+                pixels = 0.0
+            }
             return
         }
         

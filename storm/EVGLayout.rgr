@@ -5328,6 +5328,10 @@ class EVGLayout {
             def ctk:EVGGridTrack (cols.trackAt(ck))
             ctk.sizePx = (0.0 - colGapPx)
         }
+        ; justify-content's distributed space is part of an item's area
+        ; already when the rows measure it (CSS Grid 12.1)
+        def colDist0:[double] (EVGLayout.contentDistribution(parent.justifyContent (innerWidth - (cols.extentOf(0 (cols.count()) colGapPx))) (cols.count())))
+        def measureGap:double (colGapPx + (itemAt colDist0 1))
 
         ; --- row sizing ------------------------------------------------------
         def rowSpec:string parent.gridTemplateRows
@@ -5399,11 +5403,18 @@ class EVGLayout {
                     def rit:EVGElement (itemAt items rm)
                     def rri:int (itemAt placedRow rm)
                     if (((itemAt rowSpans rm) == 1) && ((rri < (rows.count())) && (rit.gridTemplateRows != "subgrid"))) {
-                        def rcw:double (cols.extentOf((itemAt placedCol rm) (itemAt colSpans rm) colGapPx))
+                        def rcw:double (cols.extentOf((itemAt placedCol rm) (itemAt colSpans rm) measureGap))
                         rit.calculatedFlexHeight = 0.0
                         rit.unitsResolved = false
                         rit.resolveUnits(rcw innerHeight)
+                        def pctR:boolean (rit.height.isSet && (rit.height.isPercent()))
+                        if pctR {
+                            rit.height.isSet = false
+                        }
                         this.layoutElement(rit 0.0 0.0 ((rcw - rit.box.marginLeftPx) - rit.box.marginRightPx) 0.0)
+                        if pctR {
+                            rit.height.isSet = true
+                        }
                         def rh:double ((rit.calculatedHeight + rit.box.marginTopPx) + rit.box.marginBottomPx)
                         if (rh > (itemAt rowContent rri)) {
                             set rowContent rri rh
@@ -5455,14 +5466,23 @@ class EVGLayout {
                 ; out are adopted one for one.
                 def isRowSubgrid:boolean (it.gridTemplateRows == "subgrid")
                 if ((rspanM == 1) || isRowSubgrid) {
-                    def cw:double (cols.extentOf((itemAt placedCol m) (itemAt colSpans m) colGapPx))
+                    def cw:double (cols.extentOf((itemAt placedCol m) (itemAt colSpans m) measureGap))
                     ; (its percentages are of its area, not the grid)
                     it.unitsResolved = false
                     it.resolveUnits(cw innerHeight)
                     def avail:double (cw - it.box.marginLeftPx - it.box.marginRightPx)
                     ; Measure with auto height: clear any inherited flex height.
                     it.calculatedFlexHeight = 0.0
+                    ; (a percentage height of a row that is still being sized
+                    ; is auto, CSS Grid 6.5)
+                    def pctH:boolean (it.height.isSet && (it.height.isPercent()))
+                    if pctH {
+                        it.height.isSet = false
+                    }
                     this.layoutElement(it 0.0 0.0 avail 0.0)
+                    if pctH {
+                        it.height.isSet = true
+                    }
                     if isRowSubgrid {
                         def sub:int 0
                         while (sub < rspanM) {
