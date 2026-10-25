@@ -49,6 +49,18 @@ class EVGLayoutFull {
     ; whose parents are not
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        if (css.skipFirst && (element.hasBaseline == false)) {
+            def si:int 1
+            while ((si < childCount) && (element.hasBaseline == false)) {
+                def sc:EVGElement (element.getChild(si))
+                if ((sc.isAbsolute == false) && sc.hasBaseline) {
+                    element.calculatedBaseline = ((sc.calculatedY - element.calculatedY) + sc.calculatedBaseline)
+                    element.calculatedDescent = sc.calculatedDescent
+                    element.hasBaseline = true
+                }
+                si = (si + 1)
+            }
+        }
         ; (its lines are equally tall: one is the content's height less
         ; the distance between the first and the last baseline)
         if ((css.central && element.hasBaseline) && ((childCount == 0) && ((strlen element.textContent) > 0))) {
@@ -289,6 +301,12 @@ class EVGLayoutFull {
 
     ; a flex or grid item's baseline is synthesized from its border box
     ; (CSS Align 9.1), except in a line of text (height-through)
+    ; text metrics rounded to the pixel for the baseline (browsers'),
+    ; or as the painter draws them
+    fn pixelMetrics:boolean () {
+        return true
+    }
+
     fn synthBorder:boolean (parent:EVGElement) {
         return ((EVGLayoutFull.cx(parent)).heightThrough == false)
     }
@@ -528,7 +546,80 @@ class EVGLayoutFull {
         }
         lp = (lp + 1)
     }
+    this.gridFirstBaseline(lay parent items placedRow rowSpans)
+    }
 
+    ; a grid's first (last) baseline is the shared baseline of the items of
+    ; its first (last) row that align by a baseline, if there are any (CSS
+    ; Grid 10.8); otherwise the first (last) item's, the first as in the
+    ; core. The last is kept in calculatedLastBaseline for
+    ; lastBaselineOffsetOf.
+    fn gridFirstBaseline:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int]) {
+        def itemCount:int (array_length items)
+        if (itemCount == 0) {
+            return
+        }
+        def firstRow:int -1
+        def lastRow:int -1
+        def i:int 0
+        while (i < itemCount) {
+            def r:int (itemAt placedRow i)
+            if ((firstRow < 0) || (r < firstRow)) {
+                firstRow = r
+            }
+            def re:int ((r + (itemAt rowSpans i)) - 1)
+            if (re > lastRow) {
+                lastRow = re
+            }
+            i = (i + 1)
+        }
+        def firstDone:boolean false
+        def lastB:double -1.0
+        def j:int 0
+        while (j < itemCount) {
+            def el:EVGElement (itemAt items j)
+            def ga:string el.alignSelf
+            if (((strlen ga) == 0) || (ga == "auto")) {
+                ga = parent.alignItems
+            }
+            def byFirst:boolean ((ga == "baseline") || (ga == "first baseline"))
+            def byLast:boolean (ga == "last baseline")
+            if ((byFirst || byLast) && ((el.marginAutoTop || el.marginAutoBottom) == false)) {
+                def top:double ((el.calculatedY - el.box.marginTopPx) - parent.calculatedY)
+                def b:double (lay.baselineOffsetOf(el))
+                if byLast {
+                    b = (this.lastBaselineOffsetOf(lay el))
+                    if (b < 0.0) {
+                        b = (el.box.marginTopPx + el.calculatedHeight)
+                    }
+                }
+                if ((firstDone == false) && ((itemAt placedRow j) == firstRow)) {
+                    parent.calculatedBaseline = (top + b)
+                    parent.calculatedDescent = 0.0
+                    parent.hasBaseline = true
+                    firstDone = true
+                }
+                if ((lastB < 0.0) && ((((itemAt placedRow j) + (itemAt rowSpans j)) - 1) == lastRow)) {
+                    lastB = (top + b)
+                }
+            }
+            j = (j + 1)
+        }
+        if (lastB < 0.0) {
+            def k:int (itemCount - 1)
+            while ((k >= 0) && (lastB < 0.0)) {
+                def kel:EVGElement (itemAt items k)
+                if ((((itemAt placedRow k) + (itemAt rowSpans k)) - 1) == lastRow) {
+                    def kb:double (this.lastBaselineOffsetOf(lay kel))
+                    if (kb < 0.0) {
+                        kb = (kel.box.marginTopPx + kel.calculatedHeight)
+                    }
+                    lastB = (((kel.calculatedY - kel.box.marginTopPx) - parent.calculatedY) + kb)
+                }
+                k = (k - 1)
+            }
+        }
+        parent.calculatedLastBaseline = lastB
     }
 
     fn gridAbsAreas:boolean (lay:EVGLayout parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double colShift:double rowShift:double) {
@@ -823,6 +914,46 @@ class EVGLayoutFull {
         if (lineCount < 2) {
             return false
         }
+        ; each line's items grow into its own free height (CSS Flexbox 9.7)
+        def g0:int 0
+        while (g0 < lineCount) {
+            def freeG:double (limit - (itemAt lineMain g0))
+            def sumG:double 0.0
+            def g1:int 0
+            while (g1 < cnt) {
+                if ((itemAt lineOf g1) == g0) {
+                    def gi:EVGElement (itemAt items g1)
+                    if (gi.flex > 0.0) {
+                        sumG = (sumG + gi.flex)
+                    }
+                }
+                g1 = (g1 + 1)
+            }
+            if ((freeG > 0.01) && (sumG > 0.0)) {
+                ; (grow factors under 1 in all take that much of it)
+                def div:double sumG
+                if (div < 1.0) {
+                    div = 1.0
+                }
+                def share:double (freeG / div)
+                def g2:int 0
+                while (g2 < cnt) {
+                    def ge:EVGElement (itemAt items g2)
+                    if (((itemAt lineOf g2) == g0) && (ge.flex > 0.0)) {
+                        ge.calculatedFlexHeight = (ge.calculatedHeight + (share * ge.flex))
+                        ge.hasFlexHeight = true
+                        lay.layoutElement(ge ge.calculatedX ge.calculatedY ge.lastParentW ge.lastParentH)
+                    }
+                    g2 = (g2 + 1)
+                }
+                if (sumG >= 1.0) {
+                    set lineMain g0 limit
+                } {
+                    set lineMain g0 ((itemAt lineMain g0) + (freeG * sumG))
+                }
+            }
+            g0 = (g0 + 1)
+        }
         ; align-content: stretch (normal) shares the spare width out
         def ac:string parent.alignContent
         def sumCross:double (crossGap * (to_double (lineCount - 1)))
@@ -973,6 +1104,21 @@ class EVGLayoutFull {
                 li = (li - 1)
             }
             return -1.0
+        }
+        ; (a grid's, gridFirstBaseline's)
+        if ((el.display == "grid") && (el.calculatedLastBaseline >= 0.0)) {
+            def inFlow:boolean false
+            def gi:int 0
+            while (gi < n) {
+                def gc:EVGElement (el.getChild(gi))
+                if ((gc.isAbsolute == false) && ((gc.isHidden()) == false)) {
+                    inFlow = true
+                }
+                gi = (gi + 1)
+            }
+            if inFlow {
+                return (el.box.marginTopPx + el.calculatedLastBaseline)
+            }
         }
         while (i < n) {
             def c:EVGElement (el.getChild(i))

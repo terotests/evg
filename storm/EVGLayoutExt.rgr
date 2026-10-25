@@ -84,6 +84,12 @@ class EVGLayoutExt {
 
     ; whether a box with no baseline in a row of `parent` has one at its
     ; border box's bottom rather than its margin box's
+    ; text metrics rounded to the pixel for the baseline (browsers'),
+    ; or as the painter draws them
+    fn pixelMetrics:boolean () {
+        return false
+    }
+
     fn synthBorder:boolean (parent:EVGElement) {
         return false
     }
