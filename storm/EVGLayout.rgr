@@ -2147,7 +2147,9 @@ class EVGLayout {
                 if ((this.crossAlignOf(child parent.alignItems)) == "stretch") {
                     ; (a wrapping one with align-content: stretch sizes
                     ; its lines first, then grows them)
-                    if ((child.height.isSet == false) && ((parent.flexWrap == "nowrap") || (parent.alignContent != "stretch"))) {
+                    ; (a wrapping one sizes its lines first: an item is as
+                    ; tall as its line, alignRow)
+                    if ((child.height.isSet == false) && (parent.flexWrap == "nowrap")) {
                         child.calculatedFlexHeight = innerHeight
                     }
                 }
@@ -2308,7 +2310,53 @@ class EVGLayout {
                 }
             }
             if (wrapped == false) {
-                this.alignColumn(parent totalHeight startX startY innerWidth innerHeight)
+                ; a wrapping column of one line is as wide as its items,
+                ; and align-content places that line (CSS Flexbox 9.4)
+                def lineX:double 0.0
+                def lineW:double innerWidth
+                def acL:string parent.alignContent
+                def revL:boolean (parent.flexWrap == "wrap-reverse")
+                if ((parent.flexWrap != "nowrap") && ((acL == "center") || ((acL == "flex-end") || ((acL == "end") || ((acL == "space-around") || ((acL == "space-evenly") || (revL && ((acL == "flex-start") || (acL == "space-between"))))))))) {
+                    def widest:double 0.0
+                    def wi:int 0
+                    while (wi < childCount) {
+                        def wc:EVGElement (parent.getChild(wi))
+                        if (wc.isAbsolute == false) {
+                            def ow:double ((wc.calculatedWidth + wc.box.marginLeftPx) + wc.box.marginRightPx)
+                            if (ow > widest) {
+                                widest = ow
+                            }
+                        }
+                        wi = (wi + 1)
+                    }
+                    if (widest < innerWidth) {
+                        lineW = widest
+                        def freeL:double (innerWidth - widest)
+                        lineX = (freeL / 2.0)
+                        if ((acL == "flex-end") || (acL == "end")) {
+                            lineX = freeL
+                        }
+                        if ((acL == "flex-start") || (acL == "space-between")) {
+                            lineX = 0.0
+                        }
+                        ; (wrap-reverse: the flex- ends the other way round)
+                        if (revL && ((acL == "flex-start") || ((acL == "flex-end") || (acL == "space-between")))) {
+                            lineX = (freeL - lineX)
+                        }
+                    }
+                }
+                this.alignColumn(parent totalHeight startX startY lineW innerHeight)
+                if (lineX != 0.0) {
+                    def wj:int 0
+                    while (wj < childCount) {
+                        def wk:EVGElement (parent.getChild(wj))
+                        if (wk.isAbsolute == false) {
+                            wk.calculatedX = (wk.calculatedX + lineX)
+                            this.propagateOffsetToChildren(wk lineX 0.0)
+                        }
+                        wj = (wj + 1)
+                    }
+                }
             }
         }
         
@@ -2403,7 +2451,7 @@ class EVGLayout {
             if ((ac == "flex-end") || (ac == "end")) {
                 firstX = spare
             }
-            if (ac == "space-between") {
+            if ((ac == "space-between") && (lineCount > 1)) {
                 betweenX = (crossGap + (spare / (to_double (lineCount - 1))))
             }
             if (ac == "space-around") {
@@ -2640,6 +2688,10 @@ class EVGLayout {
         def li:int 0
         while (li < lineCount) {
             def shift:double (extra * (to_double li))
+            ; (wrap-reverse: the first line is the bottom one)
+            if (parent.flexWrap == "wrap-reverse") {
+                shift = (extra * (to_double ((lineCount - 1) - li)))
+            }
             def grown:double ((itemAt heights li) + extra)
             def n:int (itemAt counts li)
             def k:int 0
@@ -2649,9 +2701,30 @@ class EVGLayout {
                     el.calculatedY = (el.calculatedY + shift)
                     this.propagateOffsetToChildren(el 0.0 shift)
                 }
+                ; an item aligned in its line moves with the line's growth
+                def caS:string (this.crossAlignOf(el parent.alignItems))
+                if ((caS == "center") || ((caS == "flex-end") || (caS == "end"))) {
+                    def moveS:double extra
+                    if (caS == "center") {
+                        moveS = (extra / 2.0)
+                    }
+                    if (parent.flexWrap == "wrap-reverse") {
+                        moveS = (extra - moveS)
+                    }
+                    el.calculatedY = (el.calculatedY + moveS)
+                    this.propagateOffsetToChildren(el 0.0 moveS)
+                } {
+                    ; (wrap-reverse: an item that does not grow is at the
+                    ; line's far side, its cross start)
+                    if ((parent.flexWrap == "wrap-reverse") && ((el.height.isSet || ((caS != "stretch") && ((caS != "normal") && (strlen caS) > 0))) && ((caS != "baseline") && (el.isAbsolute == false)))) {
+                        el.calculatedY = (el.calculatedY + extra)
+                        this.propagateOffsetToChildren(el 0.0 extra)
+                    }
+                }
                 ; Only items that were sized by the line grow with it; an
                 ; explicit height is still an explicit height.
-                if ((el.height.isSet == false) && (el.isAbsolute == false)) {
+                ; (and EVG's default flex-start, which grows with it)
+                if (((el.height.isSet == false) && (el.isAbsolute == false)) && ((caS == "stretch") || ((caS == "normal") || (((strlen caS) == 0) || (caS == "flex-start"))))) {
                     def target:double ((grown - el.box.marginTopPx) - el.box.marginBottomPx)
                     if (target > el.calculatedHeight) {
                         el.calculatedHeight = target
@@ -2679,13 +2752,24 @@ class EVGLayout {
             return
         }
         def mode:string parent.alignContent
+        ; (wrap-reverse: the lines start at the cross end, applyWrapReverse
+        ; turned them round about the content; flex-start is the far end)
+        if (parent.flexWrap == "wrap-reverse") {
+            if ((mode == "flex-start") || ((strlen mode) == 0)) {
+                mode = "flex-end"
+            } {
+                if (mode == "flex-end") {
+                    mode = "flex-start"
+                }
+            }
+        }
         if (mode == "flex-start") {
             return
         }
         if (mode == "start") {
             return
         }
-        if (mode == "stretch") {
+        if ((mode == "stretch") || (mode == "normal")) {
             this.applyAlignContentStretch(parent members counts heights contentHeight innerHeight)
             return
         }
@@ -2702,8 +2786,12 @@ class EVGLayout {
         if (mode == "center") {
             first = (free / 2.0)
         }
-        if (mode == "space-between") {
+        ; (one line: space-between is flex-start)
+        if ((mode == "space-between") && (lineCount > 1)) {
             between = (free / (to_double (lineCount - 1)))
+        }
+        if (((mode == "space-between") && (lineCount == 1)) && (parent.flexWrap == "wrap-reverse")) {
+            first = free
         }
         if (mode == "space-around") {
             between = (free / (to_double lineCount))
@@ -2718,6 +2806,10 @@ class EVGLayout {
         def li:int 0
         while (li < lineCount) {
             def shift:double (first + (between * (to_double li)))
+            ; (wrap-reverse: the lines run up, the first one at the bottom)
+            if (parent.flexWrap == "wrap-reverse") {
+                shift = (first + (between * (to_double ((lineCount - 1) - li))))
+            }
             def n:int (itemAt counts li)
             def k:int 0
             while (k < n) {
@@ -3108,12 +3200,9 @@ class EVGLayout {
             if parent.hasDefiniteHeight {
                 crossBox = parent.calculatedInnerHeight
             }
-        } {
-            ; align-content: stretch grows the lines afterwards
-            if (parent.height.isSet && (parent.alignContent != "stretch")) {
-                crossBox = parent.calculatedInnerHeight
-            }
         }
+        ; (a wrapping one's line is as tall as its items, and align-content
+        ; places and grows the lines afterwards, CSS Flexbox 9.4)
         if (crossBox > rowHeight) {
             effectiveRowHeight = crossBox
         }

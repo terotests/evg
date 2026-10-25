@@ -457,6 +457,32 @@ class CssBoxCheck {
         this.layoutAt(page20 300.0 600.0)
         this.ok("baseline: boxes with no text share their bottoms" ((this.near((a20.calculatedY - g20.calculatedY) 30.0)) && (this.near((b20.calculatedY - g20.calculatedY) 0.0))))
 
+        ; --- 18. a wrapping row's lines are their items' height ---------------------
+        def page21 (EVGElement.createDiv())
+        page21.setAttribute("width" "300px")
+        def w21 (EVGElement.createDiv())
+        w21.setAttribute("display" "flex")
+        w21.setAttribute("flex-direction" "row")
+        w21.setAttribute("flex-wrap" "wrap")
+        w21.setAttribute("align-items" "stretch")
+        w21.setAttribute("align-content" "center")
+        w21.setAttribute("width" "20px")
+        w21.setAttribute("height" "200px")
+        def a21 (EVGElement.createDiv())
+        a21.setAttribute("width" "20px")
+        a21.setAttribute("height" "10px")
+        def b21 (EVGElement.createDiv())
+        b21.setAttribute("width" "20px")
+        def b21k (EVGElement.createDiv())
+        b21k.setAttribute("height" "30px")
+        b21.addChild(b21k)
+        w21.addChild(a21)
+        w21.addChild(b21)
+        page21.addChild(w21)
+        this.layoutAt(page21 300.0 600.0)
+        this.ok("wrap: a stretched item is as tall as its line" (this.near(b21.calculatedHeight 30.0)))
+        this.ok("align-content: center puts the lines in the middle" (this.near((a21.calculatedY - w21.calculatedY) 80.0)))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

@@ -3603,6 +3603,7 @@ class EVGElement {
         calculatedFlexHeight = other.calculatedFlexHeight
         hasFlexHeight = other.hasFlexHeight
         calculatedBaseline = other.calculatedBaseline
+        calculatedLastBaseline = other.calculatedLastBaseline
         calculatedDescent = other.calculatedDescent
         hasBaseline = other.hasBaseline
         hasDefiniteHeight = other.hasDefiniteHeight
