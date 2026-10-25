@@ -1998,9 +1998,17 @@ class EVGLayoutFull {
                         if pctH {
                             it.height.isSet = false
                         }
+                        ; (and so is a percentage min-height)
+                        def pctHMin:boolean (it.minHeight.isSet && (it.minHeight.isPercent()))
+                        if pctHMin {
+                            it.minHeight.isSet = false
+                        }
                         lay.layoutElement(it 0.0 0.0 ((cw - it.box.marginLeftPx) - it.box.marginRightPx) 0.0)
                         if pctH {
                             it.height.isSet = true
+                        }
+                        if pctHMin {
+                            it.minHeight.isSet = true
                         }
                         def need:double (((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx) - cur)
                         if (need > 0.0) {

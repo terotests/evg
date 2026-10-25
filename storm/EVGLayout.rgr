@@ -1910,6 +1910,12 @@ class EVGLayout {
                 if (c.isAbsolute == false) {
                     flowCountC = (flowCountC + 1)
                     def mAxis:double (c.box.marginTopPx + c.box.marginBottomPx)
+                    ; (a height an earlier pass squeezed, a measure of this
+                    ; column among them, is worked out again below)
+                    if (c.height.isSet && c.hasFlexHeight) {
+                        c.hasFlexHeight = false
+                        c.calculatedFlexHeight = 0.0
+                    }
                     if c.height.isSet {
                         ; (a growing item with a height starts from its basis:
                         ; a stated flex-basis, or else the height)
@@ -1942,11 +1948,16 @@ class EVGLayout {
             ; The height is a layout at the width the item will be laid out
             ; at — as the grid measures its rows — and the real pass lays it
             ; out again where it goes.
+            ; (and so is a growing one whose flex-basis is auto, which then
+            ; grows from there)
+            def autoBasisC:[double]
             if (totalFlexC > 0.0) {
                 def jm:int 0
                 while (jm < childCount) {
                     def c:EVGElement (parent.getChild(jm))
-                    if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && ((c.height.isSet == false) && (c.flex <= 0.0))) {
+                    def basisAuto:boolean (((c.flex > 0.0) && c.flexBasisAuto) && (c.flexBasis.isSet == false))
+                    push autoBasisC -1.0
+                    if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && ((c.height.isSet == false) && ((c.flex <= 0.0) || basisAuto))) {
                         def availM:double ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx)
                         def cw:double (this.estimateChildWidth(c availM (this.crossShrinksUnder(parent))))
                         if c.hasFlexWidth {
@@ -1968,6 +1979,9 @@ class EVGLayout {
                         layingOutAlongRow = wasRowM
                         columnCrossShrinks = wasShrinkM
                         fixedHeight = (fixedHeight + c.calculatedHeight)
+                        if basisAuto {
+                            set autoBasisC jm c.calculatedHeight
+                        }
                     }
                     jm = (jm + 1)
                 }
@@ -1985,6 +1999,9 @@ class EVGLayout {
                     if (c.isAbsolute == false) {
                         if ((c.height.isSet == false) && (c.flex > 0.0)) {
                             c.calculatedFlexHeight = ((availC * c.flex) / totalFlexC)
+                            if ((jg < (array_length autoBasisC)) && ((itemAt autoBasisC jg) >= 0.0)) {
+                                c.calculatedFlexHeight = ((itemAt autoBasisC jg) + c.calculatedFlexHeight)
+                            }
                         }
                         if (c.height.isSet && (c.flex > 0.0)) {
                             c.calculatedFlexHeight = ((this.colBasis(c)) + ((availC * c.flex) / totalFlexC))
@@ -2572,13 +2589,20 @@ class EVGLayout {
         if (lineCount < 2) {
             return
         }
+        ; (lines that overflow a definite height start at its far edge,
+        ; past the near one, when align-content packs them at the start)
+        def about:double contentHeight
+        def acW:string parent.alignContent
+        if ((parent.hasDefiniteHeight && (parent.calculatedInnerHeight < contentHeight)) && (((strlen acW) == 0) || ((acW == "normal") || ((acW == "stretch") || (acW == "flex-start"))))) {
+            about = parent.calculatedInnerHeight
+        }
         def idx:int 0
         def offset:double 0.0
         def li:int 0
         while (li < lineCount) {
             def h:double (itemAt heights li)
             ; Mirror this line's position about the middle of the content box.
-            def newOffset:double ((contentHeight - offset) - h)
+            def newOffset:double ((about - offset) - h)
             def shift:double (newOffset - offset)
             def n:int (itemAt counts li)
             def k:int 0
@@ -5496,9 +5520,17 @@ class EVGLayout {
                         if pctR {
                             rit.height.isSet = false
                         }
+                        ; (and so is a percentage min-height)
+                        def pctRMin:boolean (rit.minHeight.isSet && (rit.minHeight.isPercent()))
+                        if pctRMin {
+                            rit.minHeight.isSet = false
+                        }
                         this.layoutElement(rit 0.0 0.0 ((rcw - rit.box.marginLeftPx) - rit.box.marginRightPx) 0.0)
                         if pctR {
                             rit.height.isSet = true
+                        }
+                        if pctRMin {
+                            rit.minHeight.isSet = true
                         }
                         def rh:double ((rit.calculatedHeight + rit.box.marginTopPx) + rit.box.marginBottomPx)
                         if (rh > (itemAt rowContent rri)) {
@@ -5565,9 +5597,17 @@ class EVGLayout {
                     if pctH {
                         it.height.isSet = false
                     }
+                    ; (and so is a percentage min-height)
+                    def pctHMin:boolean (it.minHeight.isSet && (it.minHeight.isPercent()))
+                    if pctHMin {
+                        it.minHeight.isSet = false
+                    }
                     this.layoutElement(it 0.0 0.0 avail 0.0)
                     if pctH {
                         it.height.isSet = true
+                    }
+                    if pctHMin {
+                        it.minHeight.isSet = true
                     }
                     if isRowSubgrid {
                         def sub:int 0
