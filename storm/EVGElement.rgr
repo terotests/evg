@@ -1370,6 +1370,9 @@ class EVGElement {
 
     def isLayoutComplete:boolean false
     def unitsResolved:boolean false
+    ; set by resolveUnits: every unit resolved the same whatever box this is
+    ; in, so a measurement may keep the resolution
+    def unitsFixed:boolean false
     
     ; For statement evaluation: indicates if a return was executed
     def hasReturn:boolean false
@@ -2478,6 +2481,12 @@ class EVGElement {
         
         ; Determine if absolute positioning
         isAbsolute = (this.hasAbsolutePosition())
+        unitsFixed = false
+        if ((((width.fixedPx()) && (height.fixedPx())) && (flexBasis.fixedPx())) && (((minWidth.fixedPx()) && (minHeight.fixedPx())) && ((maxWidth.fixedPx()) && (maxHeight.fixedPx())))) {
+            if ((((left.fixedPx()) && (top.fixedPx())) && ((right.fixedPx()) && (bottom.fixedPx()))) && (((x.fixedPx()) && (y.fixedPx())) && ((shadowOffsetX.fixedPx()) && (shadowOffsetY.fixedPx())))) {
+                unitsFixed = ((shadowRadius.fixedPx()) && (box.unitsFixed()))
+            }
+        }
     }
     
     ; Normalize a property spelling so `fontSize` and `font-size` are one key.
@@ -3704,6 +3713,7 @@ class EVGElement {
         inspectSlot = other.inspectSlot
         isLayoutComplete = other.isLayoutComplete
         unitsResolved = other.unitsResolved
+        unitsFixed = other.unitsFixed
         hasReturn = other.hasReturn
         hasBreak = other.hasBreak
         hasContinue = other.hasContinue

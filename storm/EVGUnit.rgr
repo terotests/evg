@@ -577,6 +577,11 @@ class EVGUnit {
         this.resolve(parentWidth fontSize)
     }
     
+    ; resolves to the same pixels whatever box it is in (unset or px)
+    fn fixedPx:boolean () {
+        return ((isSet == false) || (unitType == 0))
+    }
+
     fn isPixels:boolean () {
         return (unitType == 0)
     }

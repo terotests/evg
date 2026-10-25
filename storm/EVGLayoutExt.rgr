@@ -115,9 +115,34 @@ class EVGLayoutExt {
         return false
     }
 
+    ; items placed on lines before the explicit grid's first; below 0 when
+    ; there are none
+    fn gridLeading:double (lay:EVGLayout parent:EVGElement) {
+        return -1.0
+    }
+
     ; grid-auto-flow: column; below 0 when the core lays the grid out by rows
     fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
         return -1.0
+    }
+
+    ; intrinsic columns grown by the items that span several (CSS Grid
+    ; 12.5.3); the core sizes them from single-column items only
+    fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
+    }
+
+    ; the min-content floors of plain fr columns (cols.frMin, frAutoMin);
+    ; the core lets an fr column shrink below its items
+    fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
+    }
+
+    ; content-sized rows grown by the items that span several
+    fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
+    }
+
+    ; fr rows of a grid with no definite height: each fr the largest its
+    ; rows' content needs, clamped by the grid's min/max-height
+    fn gridFlexRows:void (parent:EVGElement rowSpec:string rowGapTotal:double rowSizes:[double]) {
     }
 
     ; content-sized grid rows grown by their items' baseline shifts
