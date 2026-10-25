@@ -1009,7 +1009,11 @@ class EVGGridPlacement {
             p.takeStart(lhs)
         }
         if (EVGGridPlacement.isSpan(rhs)) {
-            p.span = (EVGGridPlacement.spanCount(rhs))
+            ; (two spans: the end's is dropped)
+            if (p.backSpan == false) {
+                p.span = (EVGGridPlacement.spanCount(rhs))
+            }
+            p.backSpan = false
             p.spanExplicit = true
         } {
             p.takeEnd(rhs)

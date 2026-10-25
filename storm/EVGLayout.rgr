@@ -1858,7 +1858,9 @@ class EVGLayout {
                 ; on one 46-pixel line.
                 def contentH:double (fixedHeight + gapTotalC)
                 def overflowH:double (contentH - innerHeight)
-                if (parent.clipsContent()) {
+                ; (nor in a wrapping column: it wraps instead, each line
+                ; shrinking on its own)
+                if ((parent.clipsContent()) || (parent.flexWrap != "nowrap")) {
                     overflowH = 0.0
                 }
                 if ((overflowH > 0.0) && (fixedHeight > 0.0)) {
