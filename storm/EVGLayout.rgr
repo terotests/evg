@@ -5354,7 +5354,36 @@ class EVGLayout {
             if (rows.hadError) {
                 this.warn(("grid-template-rows: " + rows.errorText))
             }
-            rows.resolve((innerHeight - rowGapTotal))
+            ; intrinsic rows are as tall as their items (span 1), and only
+            ; align-content normal or stretch grows the auto ones
+            if (rows.hasIntrinsicTrack()) {
+                def rowContent:[double]
+                def rc0:int 0
+                while (rc0 < (rows.count())) {
+                    push rowContent 0.0
+                    rc0 = (rc0 + 1)
+                }
+                def rm:int 0
+                while (rm < itemCount) {
+                    def rit:EVGElement (itemAt items rm)
+                    def rri:int (itemAt placedRow rm)
+                    if (((itemAt rowSpans rm) == 1) && ((rri < (rows.count())) && (rit.gridTemplateRows != "subgrid"))) {
+                        def rcw:double (cols.extentOf((itemAt placedCol rm) (itemAt colSpans rm) colGapPx))
+                        rit.calculatedFlexHeight = 0.0
+                        this.layoutElement(rit 0.0 0.0 ((rcw - rit.box.marginLeftPx) - rit.box.marginRightPx) 0.0)
+                        def rh:double ((rit.calculatedHeight + rit.box.marginTopPx) + rit.box.marginBottomPx)
+                        if (rh > (itemAt rowContent rri)) {
+                            set rowContent rri rh
+                        }
+                    }
+                    rm = (rm + 1)
+                }
+                def acS:string parent.alignContent
+                rows.stretchAutos = (((strlen acS) == 0) || ((acS == "normal") || ((acS == "stretch") || (acS == "flex-start"))))
+                rows.resolveWithContent((innerHeight - rowGapTotal) rowContent rowContent)
+            } {
+                rows.resolve((innerHeight - rowGapTotal))
+            }
             def r2:int 0
             while (r2 < rowsUsed) {
                 if (r2 < (rows.count())) {

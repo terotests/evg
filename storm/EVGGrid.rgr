@@ -54,6 +54,9 @@ class EVGGridTrack {
     ; (CSS Grid 11.8, stretch auto tracks)
     def minContentTrack:boolean false
     def autoTrack:boolean false
+    ; how far an auto or fit-content() track may grow from its min-content
+    ; base when there is room (CSS Grid 12.6, maximize tracks)
+    def growTo:double 0.0
 
     Constructor () {
         kind = 0
@@ -625,11 +628,55 @@ class EVGGridTemplate {
                         }
                     }
                 }
-                t.sizePx = c
-                used = (used + c)
+                ; (an auto or fit-content() track starts at its items'
+                ; min-content and grows toward c while there is room)
+                def base:double c
+                if (((t.minContentTrack == false) && (t.autoTrack || t.hasFitLimit)) && (i < (array_length minContent))) {
+                    def mc0:double (itemAt minContent i)
+                    if (mc0 < base) {
+                        base = mc0
+                    }
+                }
+                t.sizePx = base
+                t.growTo = c
+                used = (used + base)
                 t.frozen = true
             }
             i = (i + 1)
+        }
+        ; maximize tracks: the free space goes to the growing tracks evenly,
+        ; each up to its limit
+        def growPass:int 0
+        while (growPass <= n) {
+            def growFree:double (available - used)
+            def growing:int 0
+            def gi:int 0
+            while (gi < n) {
+                def gt:EVGGridTrack (itemAt tracks gi)
+                if ((gt.kind == 3) && (gt.growTo > (gt.sizePx + 0.01))) {
+                    growing = (growing + 1)
+                }
+                gi = (gi + 1)
+            }
+            if ((growing == 0) || (growFree <= 0.01)) {
+                break
+            }
+            def gShare:double (growFree / (to_double growing))
+            gi = 0
+            while (gi < n) {
+                def gt2:EVGGridTrack (itemAt tracks gi)
+                if ((gt2.kind == 3) && (gt2.growTo > (gt2.sizePx + 0.01))) {
+                    def room:double (gt2.growTo - gt2.sizePx)
+                    def add:double gShare
+                    if (add > room) {
+                        add = room
+                    }
+                    gt2.sizePx = (gt2.sizePx + add)
+                    used = (used + add)
+                }
+                gi = (gi + 1)
+            }
+            growPass = (growPass + 1)
         }
 
         ; Distribute the leftover across the fr tracks, then clamp against any
