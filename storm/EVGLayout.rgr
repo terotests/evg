@@ -4294,7 +4294,7 @@ class EVGLayout {
                 def wasResolved:boolean kid.unitsResolved
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
                 def w:double (this.intrinsicWidth(kid wantMin))
-                if (wasResolved == false) {
+                if ((wasResolved || kid.unitsFixed) == false) {
                     kid.unitsResolved = false
                 }
                 def col:int (at % nc)
@@ -4506,7 +4506,7 @@ class EVGLayout {
                 def wasResolved:boolean kid.unitsResolved
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
                 def w:double (this.intrinsicWidth(kid wantMin))
-                if (wasResolved == false) {
+                if ((wasResolved || kid.unitsFixed) == false) {
                     kid.unitsResolved = false
                 }
                 if (w > widest) {
@@ -5062,6 +5062,7 @@ class EVGLayout {
             }
             ext.gridSpanContent(this cols items placedCol colSpans colContent colMinContent colGapPx)
         }
+        ext.gridFrMin(this cols items placedCol colSpans)
         ; auto-fit: a repetition no item lands in collapses, a 0 track
         ; whose gap is given back (CSS Grid 7.2.3.2)
         def collapsed:[int]

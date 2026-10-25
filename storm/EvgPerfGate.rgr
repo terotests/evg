@@ -1,11 +1,14 @@
 Import "EVGElement.rgr"
 Import "EVGUnit.rgr"
 Import "EVGLayout.rgr"
+Import "EVGLayoutFull.rgr"
 Import "EVGDisplayList.rgr"
 
 ; Perf gate fixtures (scripts/storm-perf-gate.mjs): four pages of 10k
 ; elements laid out and listed; the gate counts the instructions of each
-; gate* function under callgrind (C++ build), base vs head.
+; gate* function under callgrind (C++ build), base vs head. The *Full
+; fixtures lay the grid and dashboard pages out again with EVGLayoutFull
+; installed.
 class EvgPerfGate {
     sfn el:EVGElement (css:string) {
         def e (EVGElement.createDiv())
@@ -147,6 +150,21 @@ class EvgPerfGate {
             r = (r + 1)
         }
     }
+    ; the same pages under the CSS layer (EVGLayoutFull), as MfdDomView lays out
+    sfn gateLayGridFull:void (root:EVGElement lay:EVGLayout) {
+        def r:int 0
+        while (r < 3) {
+            lay.layout(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateLayDashFull:void (root:EVGElement lay:EVGLayout) {
+        def r:int 0
+        while (r < 3) {
+            lay.layout(root)
+            r = (r + 1)
+        }
+    }
     sfn newLayout:EVGLayout () {
         def lay (new EVGLayout())
         lay.setPageSize(1232.0 900.0)
@@ -174,6 +192,10 @@ class EvgPerfGate {
         def l4 (EvgPerfGate.newLayout())
         EvgPerfGate.gateLayDash(d l4)
         EvgPerfGate.gateListDash(d (EvgPerfGate.newList(l4)))
+        ; (from here on every layout consults the CSS layer)
+        EVGLayoutFull.install()
+        EvgPerfGate.gateLayGridFull((EvgPerfGate.grid(10000)) (EvgPerfGate.newLayout()))
+        EvgPerfGate.gateLayDashFull((EvgPerfGate.dash(10000)) (EvgPerfGate.newLayout()))
         print "perf gate fixtures done"
     }
 }

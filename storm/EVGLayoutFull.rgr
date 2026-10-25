@@ -275,29 +275,33 @@ class EVGLayoutFull {
             fixY = (fixY + crossOff)
         }
         }
-        ; (between two insets a box narrower than the room left has its
-        ; auto margins share it, CSS 2.1 10.3.7 and 10.6.4)
+        ; (between two insets the room left goes to the auto margins, CSS
+        ; 2.1 10.3.7 and 10.6.4: shared when both are auto, which down the
+        ; block axis holds when the room is negative too; across, a negative
+        ; room leaves the start margin 0)
         if ((child.left.isSet && child.right.isSet) && (child.marginAutoLeft || child.marginAutoRight)) {
             def freeX:double ((((innerWidth - child.left.pixels) - child.right.pixels) - child.calculatedWidth) - (child.box.marginLeftPx + child.box.marginRightPx))
-            if (freeX > 0.0) {
-                if (child.marginAutoLeft && child.marginAutoRight) {
+            if (child.marginAutoLeft && child.marginAutoRight) {
+                if (freeX > 0.0) {
                     fixX = (fixX + (freeX / 2.0))
                 } {
-                    if child.marginAutoLeft {
+                    if parent.resolvedRtl {
                         fixX = (fixX + freeX)
                     }
+                }
+            } {
+                if child.marginAutoLeft {
+                    fixX = (fixX + freeX)
                 }
             }
         }
         if ((child.top.isSet && child.bottom.isSet) && (child.marginAutoTop || child.marginAutoBottom)) {
             def freeY:double ((((innerHeight - child.top.pixels) - child.bottom.pixels) - child.calculatedHeight) - (child.box.marginTopPx + child.box.marginBottomPx))
-            if (freeY > 0.0) {
-                if (child.marginAutoTop && child.marginAutoBottom) {
-                    fixY = (fixY + (freeY / 2.0))
-                } {
-                    if child.marginAutoTop {
-                        fixY = (fixY + freeY)
-                    }
+            if (child.marginAutoTop && child.marginAutoBottom) {
+                fixY = (fixY + (freeY / 2.0))
+            } {
+                if child.marginAutoTop {
+                    fixY = (fixY + freeY)
                 }
             }
         }
@@ -861,6 +865,39 @@ class EVGLayoutFull {
     ; need beyond their tracks' sizes is shared evenly by the intrinsic
     ; tracks they cross; an item crossing an fr or percent track is left
     ; to the fr step
+    ; A `1fr` column is minmax(auto, 1fr): no narrower than the min-content
+    ; of the items in it alone, unless they clip (CSS Grid 6.6), and a
+    ; column that floor holds no longer flexes (12.7.1)
+    fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
+        def nc:int (cols.count())
+        def any:boolean false
+        def t0:int 0
+        while (t0 < nc) {
+            def tk:EVGGridTrack (cols.trackAt(t0))
+            if (((tk.kind == 2) && (tk.hasMin == false)) && (tk.minIntrinsic == 0)) {
+                any = true
+            }
+            push cols.frMin 0.0
+            t0 = (t0 + 1)
+        }
+        if (any == false) {
+            return
+        }
+        cols.frAutoMin = true
+        for items it:EVGElement k {
+            def c:int (itemAt placedCol k)
+            if ((((itemAt colSpans k) == 1) && (c < nc)) && (it.overflow == "visible")) {
+                def tk2:EVGGridTrack (cols.trackAt(c))
+                if (((tk2.kind == 2) && (tk2.hasMin == false)) && (tk2.minIntrinsic == 0)) {
+                    def m:double (lay.minIntrinsicWidthOf(it))
+                    if (m > (itemAt cols.frMin c)) {
+                        set cols.frMin c m
+                    }
+                }
+            }
+        }
+    }
+
     fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
         def nc:int (cols.count())
         def maxSpan:int 1
@@ -1107,6 +1144,10 @@ class EVGLayoutFull {
     ; names grid-template-areas implies are known only there.
     sfn rawLines:[int] (spec:string tplSpec:string areas:string isRow:boolean) {
         def out:[int]
+        ; (an item placed by auto-flow has no lines)
+        if ((strlen spec) == 0) {
+            return out
+        }
         if (((indexOf tplSpec "auto-fill") >= 0) || ((indexOf tplSpec "auto-fit") >= 0)) {
             return out
         }
@@ -1207,6 +1248,9 @@ class EVGLayoutFull {
     ; a negative line or a name in the placement, which the core resolves
     ; against the grid with its implicit tracks, not the explicit one
     sfn countsFromEnd:boolean (spec:string) {
+        if ((strlen spec) == 0) {
+            return false
+        }
         def s:string (trim spec)
         def lhs:string s
         def rhs:string ""

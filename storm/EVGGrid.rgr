@@ -99,6 +99,11 @@ class EVGGridTemplate {
     ; the floor of a minmax(auto, <fixed>) track, where an item sized by its
     ; content is clamped to the track instead (CSS Grid 6.6)
     def definiteMin:[double]
+    ; set by EVGLayoutExt.gridFrMin: a `1fr` track (min auto) is floored
+    ; at the min-content of its items, frMin by index (CSS Grid 6.6,
+    ; 12.7.1); a track the floor holds no longer flexes
+    def frAutoMin:boolean false
+    def frMin:[double]
 
     Constructor () {
         hadError = false
@@ -862,6 +867,12 @@ class EVGGridTemplate {
                     if t2.hasMin {
                         if (clamped < t2.minUnit.pixels) {
                             clamped = t2.minUnit.pixels
+                        }
+                    } {
+                        if (frAutoMin && (j < (array_length frMin))) {
+                            if (clamped < (itemAt frMin j)) {
+                                clamped = (itemAt frMin j)
+                            }
                         }
                     }
                     if t2.hasMax {

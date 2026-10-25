@@ -131,6 +131,11 @@ class EVGLayoutExt {
     fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
     }
 
+    ; the min-content floors of plain fr columns (cols.frMin, frAutoMin);
+    ; the core lets an fr column shrink below its items
+    fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
+    }
+
     ; content-sized rows grown by the items that span several
     fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
     }

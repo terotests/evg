@@ -6,7 +6,8 @@
  *
  * storm/EvgPerfGate.rgr (head's copy, for both sides) builds four pages of
  * 10k elements (flex, grid, text, dashboard) and lays out / lists each three
- * times in its own gate* function. Both sides are compiled to C++ (g++ -O2),
+ * times in its own gate* function, then lays the grid and dashboard out
+ * again with the CSS layer (EVGLayoutFull) installed. Both sides are compiled to C++ (g++ -O2),
  * run once under valgrind --tool=callgrind, and each gate* function's
  * inclusive instructions are compared. The gate fails when one is more than
  * PERF_GATE_MAX_PCT (default 5) per cent over base.
@@ -89,7 +90,8 @@ async function measure(name, stormDir, rgrc) {
     const m = line.match(/^\s*([\d,]+)\s.*EvgPerfGate::(gate\w+)\(/);
     if (m && !/\.cold/.test(line) && !(m[2] in ir)) ir[m[2]] = Number(m[1].replace(/,/g, ""));
   }
-  if (Object.keys(ir).length !== 8) throw new Error(`${name}: found ${Object.keys(ir).length} of 8 gate functions in the profile`);
+  const want = (fs.readFileSync(path.join(ROOT, "storm/EvgPerfGate.rgr"), "utf8").match(/^\s*sfn gate\w+/gm) || []).length;
+  if (Object.keys(ir).length !== want) throw new Error(`${name}: found ${Object.keys(ir).length} of ${want} gate functions in the profile`);
   return ir;
 }
 
