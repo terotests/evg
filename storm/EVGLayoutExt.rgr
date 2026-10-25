@@ -115,9 +115,24 @@ class EVGLayoutExt {
         return false
     }
 
+    ; items placed on lines before the explicit grid's first; below 0 when
+    ; there are none
+    fn gridLeading:double (lay:EVGLayout parent:EVGElement) {
+        return -1.0
+    }
+
     ; grid-auto-flow: column; below 0 when the core lays the grid out by rows
     fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
         return -1.0
+    }
+
+    ; intrinsic columns grown by the items that span several (CSS Grid
+    ; 12.5.3); the core sizes them from single-column items only
+    fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
+    }
+
+    ; content-sized rows grown by the items that span several
+    fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
     }
 
     ; content-sized grid rows grown by their items' baseline shifts

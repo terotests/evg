@@ -4474,6 +4474,15 @@ class EVGLayout {
     ; A grid's items in their tracks. grid-auto-flow: column is the CSS
     ; layer's (EVGLayoutExt.gridColumnFlow); the core places by rows.
     fn layoutGrid:double (parent:EVGElement) {
+        ; (lines before the explicit grid are the CSS layer's)
+        def hl:double (ext.gridLeading(this parent))
+        if (hl >= 0.0) {
+            return hl
+        }
+        return (this.layoutGridPlaced(parent))
+    }
+
+    fn layoutGridPlaced:double (parent:EVGElement) {
         if ((indexOf parent.gridAutoFlow "column") >= 0) {
             def hc:double (ext.gridColumnFlow(this parent))
             if (hc >= 0.0) {
@@ -4956,6 +4965,7 @@ class EVGLayout {
                 }
                 ic = (ic + 1)
             }
+            ext.gridSpanContent(this cols items placedCol colSpans colContent colMinContent colGapPx)
         }
         ; auto-fit: a repetition no item lands in collapses, a 0 track
         ; whose gap is given back (CSS Grid 7.2.3.2)
@@ -5193,6 +5203,7 @@ class EVGLayout {
                     dr = (dr + 1)
                 }
             }
+            ext.gridRowSpanContent(this parent items placedRow rowSpans placedCol colSpans cols measureGap rowSpec rowGapPx innerHeight rowSizes)
         }
 
         ; grid-auto-rows with a fixed size sets every implicit row.

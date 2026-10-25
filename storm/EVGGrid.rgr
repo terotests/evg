@@ -83,6 +83,12 @@ class EVGGridTemplate {
     ; wins, which is what CSS does for a duplicate custom-ident.
     def lineNames:[string]
     def lineNumbers:[int]
+    ; every line a name labels, in order, for "2 name" (CSS Grid 8.3)
+    def allNames:[string]
+    def allLines:[int]
+    ; the explicit grid's last line when grid-template-areas makes it
+    ; larger than the tracks do (0 = the tracks')
+    def explicitLast:int 0
     ; Set when the spec named a track type this subset does not implement.
     def hadError:boolean false
     def errorText:string ""
@@ -111,6 +117,90 @@ class EVGGridTemplate {
         return 0
     }
 
+    ; a name on a line, as grid-template-areas implies them
+    ; (kept in line order, and the first line of a name is its lowest)
+    fn addLineName:void (name:string line:int) {
+        def nn:[string]
+        def nl:[int]
+        def put:boolean false
+        def i:int 0
+        while (i < (array_length allNames)) {
+            if ((put == false) && ((itemAt allLines i) > line)) {
+                push nn name
+                push nl line
+                put = true
+            }
+            push nn (itemAt allNames i)
+            push nl (itemAt allLines i)
+            i = (i + 1)
+        }
+        if (put == false) {
+            push nn name
+            push nl line
+        }
+        allNames = nn
+        allLines = nl
+        def j:int 0
+        while (j < (array_length lineNames)) {
+            if ((itemAt lineNames j) == name) {
+                if ((itemAt lineNumbers j) > line) {
+                    set lineNumbers j line
+                }
+                return
+            }
+            j = (j + 1)
+        }
+        push lineNames name
+        push lineNumbers line
+    }
+
+    fn hasLineNamed:boolean (line:int name:string) {
+        def i:int 0
+        while (i < (array_length allNames)) {
+            if (((itemAt allLines i) == line) && ((itemAt allNames i) == name)) {
+                return true
+            }
+            i = (i + 1)
+        }
+        return false
+    }
+
+    ; The nth line named `name`, counted from the end when n is negative.
+    ; When there are too few, the implicit lines past that edge all count
+    ; as named, so the result can be 0 or below, or past the explicit grid.
+    fn nthLineNamed:int (name:string n:int) {
+        def last:int ((array_length tracks) + 1)
+        if (explicitLast > last) {
+            last = explicitLast
+        }
+        def found:int 0
+        if (n > 0) {
+            def i:int 0
+            while (i < (array_length allNames)) {
+                if ((itemAt allNames i) == name) {
+                    found = (found + 1)
+                    if (found == n) {
+                        return (itemAt allLines i)
+                    }
+                }
+                i = (i + 1)
+            }
+            return (last + (n - found))
+        }
+        def k:int (0 - n)
+        def j:int ((array_length allNames) - 1)
+        while (j >= 0) {
+            if ((itemAt allNames j) == name) {
+                found = (found + 1)
+                if (found == k) {
+                    return (itemAt allLines j)
+                }
+            }
+            j = (j - 1)
+        }
+        return (1 - (k - found))
+    }
+
     ; A "[a b]" token labels the line that comes next — line 1 before the first
     ; track, and one past the last track when it trails the list.
     fn addLineNames:void (tok:string) {
@@ -121,6 +211,8 @@ class EVGGridTemplate {
         while (i < (array_length parts)) {
             def nm:string (itemAt parts i)
             if ((strlen nm) > 0) {
+                push allNames nm
+                push allLines line
                 if ((this.lineNumberNamed(nm)) == 0) {
                     push lineNames nm
                     push lineNumbers line
@@ -1036,6 +1128,9 @@ class EVGGridPlacement {
     def spanExplicit:boolean false
     ; the span is before the end line ("span 2 / 4")
     def backSpan:boolean false
+    ; "2 name": which of the lines so named (0 = the first one)
+    def startNth:int 0
+    def endNth:int 0
 
     Constructor () {
         start = 0
@@ -1110,6 +1205,12 @@ class EVGGridPlacement {
         if (token == "auto") {
             return
         }
+        def nn:int (EVGGridPlacement.nthOf(token))
+        if (nn != 0) {
+            startNth = nn
+            startName = (EVGGridPlacement.nameOf(token))
+            return
+        }
         if (EVGGridPlacement.isNumericToken(token)) {
             start = (EVGGridPlacement.lineNumber(token))
             if (start == 0) {
@@ -1122,6 +1223,12 @@ class EVGGridPlacement {
 
     fn takeEnd:void (token:string) {
         if (token == "auto") {
+            return
+        }
+        def nn:int (EVGGridPlacement.nthOf(token))
+        if (nn != 0) {
+            endNth = nn
+            endName = (EVGGridPlacement.nameOf(token))
             return
         }
         if (EVGGridPlacement.isNumericToken(token)) {
@@ -1176,6 +1283,22 @@ class EVGGridPlacement {
                 endLine = 1
             }
         }
+        if (((strlen startName) > 0) && (startNth != 0)) {
+            start = (tpl.nthLineNamed(startName startNth))
+            if (start < 1) {
+                start = 1
+            }
+            startName = ""
+            startNth = 0
+        }
+        if (((strlen endName) > 0) && (endNth != 0)) {
+            endLine = (tpl.nthLineNamed(endName endNth))
+            if (endLine < 1) {
+                endLine = 1
+            }
+            endName = ""
+            endNth = 0
+        }
         if ((strlen startName) > 0) {
             def n:int (tpl.lineNumberNamed(startName))
             if (n > 0) {
@@ -1195,6 +1318,32 @@ class EVGGridPlacement {
             }
         }
         this.applyEndLine()
+    }
+
+    ; "2 name" or "name 2": the count, 0 when the side is not that form
+    sfn nthOf:int (s:string) {
+        def parts:[string] (strsplit (trim s) " ")
+        if ((array_length parts) != 2) {
+            return 0
+        }
+        def a:string (itemAt parts 0)
+        def b:string (itemAt parts 1)
+        if ((EVGGridPlacement.isNumericToken(a)) && ((EVGGridPlacement.isNumericToken(b)) == false)) {
+            return (EVGGridPlacement.lineNumber(a))
+        }
+        if ((EVGGridPlacement.isNumericToken(b)) && ((EVGGridPlacement.isNumericToken(a)) == false)) {
+            return (EVGGridPlacement.lineNumber(b))
+        }
+        return 0
+    }
+
+    sfn nameOf:string (s:string) {
+        def parts:[string] (strsplit (trim s) " ")
+        def a:string (itemAt parts 0)
+        if (EVGGridPlacement.isNumericToken(a)) {
+            return (itemAt parts 1)
+        }
+        return a
     }
 
     sfn isNumericToken:boolean (s:string) {
