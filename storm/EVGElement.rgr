@@ -715,6 +715,8 @@ class EVGElement {
     ; flexWrap: "wrap" (row auto-wraps — historical EVG default) or "nowrap"
     ; (CSS default; children never wrap, they overflow / shrink instead).
     def flexWrap:string "wrap"
+    ; whether flex-wrap was written (EVG's own default is wrap, CSS's nowrap)
+    def flexWrapSet:boolean false
     def gap:EVGUnit
     ; Axis-specific gaps. When unset, `gap` applies to both axes.
     def rowGap:EVGUnit
@@ -3463,6 +3465,7 @@ class EVGElement {
         alignSelf = other.alignSelf
         alignContent = other.alignContent
         flexWrap = other.flexWrap
+        flexWrapSet = other.flexWrapSet
         gap = other.gap
         rowGap = other.rowGap
         columnGap = other.columnGap
@@ -4618,6 +4621,7 @@ class EVGElement {
         }
         if ((name == "flex-wrap") || (name == "flexWrap")) {
             flexWrap = value
+            flexWrapSet = true
             return
         }
         ; `flex-grow`, WHICH WAS NOT HERE. `flex-shrink`, `flex-basis` and the

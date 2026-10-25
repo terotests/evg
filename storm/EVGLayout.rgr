@@ -2357,6 +2357,60 @@ class EVGLayout {
                         }
                     }
                 }
+                ; the one line of a wrapping column is as wide as its widest
+                ; item when that is wider than the box, and a stretched item
+                ; fills the line (CSS Flexbox 9.4, 9.6)
+                if ((parent.flexWrapSet && (parent.flexWrap != "nowrap")) && (((strlen acL) == 0) || ((acL == "normal") || ((acL == "stretch") || (acL == "flex-start"))))) {
+                    def widestS:double 0.0
+                    def si0:int 0
+                    while (si0 < childCount) {
+                        def sc:EVGElement (parent.getChild(si0))
+                        if ((sc.isAbsolute == false) && ((sc.isHidden()) == false)) {
+                            def sa:string (this.crossAlignIn(true sc parent.alignItems))
+                            def stretchy:boolean ((sc.width.isSet == false) && ((sa == "stretch") || ((sa == "normal") || ((sa == "") || (sa == "flex-start")))))
+                            def sw:double ((sc.calculatedWidth + sc.box.marginLeftPx) + sc.box.marginRightPx)
+                            ; (a stretched item's own width is its fit-content
+                            ; one, at most the box's)
+                            if stretchy {
+                                sw = (this.intrinsicWidth(sc false))
+                                if (sw > innerWidth) {
+                                    sw = innerWidth
+                                }
+                            }
+                            if (sw > widestS) {
+                                widestS = sw
+                            }
+                        }
+                        si0 = (si0 + 1)
+                    }
+                    if (widestS > (innerWidth + 0.01)) {
+                        lineW = widestS
+                        def si1:int 0
+                        while (si1 < childCount) {
+                            def sc1:EVGElement (parent.getChild(si1))
+                            if ((sc1.isAbsolute == false) && ((sc1.isHidden()) == false)) {
+                                def sa1:string (this.crossAlignIn(true sc1 parent.alignItems))
+                                if ((sc1.width.isSet == false) && ((sa1 == "stretch") || ((sa1 == "normal") || ((sa1 == "") || (sa1 == "flex-start"))))) {
+                                    def tw:double ((widestS - sc1.box.marginLeftPx) - sc1.box.marginRightPx)
+                                    def sx1:double sc1.calculatedX
+                                    def sy1:double sc1.calculatedY
+                                    sc1.hasFlexWidth = true
+                                    sc1.calculatedFlexWidth = tw
+                                    if (sc1.keepLayout == false) {
+                                        def sk1:int 0
+                                        while (sk1 < (sc1.getChildCount())) {
+                                            def sk1c:EVGElement (sc1.getChild(sk1))
+                                            sk1c.resetLayoutState()
+                                            sk1 = (sk1 + 1)
+                                        }
+                                    }
+                                    this.layoutElement(sc1 sx1 sy1 sc1.lastParentW sc1.lastParentH)
+                                }
+                            }
+                            si1 = (si1 + 1)
+                        }
+                    }
+                }
                 this.alignColumn(parent totalHeight startX startY lineW innerHeight)
                 if (lineX != 0.0) {
                     def wj:int 0
