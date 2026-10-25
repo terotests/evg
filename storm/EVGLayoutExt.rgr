@@ -84,6 +84,12 @@ class EVGLayoutExt {
 
     ; whether a box with no baseline in a row of `parent` has one at its
     ; border box's bottom rather than its margin box's
+    ; text metrics rounded to the pixel for the baseline (browsers'),
+    ; or as the painter draws them
+    fn pixelMetrics:boolean () {
+        return false
+    }
+
     fn synthBorder:boolean (parent:EVGElement) {
         return false
     }
@@ -112,6 +118,15 @@ class EVGLayoutExt {
     ; grid-auto-flow: column; below 0 when the core lays the grid out by rows
     fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
         return -1.0
+    }
+
+    ; content-sized grid rows grown by their items' baseline shifts
+    fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
+    }
+
+    ; an item with no baseline has it at its top, not its bottom
+    fn synthTop:boolean (parent:EVGElement) {
+        return false
     }
 
     ; the column tracks with the implicit ones the items' placements make
