@@ -52,6 +52,15 @@ class EVGLayoutFull {
         if (css.floatRow && (childCount > 0)) {
             EVGLayoutFull.placeFloats(element childCount)
         }
+        ; (the rows overflow it rather than make it taller)
+        if ((css.pctRowsHeight >= 0.0) && (element.hasDefiniteHeight == false)) {
+            def ph:double css.pctRowsHeight
+            if (element.minHeight.isSet && (((element.minHeight.isPercent()) == false) && ((element.minHeight.pixels - (element.box.getVerticalChrome())) > ph))) {
+                ph = (element.minHeight.pixels - (element.box.getVerticalChrome()))
+            }
+            element.calculatedInnerHeight = ph
+            element.calculatedHeight = (ph + (element.box.getVerticalChrome()))
+        }
         if (css.skipFirst && (element.hasBaseline == false)) {
             def si:int 1
             while ((si < childCount) && (element.hasBaseline == false)) {
@@ -1884,6 +1893,60 @@ class EVGLayoutFull {
     }
 
     fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
+        ; percentage rows of a grid with no definite height: sized as auto
+        ; first, then as their share of the height that gives, and the
+        ; other rows sized again around them (CSS Grid 12.1)
+        def declared0:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        def nr0:int (array_length rowSizes)
+        def hasPct:boolean false
+        if (parent.hasDefiniteHeight == false) {
+            def pi:int 0
+            while (pi < nr0) {
+                if (EVGLayoutFull.pctRow(pi declared0)) {
+                    hasPct = true
+                }
+                pi = (pi + 1)
+            }
+        }
+        if (hasPct == false) {
+            if (!null? parent.css) {
+                def pcx:EVGCssExtra (EVGLayoutFull.cx(parent))
+                pcx.pctRowsHeight = -1.0
+            }
+            this.spanRowsPass(lay parent items placedRow rowSpans placedCol colSpans cols colGap rowSpec rowGap innerHeight rowSizes false)
+            return
+        }
+        def base:[double]
+        for rowSizes bv:double bi {
+            push base bv
+        }
+        this.spanRowsPass(lay parent items placedRow rowSpans placedCol colSpans cols colGap rowSpec rowGap innerHeight rowSizes true)
+        def H:double ((to_double (nr0 - 1)) * rowGap)
+        for rowSizes hv:double hi {
+            H = (H + hv)
+        }
+        def ri:int 0
+        while (ri < nr0) {
+            set rowSizes ri (itemAt base ri)
+            if (EVGLayoutFull.pctRow(ri declared0)) {
+                def pt:EVGGridTrack (declared0.trackAt(ri))
+                set rowSizes ri ((H * pt.value) / 100.0)
+            }
+            ri = (ri + 1)
+        }
+        def pcx2:EVGCssExtra (parent.cssExtra())
+        pcx2.pctRowsHeight = H
+        this.spanRowsPass(lay parent items placedRow rowSpans placedCol colSpans cols colGap rowSpec rowGap innerHeight rowSizes false)
+    }
+
+    sfn pctRow:boolean (r:int declared:EVGGridTemplate) {
+        if (r < (declared.count())) {
+            return ((declared.trackAt(r)).kind == 1)
+        }
+        return false
+    }
+
+    fn spanRowsPass:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double] pctFree:boolean) {
         def nr:int (array_length rowSizes)
         def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
         def autoRows:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
@@ -1910,6 +1973,10 @@ class EVGLayoutFull {
                         cur = (cur + (itemAt rowSizes t))
                         if ((EVGLayoutFull.fixedRow(t declared autoRows)) == false) {
                             nI = (nI + 1)
+                        } {
+                            if (pctFree && (EVGLayoutFull.pctRow(t declared))) {
+                                nI = (nI + 1)
+                            }
                         }
                         if ((parent.hasDefiniteHeight == false) && (t < (declared.count()))) {
                             def ft:EVGGridTrack (declared.trackAt(t))
@@ -1947,7 +2014,7 @@ class EVGLayoutFull {
                                         }
                                     }
                                 } {
-                                    if ((EVGLayoutFull.fixedRow(u declared autoRows)) == false) {
+                                    if (((EVGLayoutFull.fixedRow(u declared autoRows)) == false) || (pctFree && (EVGLayoutFull.pctRow(u declared)))) {
                                         set rowSizes u ((itemAt rowSizes u) + (need / (to_double nI)))
                                     }
                                 }
@@ -2193,6 +2260,16 @@ class EVGLayoutFull {
         if ((cTpl == "subgrid") || (rTpl == "subgrid")) {
             return -1.0
         }
+        ; (lines are counted on the auto repeats as the core expands them)
+        def cLines:string cTpl
+        def rLines:string rTpl
+        if (((indexOf cTpl "auto-f") >= 0) || ((indexOf rTpl "auto-f") >= 0)) {
+            def gaps:[double] (lay.gridGaps(parent parent.calculatedInnerWidth parent.calculatedInnerHeight))
+            cLines = (EVGGridTemplate.resolveAutoRepeat(cTpl parent.calculatedInnerWidth (itemAt gaps 0) 0 parent.inheritedFontSize))
+            if ((indexOf rTpl "auto-f") >= 0) {
+                rLines = (lay.gridRowRepeat(parent rTpl parent.calculatedInnerHeight (itemAt gaps 1)))
+            }
+        }
         def nc:int ((EVGGridTemplate.parse(cTpl)).count())
         if ((strlen cTpl) == 0) {
             nc = 0
@@ -2210,11 +2287,11 @@ class EVGLayoutFull {
         while (i < n) {
             def c:EVGElement (parent.getChild(i))
             if ((c.hasAbsolutePosition()) == false) {
-                def fc:int (EVGLayoutFull.rawFirstLine(c.gridColumn cTpl parent.gridTemplateAreas false))
+                def fc:int (EVGLayoutFull.rawFirstLine(c.gridColumn cLines parent.gridTemplateAreas false))
                 if (fc < minC) {
                     minC = fc
                 }
-                def fr:int (EVGLayoutFull.rawFirstLine(c.gridRow rTpl parent.gridTemplateAreas true))
+                def fr:int (EVGLayoutFull.rawFirstLine(c.gridRow rLines parent.gridTemplateAreas true))
                 if (fr < minR) {
                     minR = fr
                 }
@@ -2254,10 +2331,10 @@ class EVGLayoutFull {
             push savedR c.gridRow
             if ((c.hasAbsolutePosition()) == false) {
                 if ((leadC > 0) || needC) {
-                    c.gridColumn = (EVGLayoutFull.shiftedPlacement(c.gridColumn cTpl parent.gridTemplateAreas false leadC))
+                    c.gridColumn = (EVGLayoutFull.shiftedPlacement(c.gridColumn cLines parent.gridTemplateAreas false leadC))
                 }
                 if ((leadR > 0) || needR) {
-                    c.gridRow = (EVGLayoutFull.shiftedPlacement(c.gridRow rTpl parent.gridTemplateAreas true leadR))
+                    c.gridRow = (EVGLayoutFull.shiftedPlacement(c.gridRow rLines parent.gridTemplateAreas true leadR))
                 }
             }
             j = (j + 1)
@@ -2426,17 +2503,93 @@ class EVGLayoutFull {
                 }
                 ri = (ri + 1)
             }
-            ; (an item placed on both axes holds its columns in the rows
-            ; that also have items locked to them)
-            def pr:int 0
-            while (pr < (array_length perRow)) {
-                if ((itemAt perRow pr) > 0) {
-                    def tot:int ((itemAt perRow pr) + (itemAt fixedRow pr))
-                    if (tot > lastLine) {
-                        lastLine = tot
+            ; (the locked items placed as CSS Grid 8.5 step 2 does, sparse:
+            ; each past the ones before it in its row, past the cells the
+            ; items with both lines hold; dense: from the row's start)
+            if ((array_length perRow) > 0) {
+                def W:int (lastLine + 1)
+                def wi:int 0
+                while (wi < (parent.getChildCount())) {
+                    def wc:EVGElement (parent.getChild(wi))
+                    if ((wc.hasAbsolutePosition()) == false) {
+                        def wp:EVGGridPlacement (EVGGridPlacement.parse(wc.gridColumn))
+                        W = ((W + wp.start) + wp.span)
                     }
+                    wi = (wi + 1)
                 }
-                pr = (pr + 1)
+                def nR:int (array_length perRow)
+                def occ:[boolean]
+                def oi:int 0
+                while (oi < (nR * W)) {
+                    push occ false
+                    oi = (oi + 1)
+                }
+                def lockEnd:[int]
+                def le0:int 0
+                while (le0 < nR) {
+                    push lockEnd 0
+                    le0 = (le0 + 1)
+                }
+                def dense:boolean ((indexOf parent.gridAutoFlow "dense") >= 0)
+                def pass:int 0
+                while (pass < 2) {
+                    def qi:int 0
+                    while (qi < (parent.getChildCount())) {
+                        def qc:EVGElement (parent.getChild(qi))
+                        if ((qc.hasAbsolutePosition()) == false) {
+                            def qcp:EVGGridPlacement (EVGGridPlacement.parse(qc.gridColumn))
+                            def qrp:EVGGridPlacement (EVGGridPlacement.parse(qc.gridRow))
+                            def qboth:boolean (((qrp.start > 0) && (qcp.start > 0)) && (((strlen qcp.startName) == 0) && ((strlen qrp.startName) == 0)))
+                            def qlocked:boolean ((qrp.start > 0) && (qcp.start == 0) && ((strlen qcp.startName) == 0) && (qcp.endLine == 0))
+                            def c0:int -1
+                            if ((pass == 0) && qboth) {
+                                c0 = (qcp.start - 1)
+                            }
+                            if ((pass == 1) && qlocked) {
+                                def r0:int (qrp.start - 1)
+                                c0 = 0
+                                if (dense == false) {
+                                    c0 = (itemAt lockEnd r0)
+                                }
+                                def busy:boolean true
+                                while (busy && ((c0 + qcp.span) < W)) {
+                                    busy = false
+                                    def cr:int r0
+                                    while ((cr < (r0 + qrp.span)) && (cr < nR)) {
+                                        def cc:int c0
+                                        while (cc < (c0 + qcp.span)) {
+                                            if (itemAt occ ((cr * W) + cc)) {
+                                                busy = true
+                                            }
+                                            cc = (cc + 1)
+                                        }
+                                        cr = (cr + 1)
+                                    }
+                                    if busy {
+                                        c0 = (c0 + 1)
+                                    }
+                                }
+                                set lockEnd r0 (c0 + qcp.span)
+                            }
+                            if (c0 >= 0) {
+                                def mr:int (qrp.start - 1)
+                                while ((mr < ((qrp.start - 1) + qrp.span)) && (mr < nR)) {
+                                    def mc:int c0
+                                    while ((mc < (c0 + qcp.span)) && (mc < W)) {
+                                        set occ ((mr * W) + mc) true
+                                        mc = (mc + 1)
+                                    }
+                                    mr = (mr + 1)
+                                }
+                                if ((c0 + qcp.span) > lastLine) {
+                                    lastLine = (c0 + qcp.span)
+                                }
+                            }
+                        }
+                        qi = (qi + 1)
+                    }
+                    pass = (pass + 1)
+                }
             }
         }
         ; (in a column flow, as many as the placement fills)
@@ -2503,7 +2656,7 @@ class EVGLayoutFull {
         def i:int 0
         while (i < n) {
             def c:EVGElement (node.getChild(i))
-            if (((EVGLayoutFull.cx(c)).cbOuterX || (EVGLayoutFull.cx(c)).cbOuterY) && c.isAbsolute) {
+            if ((((EVGLayoutFull.cx(c)).cbOuterX || (EVGLayoutFull.cx(c)).cbOuterY) || (EVGLayoutFull.cx(c)).cbOuterSize) && c.isAbsolute) {
                 def oldX:double c.calculatedX
                 def oldY:double c.calculatedY
                 def sx:double ((cb.calculatedX + cb.box.borderWidthPx) + cb.box.paddingLeftPx)
@@ -2865,7 +3018,9 @@ class EVGLayoutFull {
                 }
                 while (cn < colsN) {
                     push colStarts (colShift + (cols.offsetOf(cn colGap)))
-                    push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap)))
+                    ; (a collapsed auto-fit track ends where it starts, not
+                    ; before the grid)
+                    push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (EVGLayoutFull.atLeast0((cols.extentOf(cn 1 colGap)))))
                     cn = (cn + 1)
                 }
                 ; (the padding edge: inside the border sides given as padding)
@@ -2902,7 +3057,7 @@ class EVGLayoutFull {
                         ax = (colShift + (cols.offsetOf(c0 colGap)))
                         aw = 0.0
                         if (cspan > 0) {
-                            aw = (cols.extentOf(c0 cspan colGap))
+                            aw = (EVGLayoutFull.atLeast0((cols.extentOf(c0 cspan colGap))))
                         }
                         ; (right to left the in-flow items are mirrored
                         ; afterwards; an area is mirrored here)
@@ -2920,7 +3075,7 @@ class EVGLayoutFull {
                 }
                 while (rn < rowsN) {
                     push rowStarts (rowShift + (lay.gridRowOffset(rowSizes rn rowGap)))
-                    push rowEnds ((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn))
+                    push rowEnds ((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (EVGLayoutFull.atLeast0((itemAt rowSizes rn))))
                     rn = (rn + 1)
                 }
                 def rowAuto:[double] (EVGLayoutFull.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds (parent.box.paddingTopPx - pcx.foldT) (parent.box.paddingBottomPx - pcx.foldB) contentHeight))
@@ -2933,7 +3088,7 @@ class EVGLayoutFull {
                     rp.resolveNames(rowTemplate)
                     if (rp.start > 0) {
                         ay = (rowShift + (lay.gridRowOffset(rowSizes (rp.start - 1) rowGap)))
-                        ah = (lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))
+                        ah = (EVGLayoutFull.atLeast0((lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))))
                     }
                 }
                 c.unitsResolved = false
@@ -2997,6 +3152,13 @@ class EVGLayoutFull {
     ; 9.2). [from size] from the content edge, or nothing with no
     ; placement (EVG's content box) or a line name alone (an area's,
     ; resolved by the placement)
+    sfn atLeast0:double (v:double) {
+        if (v < 0.0) {
+            return 0.0
+        }
+        return v
+    }
+
     sfn absAutoArea:[double] (spec0:string tpl:EVGGridTemplate starts:[double] ends:[double] padS:double padE:double inner:double) {
         def res:[double]
         def spec:string (trim spec0)

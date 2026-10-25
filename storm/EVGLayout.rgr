@@ -3364,6 +3364,10 @@ class EVGLayout {
         ; `left: 16; right: 16` came out as wide as its five icons.
         if ((element.left.isSet && element.right.isSet) && (element.width.isSet == false)) {
             def spanW:double ((((parentWidth - element.left.pixels) - element.right.pixels) - element.box.marginLeftPx) - element.box.marginRightPx)
+            ; (min-width wins over the insets, CSS 2.1 10.4)
+            if ((element.minWidth.isSet && ((element.minWidth.isPercent()) == false)) && (element.minWidth.pixels > spanW)) {
+                spanW = element.minWidth.pixels
+            }
             if (spanW > 0.0) {
                 element.calculatedWidth = spanW
                 element.calculatedInnerWidth = (element.box.getInnerWidth(spanW))
@@ -3371,6 +3375,9 @@ class EVGLayout {
         }
         if ((element.top.isSet && element.bottom.isSet) && (element.height.isSet == false)) {
             def spanH:double ((((parentHeight - element.top.pixels) - element.bottom.pixels) - element.box.marginTopPx) - element.box.marginBottomPx)
+            if ((element.minHeight.isSet && ((element.minHeight.isPercent()) == false)) && (element.minHeight.pixels > spanH)) {
+                spanH = element.minHeight.pixels
+            }
             if (spanH > 0.0) {
                 element.calculatedHeight = spanH
                 element.calculatedInnerHeight = (element.box.getInnerHeight(spanH))
@@ -4723,14 +4730,40 @@ class EVGLayout {
         return (this.layoutGridFlow(parent))
     }
 
-    fn layoutGridFlow:double (parent:EVGElement) {
-        def innerWidth:double parent.calculatedInnerWidth
-        def innerHeight:double parent.calculatedInnerHeight
+    ; repeat(auto-fill / auto-fit) down the rows as repeat(N): as many as
+    ; the height holds, a definite one, else max-height, else min-height
+    fn gridRowRepeat:string (parent:EVGElement spec:string innerHeight:double rowGapPx:double) {
+        def room:double innerHeight
+        def roomMin:boolean false
+        if (parent.hasDefiniteHeight == false) {
+            room = 0.0
+            def vch:double (parent.box.getVerticalChrome())
+            ; (a percentage of a definite height is resolved, else 0)
+            if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
+                room = (parent.maxHeight.pixels - vch)
+            }
+            if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
+                if ((parent.minHeight.pixels - vch) > room) {
+                    room = (parent.minHeight.pixels - vch)
+                    ; (a min alone: as many as reach it; over a max, the
+                    ; max raised to it: as many as fit)
+                    roomMin = ((parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) == false)
+                }
+            }
+        }
+        ; (a min-height over the height is the height)
+        if (parent.hasDefiniteHeight && (parent.minHeight.isSet && ((parent.minHeight.pixels - (parent.box.getVerticalChrome())) > room))) {
+            room = (parent.minHeight.pixels - (parent.box.getVerticalChrome()))
+        }
+        if roomMin {
+            return (EVGGridTemplate.resolveAutoRepeatAtLeast(spec room rowGapPx 0 parent.inheritedFontSize))
+        }
+        return (EVGGridTemplate.resolveAutoRepeat(spec room rowGapPx 0 parent.inheritedFontSize))
+    }
 
-        def startX:double (parent.calculatedX + parent.box.borderWidthPx + parent.box.paddingLeftPx)
-        def startY:double (parent.calculatedY + parent.box.borderWidthPx + parent.box.paddingTopPx)
-
-        ; `row-gap` / `column-gap` fall back to `gap` when unset.
+    ; the column gap and the row gap: `row-gap` / `column-gap` fall back
+    ; to `gap` when unset
+    fn gridGaps:[double] (parent:EVGElement innerWidth:double innerHeight:double) {
         def colGapPx:double 0.0
         def rowGapPx:double 0.0
         if parent.gap.isSet {
@@ -4749,6 +4782,22 @@ class EVGLayout {
             parent.rowGap.resolve(innerHeight parent.inheritedFontSize)
             rowGapPx = parent.rowGap.pixels
         }
+        def out:[double]
+        push out colGapPx
+        push out rowGapPx
+        return out
+    }
+
+    fn layoutGridFlow:double (parent:EVGElement) {
+        def innerWidth:double parent.calculatedInnerWidth
+        def innerHeight:double parent.calculatedInnerHeight
+
+        def startX:double (parent.calculatedX + parent.box.borderWidthPx + parent.box.paddingLeftPx)
+        def startY:double (parent.calculatedY + parent.box.borderWidthPx + parent.box.paddingTopPx)
+
+        def gaps:[double] (this.gridGaps(parent innerWidth innerHeight))
+        def colGapPx:double (itemAt gaps 0)
+        def rowGapPx:double (itemAt gaps 1)
 
         ; Columns. With no template a grid is a single full-width column, which
         ; keeps `display: grid` from silently collapsing content to zero width.
@@ -4894,33 +4943,25 @@ class EVGLayout {
         }
         ; repeat(auto-fill / auto-fit) down the rows: as many as the height
         ; holds, a definite one, else max-height, else min-height
+        def rowFitStart:int -1
+        def rowFitOthers:int 0
+        def rowFitCount:int 0
         if (((indexOf rowTemplateSpec "auto-fill") >= 0) || ((indexOf rowTemplateSpec "auto-fit") >= 0)) {
-            def room:double innerHeight
-            def roomMin:boolean false
-            if (parent.hasDefiniteHeight == false) {
-                room = 0.0
-                def vch:double (parent.box.getVerticalChrome())
-                ; (a percentage of a definite height is resolved, else 0)
-                if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
-                    room = (parent.maxHeight.pixels - vch)
-                }
-                if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
-                    if ((parent.minHeight.pixels - vch) > room) {
-                        room = (parent.minHeight.pixels - vch)
-                        ; (a min alone: as many as reach it; over a max, the
-                        ; max raised to it: as many as fit)
-                        roomMin = ((parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) == false)
+            def rtoks:[string] (EVGGridTemplate.tokenize(rowTemplateSpec))
+            for rtoks rtok:string rti {
+                if ((EVGGridTemplate.isLineNameToken(rtok)) == false) {
+                    if ((EVGGridTemplate.autoRepeatKind(rtok)) == "auto-fit") {
+                        rowFitStart = rowFitOthers
+                    } {
+                        if ((EVGGridTemplate.autoRepeatKind(rtok)) == "") {
+                            rowFitOthers = (rowFitOthers + ((EVGGridTemplate.parse(rtok)).count()))
+                        }
                     }
                 }
             }
-            ; (a min-height over the height is the height)
-            if (parent.hasDefiniteHeight && (parent.minHeight.isSet && ((parent.minHeight.pixels - (parent.box.getVerticalChrome())) > room))) {
-                room = (parent.minHeight.pixels - (parent.box.getVerticalChrome()))
-            }
-            if roomMin {
-                rowTemplateSpec = (EVGGridTemplate.resolveAutoRepeatAtLeast(rowTemplateSpec room rowGapPx 0 parent.inheritedFontSize))
-            } {
-                rowTemplateSpec = (EVGGridTemplate.resolveAutoRepeat(rowTemplateSpec room rowGapPx 0 parent.inheritedFontSize))
+            rowTemplateSpec = (this.gridRowRepeat(parent rowTemplateSpec innerHeight rowGapPx))
+            if (rowFitStart >= 0) {
+                rowFitCount = (((EVGGridTemplate.parse(rowTemplateSpec)).count()) - rowFitOthers)
             }
         }
         def rowTemplate:EVGGridTemplate (EVGGridTemplate.parse(rowTemplateSpec))
@@ -5293,6 +5334,28 @@ class EVGLayout {
             }
         }
 
+        ; auto-fit rows: a repetition no item lands in collapses, as the
+        ; columns' (CSS Grid 7.2.3.2)
+        def rowCollapsed:[int]
+        if (rowFitCount > 0) {
+            def rfk:int rowFitStart
+            while (rfk < (rowFitStart + rowFitCount)) {
+                def rused:boolean false
+                def rfm:int 0
+                while (rfm < itemCount) {
+                    def fr0:int (itemAt placedRow rfm)
+                    if ((fr0 <= rfk) && (rfk < (fr0 + (itemAt rowSpans rfm)))) {
+                        rused = true
+                    }
+                    rfm = (rfm + 1)
+                }
+                if (rused == false) {
+                    push rowCollapsed rfk
+                }
+                rfk = (rfk + 1)
+            }
+        }
+        def rowGiveBack:double ((to_double (array_length rowCollapsed)) * rowGapPx)
         def haveTemplateRows:boolean false
         if ((strlen rowSpec) > 0) {
             ; Inherited rows are already absolute pixels, so they do not need
@@ -5310,6 +5373,29 @@ class EVGLayout {
             }
             if parent.hasDefiniteHeight {
                 rows.percentOf = innerHeight
+            }
+            ; (fixed implicit rows past the template take their room first)
+            if ((rowsUsed > (rows.count())) && ((strlen parent.gridAutoRows) > 0)) {
+                def iar:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
+                if ((iar.hadError == false) && ((iar.count()) > 0)) {
+                    def ira:int (rows.count())
+                    while (ira < rowsUsed) {
+                        def iatk:EVGGridTrack (iar.trackAt(((ira - (rows.count())) % (iar.count()))))
+                        if ((iatk.kind == 0) && (iatk.hasMin == false)) {
+                            rowGiveBack = (rowGiveBack - iatk.value)
+                        }
+                        ira = (ira + 1)
+                    }
+                }
+            }
+            for rowCollapsed rck:int rcki {
+                if (rck < (rows.count())) {
+                    def rctk:EVGGridTrack (rows.trackAt(rck))
+                    rctk.kind = 0
+                    rctk.value = 0.0
+                    rctk.hasMin = false
+                    rctk.hasMax = false
+                }
             }
             ext.gridFrRowMin(this rows items placedRow rowSpans placedCol colSpans cols measureGap innerHeight)
             ; intrinsic rows are as tall as their items (span 1), and only
@@ -5348,9 +5434,9 @@ class EVGLayout {
                 ext.gridRowBaselines(this parent items placedRow rowSpans rowContent)
                 def acS:string parent.alignContent
                 rows.stretchAutos = (((strlen acS) == 0) || ((acS == "normal") || ((acS == "stretch") || (acS == "flex-start"))))
-                rows.resolveWithContent((innerHeight - rowGapTotal) rowContent rowContent)
+                rows.resolveWithContent(((innerHeight - rowGapTotal) + rowGiveBack) rowContent rowContent)
             } {
-                rows.resolve((innerHeight - rowGapTotal))
+                rows.resolve(((innerHeight - rowGapTotal) + rowGiveBack))
             }
             def r2:int 0
             while (r2 < rowsUsed) {
@@ -5457,6 +5543,11 @@ class EVGLayout {
             ext.gridFlexRows(parent rowSpec rowGapTotal rowSizes)
         }
 
+        for rowCollapsed rcz:int rczi {
+            if (rcz < (array_length rowSizes)) {
+                set rowSizes rcz (0.0 - rowGapPx)
+            }
+        }
         ; grid-auto-rows with a fixed size sets every implicit row.
         def autoRowFixed:boolean false
         def tplRows:int 0
@@ -5492,7 +5583,14 @@ class EVGLayout {
 
         ; Implicit auto rows of a grid with a definite height share the
         ; leftover space (align-content: normal stretches auto tracks).
-        if ((haveTemplateRows == false) && ((strlen rowSpec) == 0) && parent.hasDefiniteHeight && (rowsUsed > 0) && (autoRowFixed == false)) {
+        ; (with no definite height a min-height is the room, CSS Grid 12.6)
+        def stretchRoom:double innerHeight
+        def minRoom:boolean ((parent.hasDefiniteHeight == false) && (parent.minHeight.isSet && ((parent.minHeight.isPercent()) == false)))
+        if minRoom {
+            stretchRoom = (parent.minHeight.pixels - (parent.box.getVerticalChrome()))
+        }
+        def roomKnown:boolean (parent.hasDefiniteHeight || minRoom)
+        if ((haveTemplateRows == false) && ((strlen rowSpec) == 0) && roomKnown && (rowsUsed > 0) && (autoRowFixed == false)) {
             def ac:string parent.alignContent
             if (((strlen ac) == 0) || (ac == "normal") || (ac == "stretch")) {
                 def usedH:double rowGapTotal
@@ -5501,7 +5599,7 @@ class EVGLayout {
                     usedH = (usedH + (itemAt rowSizes u))
                     u = (u + 1)
                 }
-                def spare:double (innerHeight - usedH)
+                def spare:double (stretchRoom - usedH)
                 if (spare > 0.0) {
                     def each:double (spare / (to_double rowsUsed))
                     def u2:int 0
@@ -5830,6 +5928,9 @@ class EVGLayout {
             s = (s + 1)
         }
         total = (total + rowGapTotal)
+        if (total < 0.0) {
+            total = 0.0
+        }
 
         def absH:double innerHeight
         if (absH <= 0.0) {

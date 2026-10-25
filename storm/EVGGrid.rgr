@@ -442,6 +442,13 @@ class EVGGridTemplate {
             if (t.hasMax && (t.kind != 2)) {
                 t.maxUnit.resolve(available fontSize)
                 size = t.maxUnit.pixels
+                ; (a max under the min is floored by it)
+                if t.hasMin {
+                    t.minUnit.resolve(available fontSize)
+                    if (t.minUnit.pixels > size) {
+                        size = t.minUnit.pixels
+                    }
+                }
             } {
                 if t.hasMin {
                     t.minUnit.resolve(available fontSize)
@@ -505,10 +512,15 @@ class EVGGridTemplate {
                 ; Nested repeat() is out of scope, but minmax() inside repeat()
                 ; is the ordinary way to write a responsive album grid.
                 def innerTok:string (itemAt inner2 k)
+                if (EVGGridTemplate.isLineNameToken(innerTok)) {
+                    ; (names in the list label each repetition's lines)
+                    this.addLineNames(innerTok)
+                } {
                 if (EVGGridTemplate.isMinmax(innerTok)) {
                     this.addMinmax(innerTok)
                 } {
                     this.addTrack(innerTok)
+                }
                 }
                 k = (k + 1)
             }
@@ -776,6 +788,12 @@ class EVGGridTemplate {
                 if (((t.kind == 0) && (t.minIntrinsic > 1)) && (floorI < t.sizePx)) {
                     t.growTo = t.sizePx
                     t.sizePx = floorI
+                    t.growFixed = true
+                }
+                ; (minmax(<length>, <length>) the same from its min)
+                if ((((t.kind == 0) && t.hasMin) && (t.minIntrinsic == 0)) && ((t.growFixed == false) && (t.minUnit.pixels < t.sizePx))) {
+                    t.growTo = t.sizePx
+                    t.sizePx = t.minUnit.pixels
                     t.growFixed = true
                 }
                 used = (used + t.sizePx)

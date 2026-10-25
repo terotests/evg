@@ -41,6 +41,12 @@ class EVGCssExtra {
     ; or xy)
     def cbOuterX:boolean false
     def cbOuterY:boolean false
+    ; (cb-outer with s: its percentage sizes are of that block too, its
+    ; place stays where its parent put it)
+    def cbOuterSize:boolean false
+    ; a grid with percentage rows and no definite height: its content
+    ; height from the first pass, the rows sized again in it (-1: none)
+    def pctRowsHeight:double -1.0
     ; a CSS flex container (flex-box: true): its baseline is its first
     ; item's, synthesized from that item's border box when it has none
     def flexBox:boolean false
@@ -119,6 +125,7 @@ class EVGCssExtra {
         if (name == "cb-outer") {
             cbOuterX = ((indexOf value "x") >= 0)
             cbOuterY = ((indexOf value "y") >= 0)
+            cbOuterSize = ((indexOf value "s") >= 0)
             return
         }
         if (name == "flex-box") {
@@ -196,6 +203,7 @@ class EVGCssExtra {
         c.isCb = isCb
         c.cbOuterX = cbOuterX
         c.cbOuterY = cbOuterY
+        c.cbOuterSize = cbOuterSize
         c.flexBox = flexBox
         c.baseFromBottom = baseFromBottom
         c.central = central
