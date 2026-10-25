@@ -4610,6 +4610,8 @@ class EVGLayout {
         def total:double 0.0
         def widest:double 0.0
         def counted:int 0
+        def kidWs:[double]
+        def kidMains:[double]
         def i:int 0
         while (i < n) {
             def kid:EVGElement (el.getChild(i))
@@ -4665,6 +4667,19 @@ class EVGLayout {
                 if ((wasResolved || kid.unitsFixed) == false) {
                     kid.unitsResolved = false
                 }
+                push kidWs w
+                def km:double -1.0
+                if (kid.flexBasis.isSet && ((kid.flexBasis.isPercent()) == false)) {
+                    km = kid.flexBasis.pixels
+                } {
+                    if (kid.height.isSet && ((kid.height.isPercent()) == false)) {
+                        km = kid.height.pixels
+                    }
+                }
+                if (km >= 0.0) {
+                    km = ((km + kid.box.marginTopPx) + kid.box.marginBottomPx)
+                }
+                push kidMains km
                 if (w > widest) {
                     widest = w
                 }
@@ -4681,10 +4696,68 @@ class EVGLayout {
         if (isColumn || (wantMin && (el.flexWrap != "nowrap"))) {
             inner = widest
         }
+        ; (a column that wraps in a definite height is, at its widest, its
+        ; lines side by side)
+        if ((isColumn && (wantMin == false)) && ((el.flexWrapSet && (el.flexWrap == "wrap")) && (el.height.isSet && ((el.height.isPercent()) == false)))) {
+            inner = (this.columnLinesWidth(el kidWs kidMains gapPx widest))
+        }
         if (inner <= 0.0) {
             inner = 0.0
         }
         return (inner + (el.box.getHorizontalChrome()))
+    }
+
+    ; the lines of a wrapping column side by side: each as wide as its
+    ; widest item, a new one when the next item's main size passes the
+    ; height; `widest` when an item's main size is not known
+    fn columnLinesWidth:double (el:EVGElement ws:[double] mains:[double] gapPx:double widest:double) {
+        def room:double ((el.height.pixels - (el.box.getVerticalChrome())))
+        def mainGap:double 0.0
+        if el.rowGap.isSet {
+            mainGap = el.rowGap.pixels
+        } {
+            if el.gap.isSet {
+                mainGap = el.gap.pixels
+            }
+        }
+        def sum:double 0.0
+        def lineW:double 0.0
+        def lineH:double 0.0
+        def inLine:int 0
+        def lines:int 0
+        def k:int 0
+        while (k < (array_length ws)) {
+            def m:double (itemAt mains k)
+            if (m < 0.0) {
+                return widest
+            }
+            def add:double m
+            if (inLine > 0) {
+                add = (add + mainGap)
+            }
+            if ((inLine > 0) && ((lineH + add) > (room + 0.01))) {
+                sum = (sum + lineW)
+                lines = (lines + 1)
+                lineW = 0.0
+                lineH = 0.0
+                inLine = 0
+                add = m
+            }
+            lineH = (lineH + add)
+            if ((itemAt ws k) > lineW) {
+                lineW = (itemAt ws k)
+            }
+            inLine = (inLine + 1)
+            k = (k + 1)
+        }
+        if (inLine > 0) {
+            sum = (sum + lineW)
+            lines = (lines + 1)
+        }
+        if (lines > 1) {
+            sum = (sum + ((to_double (lines - 1)) * gapPx))
+        }
+        return sum
     }
 
     ; The grid's out-of-flow children, once the tracks are sized.

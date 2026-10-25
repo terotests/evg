@@ -3018,9 +3018,9 @@ class EVGLayoutFull {
                 }
                 while (cn < colsN) {
                     push colStarts (colShift + (cols.offsetOf(cn colGap)))
-                    ; (a collapsed auto-fit track ends where it starts, not
-                    ; before the grid)
-                    push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (EVGLayoutFull.atLeast0((cols.extentOf(cn 1 colGap)))))
+                    ; (a collapsed auto-fit track at the start ends at the
+                    ; grid's start, not a gap before it)
+                    push colEnds (EVGLayoutFull.atLeast(((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap))) colShift))
                     cn = (cn + 1)
                 }
                 ; (the padding edge: inside the border sides given as padding)
@@ -3057,7 +3057,7 @@ class EVGLayoutFull {
                         ax = (colShift + (cols.offsetOf(c0 colGap)))
                         aw = 0.0
                         if (cspan > 0) {
-                            aw = (EVGLayoutFull.atLeast0((cols.extentOf(c0 cspan colGap))))
+                            aw = ((EVGLayoutFull.atLeast((ax + (cols.extentOf(c0 cspan colGap))) colShift)) - ax)
                         }
                         ; (right to left the in-flow items are mirrored
                         ; afterwards; an area is mirrored here)
@@ -3075,7 +3075,7 @@ class EVGLayoutFull {
                 }
                 while (rn < rowsN) {
                     push rowStarts (rowShift + (lay.gridRowOffset(rowSizes rn rowGap)))
-                    push rowEnds ((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (EVGLayoutFull.atLeast0((itemAt rowSizes rn))))
+                    push rowEnds (EVGLayoutFull.atLeast(((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn)) rowShift))
                     rn = (rn + 1)
                 }
                 def rowAuto:[double] (EVGLayoutFull.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds (parent.box.paddingTopPx - pcx.foldT) (parent.box.paddingBottomPx - pcx.foldB) contentHeight))
@@ -3088,7 +3088,7 @@ class EVGLayoutFull {
                     rp.resolveNames(rowTemplate)
                     if (rp.start > 0) {
                         ay = (rowShift + (lay.gridRowOffset(rowSizes (rp.start - 1) rowGap)))
-                        ah = (EVGLayoutFull.atLeast0((lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))))
+                        ah = ((EVGLayoutFull.atLeast((ay + (lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))) rowShift)) - ay)
                     }
                 }
                 c.unitsResolved = false
@@ -3152,9 +3152,9 @@ class EVGLayoutFull {
     ; 9.2). [from size] from the content edge, or nothing with no
     ; placement (EVG's content box) or a line name alone (an area's,
     ; resolved by the placement)
-    sfn atLeast0:double (v:double) {
-        if (v < 0.0) {
-            return 0.0
+    sfn atLeast:double (v:double floor:double) {
+        if (v < floor) {
+            return floor
         }
         return v
     }
