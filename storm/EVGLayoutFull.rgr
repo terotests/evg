@@ -627,25 +627,9 @@ class EVGLayoutFull {
         return true
     }
 
-    ; grid-auto-flow: column: the items placed down the columns (CSS Grid
-    ; 8.5), as many rows as the explicit grid has, a new column when they
-    ; are full. The placements are written into the items for the row
-    ; algorithm and put back after
-    fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
-        def kids:[EVGElement]
-        def savedCols:[string]
-        def savedRows:[string]
-        def n:int (parent.getChildCount())
-        def i:int 0
-        while (i < n) {
-            def c:EVGElement (parent.getChild(i))
-            if (c.isAbsolute == false) {
-                push kids c
-                push savedCols c.gridColumn
-                push savedRows c.gridRow
-            }
-            i = (i + 1)
-        }
+    ; the column flow's placements (CSS Grid 8.5) of `kids` into cs and
+    ; rs, from their lines there (-1 auto) and spans
+    fn columnFlowPlace:void (parent:EVGElement kids:[EVGElement] cs:[int] csp:[int] rs:[int] rsp:[int]) {
         def colTpl:EVGGridTemplate (EVGGridTemplate.parse(parent.gridTemplateColumns))
         def rowSpec:string parent.gridTemplateRows
         if ((rowSpec == "none") || (rowSpec == "subgrid")) {
@@ -663,10 +647,6 @@ class EVGLayoutFull {
             }
         }
         def k:int (array_length kids)
-        def cs:[int]
-        def csp:[int]
-        def rs:[int]
-        def rsp:[int]
         def j:int 0
         while (j < k) {
             def c:EVGElement (itemAt kids j)
@@ -690,6 +670,10 @@ class EVGLayoutFull {
             nRows = 1
         }
         def taken:[string:boolean]
+        def dense:boolean ((indexOf parent.gridAutoFlow "dense") >= 0)
+        ; (where the items put in a column by the second pass end, the
+        ; next one there goes past them unless dense)
+        def lockEnd:[int]
         ; the items with both lines first, then the ones with a column,
         ; then the rest from the cursor
         def pass:int 0
@@ -708,14 +692,31 @@ class EVGLayoutFull {
                 }
                 if ((pass == 1) && ((c0 >= 0) && (r0 < 0))) {
                     mine = true
+                    while ((array_length lockEnd) <= c0) {
+                        push lockEnd 0
+                    }
                     def rr:int 0
+                    if (dense == false) {
+                        rr = (itemAt lockEnd c0)
+                    }
                     while ((EVGLayoutFull.areaTaken(taken c0 rr sc sr)) && (rr < 10000)) {
                         rr = (rr + 1)
                     }
                     r0 = rr
+                    set lockEnd c0 (rr + sr)
+                    ; (its rows are the implicit grid's before the rest
+                    ; are placed, CSS Grid 8.5 step 3)
+                    if ((rr + sr) > nRows) {
+                        nRows = (rr + sr)
+                    }
                 }
                 if ((pass == 2) && (c0 < 0)) {
                     mine = true
+                    ; (dense: every item from the start of the grid)
+                    if dense {
+                        curC = 0
+                        curR = 0
+                    }
                     if (r0 >= 0) {
                         if (r0 < curR) {
                             curC = (curC + 1)
@@ -754,17 +755,49 @@ class EVGLayoutFull {
                         }
                         a = (a + 1)
                     }
-                    def el:EVGElement (itemAt kids q)
-                    el.gridColumn = (((to_string (c0 + 1)) + " / span ") + (to_string sc))
-                    el.gridRow = (((to_string (r0 + 1)) + " / span ") + (to_string sr))
+                    set cs q c0
+                    set rs q r0
                 }
                 q = (q + 1)
             }
             pass = (pass + 1)
         }
+    }
+
+    ; grid-auto-flow: column: the items placed down the columns (CSS Grid
+    ; 8.5), as many rows as the explicit grid has, a new column when they
+    ; are full. The placements are written into the items for the row
+    ; algorithm and put back after
+    fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
+        def kids:[EVGElement]
+        def savedCols:[string]
+        def savedRows:[string]
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if (c.isAbsolute == false) {
+                push kids c
+                push savedCols c.gridColumn
+                push savedRows c.gridRow
+            }
+            i = (i + 1)
+        }
+        def cs:[int]
+        def csp:[int]
+        def rs:[int]
+        def rsp:[int]
+        this.columnFlowPlace(parent kids cs csp rs rsp)
+        def q:int 0
+        while (q < (array_length kids)) {
+            def el:EVGElement (itemAt kids q)
+            el.gridColumn = (((to_string ((itemAt cs q) + 1)) + " / span ") + (to_string (itemAt csp q)))
+            el.gridRow = (((to_string ((itemAt rs q) + 1)) + " / span ") + (to_string (itemAt rsp q)))
+            q = (q + 1)
+        }
         def h:double (lay.layoutGridFlow(parent))
         def z:int 0
-        while (z < k) {
+        while (z < (array_length kids)) {
             def c:EVGElement (itemAt kids z)
             c.gridColumn = (itemAt savedCols z)
             c.gridRow = (itemAt savedRows z)
@@ -791,6 +824,61 @@ class EVGLayoutFull {
                 }
             }
             pi = (pi + 1)
+        }
+        ; (in a row flow the items locked to a row sit side by side in it,
+        ; and no item is wider than the grid: as many columns as the most
+        ; any row holds, CSS Grid 8.5 steps 2 and 3)
+        if ((indexOf parent.gridAutoFlow "column") < 0) {
+            def perRow:[int]
+            def ri:int 0
+            while (ri < (parent.getChildCount())) {
+                def rc:EVGElement (parent.getChild(ri))
+                if ((rc.hasAbsolutePosition()) == false) {
+                    def cpl:EVGGridPlacement (EVGGridPlacement.parse(rc.gridColumn))
+                    if (cpl.span > lastLine) {
+                        lastLine = cpl.span
+                    }
+                    def rpl:EVGGridPlacement (EVGGridPlacement.parse(rc.gridRow))
+                    if ((rpl.start > 0) && (cpl.start == 0) && ((strlen cpl.startName) == 0) && (cpl.endLine == 0)) {
+                        def rr:int (rpl.start - 1)
+                        while (rr < ((rpl.start - 1) + rpl.span)) {
+                            while ((array_length perRow) <= rr) {
+                                push perRow 0
+                            }
+                            set perRow rr ((itemAt perRow rr) + cpl.span)
+                            if ((itemAt perRow rr) > lastLine) {
+                                lastLine = (itemAt perRow rr)
+                            }
+                            rr = (rr + 1)
+                        }
+                    }
+                }
+                ri = (ri + 1)
+            }
+        }
+        ; (in a column flow, as many as the placement fills)
+        if ((indexOf parent.gridAutoFlow "column") >= 0) {
+            def fk:[EVGElement]
+            def fi:int 0
+            while (fi < (parent.getChildCount())) {
+                def fc:EVGElement (parent.getChild(fi))
+                if ((fc.hasAbsolutePosition()) == false) {
+                    push fk fc
+                }
+                fi = (fi + 1)
+            }
+            def fcs:[int]
+            def fcsp:[int]
+            def frs:[int]
+            def frsp:[int]
+            this.columnFlowPlace(parent fk fcs fcsp frs frsp)
+            def fj:int 0
+            while (fj < (array_length fcs)) {
+                if (((itemAt fcs fj) + (itemAt fcsp fj)) > lastLine) {
+                    lastLine = ((itemAt fcs fj) + (itemAt fcsp fj))
+                }
+                fj = (fj + 1)
+            }
         }
         def autoCol:string parent.gridAutoColumns
         if ((strlen autoCol) == 0) {

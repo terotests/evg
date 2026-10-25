@@ -4182,6 +4182,7 @@ class EVGLayout {
         }
         ; with no room given, auto-fill repeats once
         spec = (EVGGridTemplate.resolveAutoRepeat(spec 0.0 gapPx 1 el.inheritedFontSize))
+        spec = (ext.implicitColumns(el spec))
         def tpl:EVGGridTemplate (EVGGridTemplate.parse(spec))
         def nc:int (tpl.count())
         if (nc < 1) {
