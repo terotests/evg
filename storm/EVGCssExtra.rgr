@@ -47,10 +47,17 @@ class EVGCssExtra {
     ; a line with no text: its baseline this far above its bottom
     ; (baseline-from-bottom; -1 when not said)
     def baseFromBottom:double -1.0
+    ; border sides of unequal widths that the front end gave EVG as padding
+    ; (EVG's border is one width): the padding edge is this far inside
+    ; (folded-border: top right bottom left)
+    def foldT:double 0.0
+    def foldR:double 0.0
+    def foldB:double 0.0
+    def foldL:double 0.0
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || (name == "baseline-from-bottom")))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || (name == "folded-border"))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -91,6 +98,16 @@ class EVGCssExtra {
             flexBox = (value == "true")
             return
         }
+        if (name == "folded-border") {
+            def fp:[string] (strsplit (trim value) " ")
+            if ((array_length fp) == 4) {
+                foldT = (EVGCssExtra.num((itemAt fp 0)))
+                foldR = (EVGCssExtra.num((itemAt fp 1)))
+                foldB = (EVGCssExtra.num((itemAt fp 2)))
+                foldL = (EVGCssExtra.num((itemAt fp 3)))
+            }
+            return
+        }
         if (name == "baseline-from-bottom") {
             def bfb@(optional):double (str2double value)
             if (!null? bfb) {
@@ -98,6 +115,14 @@ class EVGCssExtra {
             }
             return
         }
+    }
+
+    sfn num:double (v:string) {
+        def d@(optional):double (str2double v)
+        if (!null? d) {
+            return (unwrap d)
+        }
+        return 0.0
     }
 
     fn copy:EVGCssExtra () {
@@ -114,6 +139,10 @@ class EVGCssExtra {
         c.cbOuterY = cbOuterY
         c.flexBox = flexBox
         c.baseFromBottom = baseFromBottom
+        c.foldT = foldT
+        c.foldR = foldR
+        c.foldB = foldB
+        c.foldL = foldL
         return c
     }
 }

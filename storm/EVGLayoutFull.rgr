@@ -994,11 +994,13 @@ class EVGLayoutFull {
                     push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap)))
                     cn = (cn + 1)
                 }
-                def padS:double parent.box.paddingLeftPx
-                def padE:double parent.box.paddingRightPx
+                ; (the padding edge: inside the border sides given as padding)
+                def pcx:EVGCssExtra (EVGLayoutFull.cx(parent))
+                def padS:double (parent.box.paddingLeftPx - pcx.foldL)
+                def padE:double (parent.box.paddingRightPx - pcx.foldR)
                 if parent.resolvedRtl {
-                    padS = parent.box.paddingRightPx
-                    padE = parent.box.paddingLeftPx
+                    padS = (parent.box.paddingRightPx - pcx.foldR)
+                    padE = (parent.box.paddingLeftPx - pcx.foldL)
                 }
                 def colAuto:[double] (EVGLayoutFull.absAutoArea(c.gridColumn cols colStarts colEnds padS padE innerWidth))
                 if ((array_length colAuto) == 2) {
@@ -1047,7 +1049,7 @@ class EVGLayoutFull {
                     push rowEnds ((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn))
                     rn = (rn + 1)
                 }
-                def rowAuto:[double] (EVGLayoutFull.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds parent.box.paddingTopPx parent.box.paddingBottomPx contentHeight))
+                def rowAuto:[double] (EVGLayoutFull.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds (parent.box.paddingTopPx - pcx.foldT) (parent.box.paddingBottomPx - pcx.foldB) contentHeight))
                 if ((array_length rowAuto) == 2) {
                     ay = (itemAt rowAuto 0)
                     ah = (itemAt rowAuto 1)
