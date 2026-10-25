@@ -384,6 +384,9 @@ class EVGLayout {
     ; default is true, which is the block behaviour the root and any non-flex
     ; parent want.
     def layingOutAlongRow:boolean true
+    ; inside the measure of a min-width: max-content / max-width:
+    ; min-content box (intrinsicWidthNow), which does not nest
+    def measuringKeyword:boolean false
 
     ; And, for a COLUMN parent, whether the cross axis shrink-wraps.
     ;
@@ -1049,9 +1052,12 @@ class EVGLayout {
             def ai:int 0
             while (ai < childCount) {
                 def ac:EVGElement (element.getChild(ai))
-                if ((ac.isAbsolute && ((ac.isFixedPosition()) == false)) && ((ac.top.isSet && ac.bottom.isSet) && (ac.height.isSet == false))) {
+                if ((ac.isAbsolute && ((ac.isFixedPosition()) == false)) && (EVGLayout.followsHeight(ac))) {
                     def sx:double ((element.calculatedX + element.box.borderWidthPx) + element.box.paddingLeftPx)
                     def sy:double ((element.calculatedY + element.box.borderWidthPx) + element.box.paddingTopPx)
+                    ; (its percentages again, of this height)
+                    ac.unitsResolved = false
+                    ac.resolveUnits(element.calculatedInnerWidth element.calculatedInnerHeight)
                     this.layoutOutOfFlowChild(element ac element.calculatedInnerWidth element.calculatedInnerHeight sx sy (element.flexDirection != "column"))
                 }
                 ai = (ai + 1)
@@ -1482,6 +1488,26 @@ class EVGLayout {
             }
         }
         return out
+    }
+
+    ; Whether an absolute child's place or size comes from its parent's
+    ; height: stretched by `top` and `bottom`, hung from `bottom`, or a
+    ; percentage of it. A handle written `bottom: 0` (or `top: 50%`) on a
+    ; box whose height is its content's sat where the height was 0.
+    sfn followsHeight:boolean (ac:EVGElement) {
+        if ((ac.top.isSet && ac.bottom.isSet) && (ac.height.isSet == false)) {
+            return true
+        }
+        if (ac.bottom.isSet && (ac.top.isSet == false)) {
+            return true
+        }
+        if (ac.top.isSet && (ac.top.isPercent())) {
+            return true
+        }
+        if (ac.height.isSet && (ac.height.isPercent())) {
+            return true
+        }
+        return false
     }
 
     ; An out-of-flow child — `position: fixed`, a `Layer`, or an absolutely
@@ -4160,6 +4186,27 @@ class EVGLayout {
                     outer = (this.intrinsicOfChildren(el wantMin))
                 }
             }
+            ; (max-width: min-content holds a measure at most the min-content
+            ; one, then min-width: max-content at least the max-content one)
+            def kwMeasure:boolean ((measuringKeyword == false) && (((el.minWidth.isSet == false) && (el.minWidth.unitType == 8)) || ((el.maxWidth.isSet == false) && (el.maxWidth.unitType == 7))))
+            if kwMeasure {
+                measuringKeyword = true
+                if ((el.maxWidth.isSet == false) && (el.maxWidth.unitType == 7)) {
+                    def mnw:double (this.intrinsicWidthNow(el true))
+                    mnw = ((mnw - el.box.marginLeftPx) - el.box.marginRightPx)
+                    if (mnw < outer) {
+                        outer = mnw
+                    }
+                }
+                if ((el.minWidth.isSet == false) && (el.minWidth.unitType == 8)) {
+                    def mxw:double (this.intrinsicWidthNow(el false))
+                    mxw = ((mxw - el.box.marginLeftPx) - el.box.marginRightPx)
+                    if (mxw > outer) {
+                        outer = mxw
+                    }
+                }
+                measuringKeyword = false
+            }
             ; ...and its own `min-width` and `max-width` hold it, as they hold
             ; its laid-out width. Without them a 24px button with a 16px icon
             ; in it counted as 16 and the box around it came out too narrow.
@@ -4340,9 +4387,13 @@ class EVGLayout {
             i = (i + 1)
         }
         ; (fr tracks share one size per fr, the largest any of them
-        ; needs: CSS Grid 12.7.1 with no free space to divide)
+        ; needs: CSS Grid 12.7.1 with no free space to divide; under a
+        ; min-content constraint the fr is 0 and a track is its base size)
         def frUnit:double 0.0
         def cf:int 0
+        if wantMin {
+            cf = nc
+        }
         while (cf < nc) {
             def ft2:EVGGridTrack (tpl.trackAt(cf))
             if ((ft2.kind == 2) && (ft2.value > 0.0)) {
@@ -4410,7 +4461,7 @@ class EVGLayout {
             }
             if (t.hasMin && ((t.kind == 2) || (t.kind == 3))) {
                 t.minUnit.resolve(0.0 el.inheritedFontSize)
-                if (t.minUnit.pixels > tw) {
+                if ((t.minUnit.pixels > tw) || (wantMin && (t.kind == 2))) {
                     tw = t.minUnit.pixels
                 }
             }

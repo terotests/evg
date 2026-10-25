@@ -629,6 +629,33 @@ class CssBoxCheck {
         this.layoutAt(page28 400.0 400.0)
         this.ok("abs 300 between insets of 100 in 400: x 100, y 50" ((this.near((a28.calculatedX - page28.calculatedX) 100.0)) && (this.near((a28.calculatedY - page28.calculatedY) 50.0))))
 
+        ; --- 26. an absolute box hung from bottom: 0 of a box whose height is its
+        ; content's sits at that height's bottom ---------------------------------
+        def page29 (EVGElement.createDiv())
+        page29.setAttribute("width" "300px")
+        def p29 (EVGElement.createDiv())
+        p29.setAttribute("position" "relative")
+        def c29 (EVGElement.createDiv())
+        c29.setAttribute("height" "80px")
+        p29.addChild(c29)
+        def a29 (EVGElement.createDiv())
+        a29.setAttribute("position" "absolute")
+        a29.setAttribute("left" "0px")
+        a29.setAttribute("bottom" "0px")
+        a29.setAttribute("width" "10px")
+        a29.setAttribute("height" "10px")
+        p29.addChild(a29)
+        def h29 (EVGElement.createDiv())
+        h29.setAttribute("position" "absolute")
+        h29.setAttribute("left" "20px")
+        h29.setAttribute("top" "50%")
+        h29.setAttribute("width" "10px")
+        h29.setAttribute("height" "10px")
+        p29.addChild(h29)
+        page29.addChild(p29)
+        this.layoutAt(page29 300.0 600.0)
+        this.ok("abs bottom 0 / top 50% in an auto-height box of 80: y 70 and 40" ((this.near((a29.calculatedY - p29.calculatedY) 70.0)) && (this.near((h29.calculatedY - p29.calculatedY) 40.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
