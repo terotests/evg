@@ -57,6 +57,9 @@ class EVGGridTrack {
     ; how far an auto or fit-content() track may grow from its min-content
     ; base when there is room (CSS Grid 12.6, maximize tracks)
     def growTo:double 0.0
+    ; minmax() with an intrinsic min: 1 auto, 2 min-content, 3 max-content
+    ; (the track is at least what its items need, CSS Grid 12.5)
+    def minIntrinsic:int 0
 
     Constructor () {
         kind = 0
@@ -86,6 +89,10 @@ class EVGGridTemplate {
     ; justify-content / align-content normal or stretch: the space left
     ; goes to the auto tracks (CSS Grid 11.8); any other leaves it free
     def stretchAutos:boolean true
+    ; per track, the widest item whose own size (or min size) is definite:
+    ; the floor of a minmax(auto, <fixed>) track, where an item sized by its
+    ; content is clamped to the track instead (CSS Grid 6.6)
+    def definiteMin:[double]
 
     Constructor () {
         hadError = false
@@ -437,6 +444,15 @@ class EVGGridTemplate {
             return
         }
         def track:EVGGridTrack (itemAt tracks ((array_length tracks) - 1))
+        if (minStr == "auto") {
+            track.minIntrinsic = 1
+        }
+        if (minStr == "min-content") {
+            track.minIntrinsic = 2
+        }
+        if (minStr == "max-content") {
+            track.minIntrinsic = 3
+        }
         if ((EVGGridTemplate.isFrToken(minStr)) == false) {
             track.minUnit = (EVGUnit.parse(minStr))
             track.hasMin = track.minUnit.isSet
@@ -537,7 +553,7 @@ class EVGGridTemplate {
         def i:int 0
         while (i < (array_length tracks)) {
             def t:EVGGridTrack (itemAt tracks i)
-            if (t.kind == 3) {
+            if ((t.kind == 3) || (t.minIntrinsic > 0)) {
                 return true
             }
             i = (i + 1)
@@ -583,13 +599,25 @@ class EVGGridTemplate {
             if t.hasMax {
                 t.maxUnit.resolve(available 16.0)
             }
-            if (t.kind == 0) {
+            if ((t.kind == 0) || (t.kind == 1)) {
                 t.sizePx = t.value
-                used = (used + t.sizePx)
-                t.frozen = true
-            }
-            if (t.kind == 1) {
-                t.sizePx = ((available * t.value) / 100.0)
+                if (t.kind == 1) {
+                    t.sizePx = ((available * t.value) / 100.0)
+                }
+                ; (an intrinsic min floors the fixed max)
+                def floorI:double 0.0
+                if ((t.minIntrinsic == 1) && (i < (array_length definiteMin))) {
+                    floorI = (itemAt definiteMin i)
+                }
+                if ((t.minIntrinsic == 2) && (i < (array_length minContent))) {
+                    floorI = (itemAt minContent i)
+                }
+                if ((t.minIntrinsic == 3) && (i < (array_length content))) {
+                    floorI = (itemAt content i)
+                }
+                if (floorI > t.sizePx) {
+                    t.sizePx = floorI
+                }
                 used = (used + t.sizePx)
                 t.frozen = true
             }
@@ -756,15 +784,17 @@ class EVGGridTemplate {
         def k:int 0
         while (k < n) {
             def t3:EVGGridTrack (itemAt tracks k)
+            ; (a max under the min is ignored, CSS Grid 7.2.4, and so is
+            ; the fixed max of a track its items' intrinsic floor widened)
             if (t3.kind != 2) {
+                if (t3.hasMax && (t3.minIntrinsic == 0)) {
+                    if (t3.sizePx > t3.maxUnit.pixels) {
+                        t3.sizePx = t3.maxUnit.pixels
+                    }
+                }
                 if t3.hasMin {
                     if (t3.sizePx < t3.minUnit.pixels) {
                         t3.sizePx = t3.minUnit.pixels
-                    }
-                }
-                if t3.hasMax {
-                    if (t3.sizePx > t3.maxUnit.pixels) {
-                        t3.sizePx = t3.maxUnit.pixels
                     }
                 }
             }

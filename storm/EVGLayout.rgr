@@ -861,11 +861,14 @@ class EVGLayout {
                 if (descentAbs < 0.0) {
                     descentAbs = (0.0 - descentAbs)
                 }
-                def leading:double ((lineSpacing - (metrics.ascent + descentAbs)) / 2.0)
+                ; (each metric rounded to the pixel, as browsers have them)
+                def ascR:double (to_double (to_int (metrics.ascent + 0.5)))
+                def descR:double (to_double (to_int (descentAbs + 0.5)))
+                def leading:double ((lineSpacing - (ascR + descR)) / 2.0)
                 ; `textShiftY` is written below, once the height is final —
                 ; it is a share of the slack and there is no slack until then
                 ; — so the baseline is completed there as well.
-                element.calculatedBaseline = (element.box.paddingTopPx + element.box.borderWidthPx + leading + metrics.ascent)
+                element.calculatedBaseline = (element.box.paddingTopPx + element.box.borderWidthPx + leading + ascR)
                 element.calculatedLastBaseline = (element.calculatedBaseline + (lineSpacing * (to_double (lineCount - 1))))
                 element.calculatedDescent = descentAbs
                 element.hasBaseline = true
@@ -4330,9 +4333,11 @@ class EVGLayout {
             return (this.intrinsicOfChildren(el wantMin))
         }
         def widths:[double]
+        def defWidths:[double]
         def c0:int 0
         while (c0 < nc) {
             push widths 0.0
+            push defWidths 0.0
             c0 = (c0 + 1)
         }
         def n:int (el.getChildCount())
@@ -4351,6 +4356,11 @@ class EVGLayout {
                 if (w > (itemAt widths col)) {
                     set widths col w
                 }
+                if ((kid.width.isSet && ((kid.width.isPercent()) == false)) || kid.minWidth.isSet) {
+                    if (w > (itemAt defWidths col)) {
+                        set defWidths col w
+                    }
+                }
                 at = (at + 1)
             }
             i = (i + 1)
@@ -4361,7 +4371,18 @@ class EVGLayout {
             def t:EVGGridTrack (tpl.trackAt(c))
             def tw:double (itemAt widths c)
             if (t.kind == 0) {
+                ; (minmax() with an intrinsic min: at least its items)
+                def floorW:double 0.0
+                if (t.minIntrinsic == 1) {
+                    floorW = (itemAt defWidths c)
+                }
+                if (t.minIntrinsic > 1) {
+                    floorW = tw
+                }
                 tw = t.value
+                if (floorW > tw) {
+                    tw = floorW
+                }
             }
             if (t.hasMin && ((t.kind == 2) || (t.kind == 3))) {
                 t.minUnit.resolve(0.0 el.inheritedFontSize)
@@ -5243,6 +5264,11 @@ class EVGLayout {
             push colMinContent 0.0
             ci = (ci + 1)
         }
+        def dmi:int 0
+        while (dmi < colCount) {
+            push cols.definiteMin 0.0
+            dmi = (dmi + 1)
+        }
         if (cols.hasIntrinsicTrack()) {
             def ic:int 0
             while (ic < (array_length items)) {
@@ -5257,6 +5283,11 @@ class EVGLayout {
                         def m2:double (this.minIntrinsicWidthOf(it))
                         if (m2 > (itemAt colMinContent col2)) {
                             set colMinContent col2 m2
+                        }
+                        if ((it.width.isSet && ((it.width.isPercent()) == false)) || it.minWidth.isSet) {
+                            if (m2 > (itemAt cols.definiteMin col2)) {
+                                set cols.definiteMin col2 m2
+                            }
                         }
                     }
                 }
