@@ -861,6 +861,7 @@ class EVGLayout {
                 ; it is a share of the slack and there is no slack until then
                 ; — so the baseline is completed there as well.
                 element.calculatedBaseline = (element.box.paddingTopPx + element.box.borderWidthPx + leading + metrics.ascent)
+                element.calculatedLastBaseline = (element.calculatedBaseline + (lineSpacing * (to_double (lineCount - 1))))
                 element.calculatedDescent = descentAbs
                 element.hasBaseline = true
             }
@@ -951,6 +952,7 @@ class EVGLayout {
             }
             if (element.hasBaseline && (element.textShiftY != 0.0)) {
                 element.calculatedBaseline = (element.calculatedBaseline + element.textShiftY)
+                element.calculatedLastBaseline = (element.calculatedLastBaseline + element.textShiftY)
             }
         }
         element.calculatedPage = currentPage
@@ -2929,6 +2931,37 @@ class EVGLayout {
             return (el.box.marginTopPx + el.calculatedBaseline)
         }
         return (el.box.marginTopPx + el.calculatedHeight + el.box.marginBottomPx)
+    }
+
+    ; Distance from an element's top margin edge to its LAST baseline: the
+    ; last line's of a text node, else the lowest in-flow child's that has
+    ; one; with none, -1 (synthesized from the bottom margin edge)
+    fn lastBaselineOffsetOf:double (el:EVGElement) {
+        def n:int (el.getChildCount())
+        def best:double -1.0
+        def bestBottom:double -1.0
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                def cb:double (this.lastBaselineOffsetOf(c))
+                if (cb >= 0.0) {
+                    def bottom:double (c.calculatedY + c.calculatedHeight)
+                    if (bottom >= bestBottom) {
+                        bestBottom = bottom
+                        best = ((((c.calculatedY - c.box.marginTopPx) - el.calculatedY) + cb) + el.box.marginTopPx)
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        if (best >= 0.0) {
+            return best
+        }
+        if (el.hasBaseline && (n == 0)) {
+            return (el.box.marginTopPx + el.calculatedLastBaseline)
+        }
+        return -1.0
     }
 
     fn alignRow:double (rowElements:[EVGElement] parent:EVGElement rowHeight:double startX:double innerWidth:double) {
@@ -5423,7 +5456,7 @@ class EVGLayout {
             if (((strlen ga) == 0) || (ga == "auto")) {
                 ga = parent.alignItems
             }
-            def byBaseline:boolean ((ga == "baseline") || (ga == "first baseline"))
+            def byBaseline:boolean ((ga == "baseline") || ((ga == "first baseline") || (ga == "last baseline")))
             def placedV:boolean ((ga == "center") || ((ga == "end") || ((ga == "flex-end") || ((ga == "start") || ((ga == "self-end") || byBaseline)))))
             if (el.marginAutoTop || el.marginAutoBottom) {
                 placedV = true
@@ -5610,6 +5643,88 @@ class EVGLayout {
                 }
             }
             bp = (bp + 1)
+        }
+
+        ; align-self: last baseline: the items share their last baselines,
+        ; the group at the end of the row they end in (its fallback is safe
+        ; end)
+        def lp:int 0
+        while (lp < itemCount) {
+            def lel:EVGElement (itemAt items lp)
+            def lga:string lel.alignSelf
+            if (((strlen lga) == 0) || (lga == "auto")) {
+                lga = parent.alignItems
+            }
+            if ((lga == "last baseline") && ((lel.marginAutoTop || lel.marginAutoBottom) == false)) {
+                def lrow:int (((itemAt placedRow lp) + (itemAt rowSpans lp)) - 1)
+                def ldone:boolean false
+                def lq:int 0
+                while (lq < lp) {
+                    def qel2:EVGElement (itemAt items lq)
+                    def qga2:string qel2.alignSelf
+                    if (((strlen qga2) == 0) || (qga2 == "auto")) {
+                        qga2 = parent.alignItems
+                    }
+                    if ((qga2 == "last baseline") && ((((itemAt placedRow lq) + (itemAt rowSpans lq)) - 1) == lrow)) {
+                        ldone = true
+                    }
+                    lq = (lq + 1)
+                }
+                if (ldone == false) {
+                    ; the most any of them has under its last baseline
+                    def maxD:double 0.0
+                    def lk:int lp
+                    while (lk < itemCount) {
+                        def kel2:EVGElement (itemAt items lk)
+                        def kga2:string kel2.alignSelf
+                        if (((strlen kga2) == 0) || (kga2 == "auto")) {
+                            kga2 = parent.alignItems
+                        }
+                        if ((kga2 == "last baseline") && ((((itemAt placedRow lk) + (itemAt rowSpans lk)) - 1) == lrow)) {
+                            def kOuter:double ((kel2.calculatedHeight + kel2.box.marginTopPx) + kel2.box.marginBottomPx)
+                            def kLb:double (this.lastBaselineOffsetOf(kel2))
+                            if (kLb < 0.0) {
+                                kLb = kOuter
+                            }
+                            if ((kOuter - kLb) > maxD) {
+                                maxD = (kOuter - kLb)
+                            }
+                        }
+                        lk = (lk + 1)
+                    }
+                    def rowEnd:double ((startY + rowShift) + ((this.gridRowOffset(rowSizes lrow rowGapPx)) + (itemAt rowSizes lrow)))
+                    def lm:int lp
+                    while (lm < itemCount) {
+                        def mel2:EVGElement (itemAt items lm)
+                        def mga2:string mel2.alignSelf
+                        if (((strlen mga2) == 0) || (mga2 == "auto")) {
+                            mga2 = parent.alignItems
+                        }
+                        if ((mga2 == "last baseline") && ((((itemAt placedRow lm) + (itemAt rowSpans lm)) - 1) == lrow)) {
+                            def mOuter:double ((mel2.calculatedHeight + mel2.box.marginTopPx) + mel2.box.marginBottomPx)
+                            def mLb:double (this.lastBaselineOffsetOf(mel2))
+                            if (mLb < 0.0) {
+                                mLb = mOuter
+                            }
+                            ; (its margin bottom edge that far above the row's end)
+                            def wantBottom:double (rowEnd - (maxD - (mOuter - mLb)))
+                            def nowBottom:double ((mel2.calculatedY + mel2.calculatedHeight) + mel2.box.marginBottomPx)
+                            def shiftL:double (wantBottom - nowBottom)
+                            ; (safe: not above the row's start)
+                            def topNow:double (mel2.calculatedY - mel2.box.marginTopPx)
+                            def rowTop:double ((startY + rowShift) + (this.gridRowOffset(rowSizes (itemAt placedRow lm) rowGapPx)))
+                            if ((topNow + shiftL) < rowTop) {
+                                shiftL = (rowTop - topNow)
+                            }
+                            if (shiftL != 0.0) {
+                                this.translateSubtree(mel2 0.0 shiftL)
+                            }
+                        }
+                        lm = (lm + 1)
+                    }
+                }
+            }
+            lp = (lp + 1)
         }
 
         ; Leave the rows behind for an enclosing grid that has to size its own

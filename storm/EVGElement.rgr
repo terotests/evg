@@ -1057,6 +1057,9 @@ class EVGElement {
     ; in-flow child for containers, so `align-items: baseline` has something to
     ; line up. 0 means "no text baseline" — CSS then uses the bottom margin edge.
     def calculatedBaseline:double 0.0
+    ; a text node's LAST line's baseline the same way (align-self: last
+    ; baseline); EVGLayout.lastBaselineOffsetOf finds a container's
+    def calculatedLastBaseline:double 0.0
     def calculatedDescent:double 0.0
     def hasBaseline:boolean false
     ; True when this element's height was definite (explicit, page-sized, or
