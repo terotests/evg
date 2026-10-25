@@ -772,6 +772,14 @@ class EVGGridTemplate {
                 if ((t.minIntrinsic == 1) && (i < (array_length definiteMin))) {
                     floorI = (itemAt definiteMin i)
                 }
+                ; (rows have no definite minimums: their items' content,
+                ; clamped by the fixed max)
+                if (((t.minIntrinsic == 1) && (i >= (array_length definiteMin))) && (i < (array_length minContent))) {
+                    floorI = (itemAt minContent i)
+                    if (floorI > t.sizePx) {
+                        floorI = t.sizePx
+                    }
+                }
                 if ((t.minIntrinsic == 2) && (i < (array_length minContent))) {
                     floorI = (itemAt minContent i)
                 }
@@ -785,7 +793,7 @@ class EVGGridTemplate {
                 ; items and grows to the length while there is room: CSS
                 ; Grid 12.5, maximize tracks before the fr ones expand)
                 t.growFixed = false
-                if (((t.kind == 0) && (t.minIntrinsic > 1)) && (floorI < t.sizePx)) {
+                if (((t.kind == 0) && (t.minIntrinsic >= 1)) && (floorI < t.sizePx)) {
                     t.growTo = t.sizePx
                     t.sizePx = floorI
                     t.growFixed = true

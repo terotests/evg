@@ -1128,6 +1128,27 @@ class CssBoxCheck {
         this.layoutAt(page53 300.0 600.0)
         this.ok("minmax(40px, auto) rows, one with a 40px item, in 200px: 100 and 100" ((this.near((c53.calculatedY - g53.calculatedY) 100.0)) && (this.near(c53.calculatedHeight 100.0))))
 
+        ; --- 50. minmax(auto, 0px): the items' margins and min sizes only ---
+        def page54 (EVGElement.createDiv())
+        page54.setAttribute("width" "300px")
+        def g54 (EVGElement.createDiv())
+        g54.setAttribute("display" "grid")
+        g54.setAttribute("width" "150px")
+        g54.setAttribute("grid-template-columns" "minmax(auto, 0px)")
+        g54.setAttribute("grid-template-rows" "minmax(auto, 0px)")
+        def a54 (EVGElement.createDiv())
+        a54.setAttribute("min-width" "40px")
+        a54.setAttribute("min-height" "30px")
+        a54.setAttribute("margin" "5px")
+        def k54 (EVGElement.createDiv())
+        k54.setAttribute("width" "100px")
+        k54.setAttribute("height" "100px")
+        a54.addChild(k54)
+        g54.addChild(a54)
+        page54.addChild(g54)
+        this.layoutAt(page54 300.0 600.0)
+        this.ok("minmax(auto, 0px) tracks around min-width 40, min-height 30, margin 5: the item is 40 x 30" ((this.near(a54.calculatedWidth 40.0)) && (this.near(a54.calculatedHeight 30.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
