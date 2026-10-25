@@ -961,6 +961,12 @@ class EVGLayoutFull {
         if ((rowSpec == "none") || (rowSpec == "subgrid")) {
             rowSpec = ""
         }
+        ; (auto repeats count as many rows as the core expands them to)
+        if ((indexOf rowSpec "auto-f") >= 0) {
+            def rlay (new EVGLayout())
+            def rgaps:[double] (rlay.gridGaps(parent parent.calculatedInnerWidth parent.calculatedInnerHeight))
+            rowSpec = (rlay.gridRowRepeat(parent rowSpec parent.calculatedInnerHeight (itemAt rgaps 1)))
+        }
         def rowTpl:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
         def nRows:int (rowTpl.count())
         if ((strlen rowSpec) == 0) {

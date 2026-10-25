@@ -939,6 +939,28 @@ class CssBoxCheck {
         this.layoutAt(page44 300.0 600.0)
         this.ok("height 100px, min-height 200px, a 200px child: both 200" ((this.near(b44.calculatedHeight 200.0)) && (this.near(k44.calculatedHeight 200.0))))
 
+        ; --- 41. column flow: auto-fill rows are counted when the cursor places items ---
+        def page45 (EVGElement.createDiv())
+        page45.setAttribute("width" "300px")
+        def g45 (EVGElement.createDiv())
+        g45.setAttribute("display" "grid")
+        g45.setAttribute("width" "100px")
+        g45.setAttribute("height" "50px")
+        g45.setAttribute("grid-auto-flow" "column")
+        g45.setAttribute("grid-auto-columns" "25px")
+        g45.setAttribute("grid-template-rows" "repeat(auto-fill, 25px)")
+        def a45 (EVGElement.createDiv())
+        a45.setAttribute("grid-column" "1")
+        g45.addChild(a45)
+        def b45 (EVGElement.createDiv())
+        b45.setAttribute("grid-row" "1")
+        g45.addChild(b45)
+        def c45 (EVGElement.createDiv())
+        g45.addChild(c45)
+        page45.addChild(g45)
+        this.layoutAt(page45 300.0 600.0)
+        this.ok("two auto-fill rows: the auto item goes under the row-1 item, at 25,25" ((this.near((c45.calculatedX - g45.calculatedX) 25.0)) && (this.near((c45.calculatedY - g45.calculatedY) 25.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
