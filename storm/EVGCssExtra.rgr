@@ -1,0 +1,167 @@
+; ==============================================================================
+; EVGCssExtra — the flags only the CSS conformance layer reads
+; ==============================================================================
+;
+; A CSS front end (MfdDomView) marks boxes with what a CSS layout needs and
+; EVG's own model does not have: containing blocks above the parent, static
+; places of absolute boxes, line rows, synthesized baselines. They live here,
+; in one object an element allocates the first time one of them is set, so an
+; element that has none (every element of a Lite layout) carries one pointer
+; for all of them. EVGLayoutFull (EVGLayoutExt) is what reads them; the core
+; layout only asks whether an element has the object at all.
+
+class EVGCssExtra {
+    ; joined to the item before it with no gap: its margin-left takes the
+    ; row's column-gap back, which at the start of a wrapped line there is
+    ; none to take (line-join: true)
+    def lineJoin:boolean false
+    ; a box that is not a containing block for percentage heights (a line):
+    ; its children's percentages are of its parent's height
+    ; (height-through: true)
+    def heightThrough:boolean false
+    ; an absolutely positioned child of a CSS flex container with no inset:
+    ; its static position is where justify-content and align-self put it
+    ; as the container's only item (CSS Flexbox 4.1)
+    def staticFlex:boolean false
+    ; in a grid area, the one axis ("x" or "y") with no inset, which
+    ; justify-self / align-self place along (static-flex: x or y)
+    def staticAxis:string ""
+    ; an absolutely positioned child of a block with no inset: its static
+    ; place is under the in-flow boxes before it (static-flow: true)
+    def staticFlow:boolean false
+    ; an absolutely positioned box with no positioned box around it: its
+    ; insets are from the page's corner (icb: x, y or xy)
+    def icbX:boolean false
+    def icbY:boolean false
+    ; a positioned box: the containing block of the absolute boxes inside
+    ; it whose own parent is not (cb: true)
+    def isCb:boolean false
+    ; an absolute box whose containing block is a positioned box further
+    ; up, laid out again in it along the axes with an inset (cb-outer: x, y
+    ; or xy)
+    def cbOuterX:boolean false
+    def cbOuterY:boolean false
+    ; a CSS flex container (flex-box: true): its baseline is its first
+    ; item's, synthesized from that item's border box when it has none
+    def flexBox:boolean false
+    ; a line with no text: its baseline this far above its bottom
+    ; (baseline-from-bottom; -1 when not said)
+    def baseFromBottom:double -1.0
+    ; border sides of unequal widths that the front end gave EVG as padding
+    ; (EVG's border is one width): the padding edge is this far inside
+    ; (folded-border: top right bottom left)
+    ; text set in a vertical line: its baselines are the lines' middles,
+    ; the central baseline (baseline-central: true)
+    def central:boolean false
+    ; a box turned over across its block axis after the layout (a vertical
+    ; box in the other vertical mode than its parent's): its first and last
+    ; baselines are each other's, from the other side (baseline-flip: true)
+    def flipBase:boolean false
+    def flipDone:boolean false
+    def flipLast:double 0.0
+    def foldT:double 0.0
+    def foldR:double 0.0
+    def foldB:double 0.0
+    def foldL:double 0.0
+
+    ; the attribute names that are kept here
+    sfn owns:boolean (name:string) {
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "folded-border") || ((name == "baseline-central") || (name == "baseline-flip"))))))))))))
+    }
+
+    fn set:void (name:string value:string) {
+        if (name == "line-join") {
+            lineJoin = (value == "true")
+            return
+        }
+        if (name == "height-through") {
+            heightThrough = (value == "true")
+            return
+        }
+        if (name == "static-flex") {
+            staticFlex = (value == "true")
+            if ((value == "x") || (value == "y")) {
+                staticAxis = value
+            }
+            return
+        }
+        if (name == "static-flow") {
+            staticFlow = (value == "true")
+            return
+        }
+        if (name == "icb") {
+            icbX = ((indexOf value "x") >= 0)
+            icbY = ((indexOf value "y") >= 0)
+            return
+        }
+        if (name == "cb") {
+            isCb = (value == "true")
+            return
+        }
+        if (name == "cb-outer") {
+            cbOuterX = ((indexOf value "x") >= 0)
+            cbOuterY = ((indexOf value "y") >= 0)
+            return
+        }
+        if (name == "flex-box") {
+            flexBox = (value == "true")
+            return
+        }
+        if (name == "baseline-flip") {
+            flipBase = (value == "true")
+            return
+        }
+        if (name == "baseline-central") {
+            central = (value == "true")
+            return
+        }
+        if (name == "folded-border") {
+            def fp:[string] (strsplit (trim value) " ")
+            if ((array_length fp) == 4) {
+                foldT = (EVGCssExtra.num((itemAt fp 0)))
+                foldR = (EVGCssExtra.num((itemAt fp 1)))
+                foldB = (EVGCssExtra.num((itemAt fp 2)))
+                foldL = (EVGCssExtra.num((itemAt fp 3)))
+            }
+            return
+        }
+        if (name == "baseline-from-bottom") {
+            def bfb@(optional):double (str2double value)
+            if (!null? bfb) {
+                baseFromBottom = (unwrap bfb)
+            }
+            return
+        }
+    }
+
+    sfn num:double (v:string) {
+        def d@(optional):double (str2double v)
+        if (!null? d) {
+            return (unwrap d)
+        }
+        return 0.0
+    }
+
+    fn copy:EVGCssExtra () {
+        def c (new EVGCssExtra())
+        c.lineJoin = lineJoin
+        c.heightThrough = heightThrough
+        c.staticFlex = staticFlex
+        c.staticAxis = staticAxis
+        c.staticFlow = staticFlow
+        c.icbX = icbX
+        c.icbY = icbY
+        c.isCb = isCb
+        c.cbOuterX = cbOuterX
+        c.cbOuterY = cbOuterY
+        c.flexBox = flexBox
+        c.baseFromBottom = baseFromBottom
+        c.central = central
+        c.flipBase = flipBase
+        c.foldT = foldT
+        c.foldR = foldR
+        c.foldB = foldB
+        c.foldL = foldL
+        return c
+    }
+}

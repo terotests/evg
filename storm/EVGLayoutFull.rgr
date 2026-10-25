@@ -1,0 +1,1303 @@
+; ==============================================================================
+; EVGLayoutFull — the CSS conformance layer over the core layout
+; ==============================================================================
+;
+; What a browser's CSS needs and a native EVG document does not: the hooks of
+; EVGLayoutExt answered the CSS way. A front end that lays CSS out (MfdDomView
+; through web/dom) installs it once, before its first layout:
+;
+;     EVGLayoutFull.install()
+;
+; and every EVGLayout made after that consults it. The flags it reads are on
+; the elements' EVGCssExtra (EVGElement.css), which only such a front end sets.
+;
+; Here: containing blocks above the parent and the page's (cb, cb-outer,
+; icb), static positions of absolute boxes in flex containers and blocks
+; (static-flex, static-flow), line rows (height-through, line-join, baseline-
+; from-bottom), synthesized baselines of flex and grid items and containers,
+; last baselines, wrapping columns, absolute boxes in grid areas, grid-auto-
+; flow: column and the implicit columns placements make.
+
+Import "EVGLayout.rgr"
+
+class EVGLayoutFull {
+    Extends(EVGLayoutExt)
+
+    ; installs the CSS layer for the layouts made from now on
+    sfn install:void () {
+        EVGLayoutExtDefault.install((new EVGLayoutFull()))
+    }
+
+    ; an element's CSS flags, or none set
+    sfn cx:EVGCssExtra (el:EVGElement) {
+        if (!null? el.css) {
+            return (unwrap el.css)
+        }
+        return (new EVGCssExtra())
+    }
+
+    fn autoInnerHeight:void (lay:EVGLayout el:EVGElement parentHeight:double) {
+        if ((EVGLayoutFull.cx(el)).heightThrough) {
+            el.calculatedInnerHeight = parentHeight
+        }
+    }
+
+    ; a line with no text has its baseline above its bottom
+    ; (baseline-from-bottom); a CSS flex container's baseline is its first
+    ; item's, synthesized from that item's border box when it has none; a
+    ; positioned box is the containing block of the absolute boxes inside
+    ; whose parents are not
+    fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
+        def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        ; (its lines are equally tall: one is the content's height less
+        ; the distance between the first and the last baseline)
+        if ((css.central && element.hasBaseline) && ((childCount == 0) && ((strlen element.textContent) > 0))) {
+            def top:double (element.box.paddingTopPx + element.box.borderWidthPx)
+            def contentH:double ((element.calculatedHeight - top) - (element.box.paddingBottomPx + element.box.borderWidthPx))
+            def spread:double 0.0
+            if (element.calculatedLastBaseline > element.calculatedBaseline) {
+                spread = (element.calculatedLastBaseline - element.calculatedBaseline)
+            }
+            def lineH:double (contentH - spread)
+            element.calculatedBaseline = (top + (lineH / 2.0))
+            element.calculatedLastBaseline = (element.calculatedBaseline + spread)
+            element.calculatedDescent = (lineH / 2.0)
+        }
+        if ((element.hasBaseline == false) && (css.baseFromBottom >= 0.0)) {
+            element.calculatedBaseline = (element.calculatedHeight - css.baseFromBottom)
+            element.calculatedDescent = css.baseFromBottom
+            element.hasBaseline = true
+        }
+        if ((element.hasBaseline == false) && (childCount > 0)) {
+            def i:int 0
+            def n:int childCount
+            if (css.flexBox && (element.display == "flex")) {
+                while (i < n) {
+                    def f:EVGElement (element.getChild(i))
+                    if ((f.isAbsolute == false) && ((f.isHidden()) == false)) {
+                        if f.hasBaseline {
+                            element.calculatedBaseline = ((f.calculatedY - element.calculatedY) + f.calculatedBaseline)
+                            element.calculatedDescent = f.calculatedDescent
+                        } {
+                            element.calculatedBaseline = ((f.calculatedY - element.calculatedY) + f.calculatedHeight)
+                            element.calculatedDescent = 0.0
+                        }
+                        element.hasBaseline = true
+                        i = n
+                    }
+                    i = (i + 1)
+                }
+            }
+        }
+        if (css.isCb && (childCount > 0)) {
+            this.placeOuterAbs(lay element element)
+        }
+        if css.flipBase {
+            css.flipDone = false
+            if ((element.hasBaseline == false) && (childCount > 0)) {
+                lay.inheritBaselineFromFirstChild(element)
+            }
+            if element.hasBaseline {
+                def h:double element.calculatedHeight
+                def b1:double element.calculatedBaseline
+                def b2:double ((this.lastBaselineOffsetOf(lay element)) - element.box.marginTopPx)
+                if (b2 < 0.0) {
+                    b2 = b1
+                }
+                element.calculatedBaseline = (h - b2)
+                css.flipLast = (h - b1)
+                element.calculatedLastBaseline = css.flipLast
+                css.flipDone = true
+            }
+        }
+    }
+
+    ; a grid whose first item has no baseline (a picture) synthesizes it
+    ; from that item's bottom margin edge (CSS Align 9.1)
+    fn gridBaseline:void (lay:EVGLayout element:EVGElement) {
+        if element.hasBaseline {
+            return
+        }
+        def n:int (element.getChildCount())
+        def j:int 0
+        while (j < n) {
+            def g:EVGElement (element.getChild(j))
+            if ((g.isAbsolute == false) && ((g.isHidden()) == false)) {
+                element.calculatedBaseline = (((g.calculatedY - element.calculatedY) + g.calculatedHeight) + g.box.marginBottomPx)
+                element.calculatedDescent = 0.0
+                element.hasBaseline = true
+                return
+            }
+            j = (j + 1)
+        }
+    }
+
+    ; with no positioned box around it, an absolute box's insets are from
+    ; the page's corner: the initial containing block (icb)
+    fn absFrame:EVGAbsFrame (lay:EVGLayout child:EVGElement startX:double startY:double innerWidth:double innerHeight:double) {
+        def f (new EVGAbsFrame())
+        f.x = startX
+        f.y = startY
+        f.w = innerWidth
+        f.h = innerHeight
+        def css:EVGCssExtra (EVGLayoutFull.cx(child))
+        if ((css.icbX || css.icbY) && (child.viewportW > 0.0)) {
+            if css.icbX {
+                f.x = child.viewportX
+                f.w = child.viewportW
+            }
+            if css.icbY {
+                f.y = child.viewportY
+                f.h = child.viewportH
+            }
+        }
+        return f
+    }
+
+    ; an absolute child of a flex container with no inset (static-flex):
+    ; its static position is where justify-content and align-self put it
+    ; as the container's only item (CSS Flexbox 4.1)
+    fn absStatic:EVGAbsFrame (lay:EVGLayout parent:EVGElement child:EVGElement innerWidth:double innerHeight:double fixX0:double fixY0:double) {
+        def f (new EVGAbsFrame())
+        def fixX:double fixX0
+        def fixY:double fixY0
+        if ((EVGLayoutFull.cx(child)).staticFlex && (parent.display != "grid")) {
+        def outW:double ((child.calculatedWidth + child.box.marginLeftPx) + child.box.marginRightPx)
+        def outH:double ((child.calculatedHeight + child.box.marginTopPx) + child.box.marginBottomPx)
+        def mainFree:double (innerWidth - outW)
+        def crossFree:double (innerHeight - outH)
+        if ((parent.flexDirection == "column") || (parent.flexDirection == "column-reverse")) {
+            mainFree = (innerHeight - outH)
+            crossFree = (innerWidth - outW)
+        }
+        def jc:string parent.justifyContent
+        def safeJ:boolean ((indexOf jc "safe ") == 0)
+        if (((indexOf jc "safe ") == 0) || ((indexOf jc "unsafe ") == 0)) {
+            jc = (substring jc ((indexOf jc " ") + 1) (strlen jc))
+        }
+        if (safeJ && (mainFree < 0.0)) {
+            jc = "flex-start"
+        }
+        def isColS:boolean ((parent.flexDirection == "column") || (parent.flexDirection == "column-reverse"))
+        def revS:boolean ((parent.flexDirection == "row-reverse") || (parent.flexDirection == "column-reverse"))
+        ; (left and right place along a row only; down a column
+        ; they are the start)
+        if (isColS && ((jc == "left") || (jc == "right"))) {
+            jc = "start"
+        }
+        def mainOff:double 0.0
+        if ((jc == "center") || ((jc == "space-around") || (jc == "space-evenly"))) {
+            mainOff = (mainFree / 2.0)
+        }
+        if ((jc == "flex-end") || ((jc == "end") || (jc == "right"))) {
+            mainOff = mainFree
+        }
+        ; a reversed direction starts at the other end for the
+        ; flex- values (and normal and the distributions); start
+        ; and end follow the writing direction, left and right
+        ; nothing
+        def flexKw:boolean ((jc != "start") && ((jc != "end") && ((jc != "left") && (jc != "right"))))
+        def flipMain:boolean (revS && flexKw)
+        if ((isColS == false) && (parent.resolvedRtl && ((jc != "left") && (jc != "right")))) {
+            flipMain = (flipMain == false)
+        }
+        if flipMain {
+            mainOff = (mainFree - mainOff)
+        }
+        def ca:string (lay.crossAlignIn(((parent.flexDirection == "column") || (parent.flexDirection == "column-reverse")) child parent.alignItems))
+        ; `safe` falls back to the start when the box does not fit
+        def safeA:boolean ((indexOf ca "safe ") == 0)
+        if (((indexOf ca "safe ") == 0) || ((indexOf ca "unsafe ") == 0)) {
+            ca = (substring ca ((indexOf ca " ") + 1) (strlen ca))
+        }
+        def toEnd:boolean ((ca == "flex-end") || ((ca == "end") || ((ca == "self-end") || (ca == "last baseline"))))
+        ; wrap-reverse swaps the cross axis' start and end for
+        ; the flex- values and the stretch (normal)
+        if (parent.flexWrap == "wrap-reverse") {
+            if (ca == "flex-end") {
+                toEnd = false
+            }
+            if ((ca == "flex-start") || ((ca == "stretch") || ((ca == "normal") || ((strlen ca) == 0)))) {
+                toEnd = true
+            }
+        }
+        def crossOff:double 0.0
+        if (ca == "center") {
+            crossOff = (crossFree / 2.0)
+        }
+        if toEnd {
+            crossOff = crossFree
+        }
+        if (safeA && (crossFree < 0.0)) {
+            crossOff = 0.0
+        }
+        ; right to left the inline axis starts on the right: a
+        ; column's cross axis, a row's main axis (left and right
+        ; are where they say)
+        ; (self-start and self-end by the item's own direction)
+        def crossRtl:boolean parent.resolvedRtl
+        if ((ca == "self-start") || (ca == "self-end")) {
+            crossRtl = child.resolvedRtl
+        }
+        if (crossRtl && isColS) {
+            crossOff = (crossFree - crossOff)
+        }
+        if isColS {
+            fixX = (fixX + crossOff)
+            fixY = (fixY + mainOff)
+        } {
+            fixX = (fixX + mainOff)
+            fixY = (fixY + crossOff)
+        }
+        }
+        f.x = fixX
+        f.y = fixY
+        return f
+    }
+
+    ; an absolute child of a block with no inset (static-flow): its static
+    ; place is under the in-flow boxes before it and the margin under the
+    ; last of them
+    fn staticTop:double (lay:EVGLayout parent:EVGElement index:int currentY:double startY:double) {
+        if ((EVGLayoutFull.cx((parent.getChild(index)))).staticFlow == false) {
+            return startY
+        }
+        def staticY:double currentY
+        def pi:int (index - 1)
+        while (pi >= 0) {
+            def pc:EVGElement (parent.getChild(pi))
+            if ((pc.isAbsolute == false) && ((pc.isHidden()) == false)) {
+                def pb:double (((pc.calculatedY + pc.calculatedHeight) + pc.box.marginBottomPx))
+                if (pb > staticY) {
+                    staticY = pb
+                }
+                pi = -1
+            }
+            pi = (pi - 1)
+        }
+        return staticY
+    }
+
+    ; an item joined to the one before (line-join) takes the gap back with
+    ; its margin, so a line it starts gives that gap to it
+    fn lineStartGap:double (child:EVGElement gap:double) {
+        if ((EVGLayoutFull.cx(child)).lineJoin) {
+            return gap
+        }
+        return 0.0
+    }
+
+    ; a flex or grid item's baseline is synthesized from its border box
+    ; (CSS Align 9.1), except in a line of text (height-through)
+    fn synthBorder:boolean (parent:EVGElement) {
+        return ((EVGLayoutFull.cx(parent)).heightThrough == false)
+    }
+
+    fn lastBaselineLine:EVGLastLine (lay:EVGLayout row:[EVGElement] align:string) {
+        def ll (new EVGLastLine())
+        for row bel:EVGElement b {
+            if ((lay.rowAlignOf(bel align)) == "last baseline") {
+                ll.used = true
+                def lo:double (this.lastBaselineOf(lay bel))
+                if (lo > ll.above) {
+                    ll.above = lo
+                }
+                def underL:double (((bel.calculatedHeight + bel.box.marginTopPx) + bel.box.marginBottomPx) - lo)
+                if (underL > ll.below) {
+                    ll.below = underL
+                }
+            }
+        }
+        return ll
+    }
+
+    ; a wrapping column breaks where its height ends; one line of it is as
+    ; wide as its items and placed by align-content
+    fn wrapColumn:boolean (lay:EVGLayout parent:EVGElement totalHeight:double startX:double startY:double innerWidth:double innerHeight:double gapPx:double) {
+        def childCount:int (parent.getChildCount())
+        def wrapped:boolean false
+        if (parent.flexWrap != "nowrap") {
+            ; a wrapping column breaks where its height ends: a definite
+            ; one, or max-height
+            def limit:double -1.0
+            if parent.hasDefiniteHeight {
+                limit = innerHeight
+            } {
+                if (parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) {
+                    limit = (parent.maxHeight.pixels - (parent.box.getVerticalChrome()))
+                }
+            }
+            if ((limit >= 0.0) && (totalHeight > (limit + 0.01))) {
+                def cg:double 0.0
+                if parent.columnGap.isSet {
+                    parent.columnGap.resolve(innerWidth parent.inheritedFontSize)
+                    cg = parent.columnGap.pixels
+                } {
+                    if parent.gap.isSet {
+                        cg = parent.gap.pixels
+                    }
+                }
+                wrapped = (this.wrapLines(lay parent limit startX startY innerWidth gapPx cg))
+            }
+        }
+        if (wrapped == false) {
+            ; a wrapping column of one line is as wide as its items,
+            ; and align-content places that line (CSS Flexbox 9.4)
+            def lineX:double 0.0
+            def lineW:double innerWidth
+            def acL:string parent.alignContent
+            def revL:boolean (parent.flexWrap == "wrap-reverse")
+            if ((parent.flexWrap != "nowrap") && ((acL == "center") || ((acL == "flex-end") || ((acL == "end") || ((acL == "space-around") || ((acL == "space-evenly") || (revL && ((acL == "flex-start") || (acL == "space-between"))))))))) {
+                def widest:double 0.0
+                def wi:int 0
+                while (wi < childCount) {
+                    def wc:EVGElement (parent.getChild(wi))
+                    if (wc.isAbsolute == false) {
+                        def ow:double ((wc.calculatedWidth + wc.box.marginLeftPx) + wc.box.marginRightPx)
+                        if (ow > widest) {
+                            widest = ow
+                        }
+                    }
+                    wi = (wi + 1)
+                }
+                if (widest < innerWidth) {
+                    lineW = widest
+                    def freeL:double (innerWidth - widest)
+                    lineX = (freeL / 2.0)
+                    if ((acL == "flex-end") || (acL == "end")) {
+                        lineX = freeL
+                    }
+                    if ((acL == "flex-start") || (acL == "space-between")) {
+                        lineX = 0.0
+                    }
+                    ; (wrap-reverse: the flex- ends the other way round)
+                    if (revL && ((acL == "flex-start") || ((acL == "flex-end") || (acL == "space-between")))) {
+                        lineX = (freeL - lineX)
+                    }
+                }
+            }
+            ; the one line of a wrapping column is as wide as its widest
+            ; item when that is wider than the box, and a stretched item
+            ; fills the line (CSS Flexbox 9.4, 9.6)
+            if ((parent.flexWrapSet && (parent.flexWrap != "nowrap")) && (((strlen acL) == 0) || ((acL == "normal") || ((acL == "stretch") || (acL == "flex-start"))))) {
+                def widestS:double 0.0
+                def si0:int 0
+                while (si0 < childCount) {
+                    def sc:EVGElement (parent.getChild(si0))
+                    if ((sc.isAbsolute == false) && ((sc.isHidden()) == false)) {
+                        def sa:string (lay.crossAlignIn(true sc parent.alignItems))
+                        def stretchy:boolean ((sc.width.isSet == false) && ((sa == "stretch") || ((sa == "normal") || ((sa == "") || (sa == "flex-start")))))
+                        def sw:double ((sc.calculatedWidth + sc.box.marginLeftPx) + sc.box.marginRightPx)
+                        ; (a stretched item's own width is its fit-content
+                        ; one, at most the box's)
+                        if stretchy {
+                            sw = (lay.intrinsicWidth(sc false))
+                            if (sw > innerWidth) {
+                                sw = innerWidth
+                            }
+                        }
+                        if (sw > widestS) {
+                            widestS = sw
+                        }
+                    }
+                    si0 = (si0 + 1)
+                }
+                if (widestS > (innerWidth + 0.01)) {
+                    lineW = widestS
+                    def si1:int 0
+                    while (si1 < childCount) {
+                        def sc1:EVGElement (parent.getChild(si1))
+                        if ((sc1.isAbsolute == false) && ((sc1.isHidden()) == false)) {
+                            def sa1:string (lay.crossAlignIn(true sc1 parent.alignItems))
+                            if ((sc1.width.isSet == false) && ((sa1 == "stretch") || ((sa1 == "normal") || ((sa1 == "") || (sa1 == "flex-start"))))) {
+                                def tw:double ((widestS - sc1.box.marginLeftPx) - sc1.box.marginRightPx)
+                                def sx1:double sc1.calculatedX
+                                def sy1:double sc1.calculatedY
+                                sc1.hasFlexWidth = true
+                                sc1.calculatedFlexWidth = tw
+                                if (sc1.keepLayout == false) {
+                                    def sk1:int 0
+                                    while (sk1 < (sc1.getChildCount())) {
+                                        def sk1c:EVGElement (sc1.getChild(sk1))
+                                        sk1c.resetLayoutState()
+                                        sk1 = (sk1 + 1)
+                                    }
+                                }
+                                lay.layoutElement(sc1 sx1 sy1 sc1.lastParentW sc1.lastParentH)
+                            }
+                        }
+                        si1 = (si1 + 1)
+                    }
+                }
+            }
+            lay.alignColumn(parent totalHeight startX startY lineW innerHeight)
+            if (lineX != 0.0) {
+                def wj:int 0
+                while (wj < childCount) {
+                    def wk:EVGElement (parent.getChild(wj))
+                    if (wk.isAbsolute == false) {
+                        wk.calculatedX = (wk.calculatedX + lineX)
+                        lay.propagateOffsetToChildren(wk lineX 0.0)
+                    }
+                    wj = (wj + 1)
+                }
+            }
+        }
+        return true
+    }
+
+    ; align-self: last baseline: the items share their last baselines, the
+    ; group at the end of the row they end in (its fallback is safe end)
+    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
+        def itemCount:int (array_length items)
+    def lp:int 0
+    while (lp < itemCount) {
+        def lel:EVGElement (itemAt items lp)
+        def lga:string lel.alignSelf
+        if (((strlen lga) == 0) || (lga == "auto")) {
+            lga = parent.alignItems
+        }
+        if ((lga == "last baseline") && ((lel.marginAutoTop || lel.marginAutoBottom) == false)) {
+            def lrow:int (((itemAt placedRow lp) + (itemAt rowSpans lp)) - 1)
+            def ldone:boolean false
+            def lq:int 0
+            while (lq < lp) {
+                def qel2:EVGElement (itemAt items lq)
+                def qga2:string qel2.alignSelf
+                if (((strlen qga2) == 0) || (qga2 == "auto")) {
+                    qga2 = parent.alignItems
+                }
+                if ((qga2 == "last baseline") && ((((itemAt placedRow lq) + (itemAt rowSpans lq)) - 1) == lrow)) {
+                    ldone = true
+                }
+                lq = (lq + 1)
+            }
+            if (ldone == false) {
+                ; the most any of them has under its last baseline
+                def maxD:double 0.0
+                def lk:int lp
+                while (lk < itemCount) {
+                    def kel2:EVGElement (itemAt items lk)
+                    def kga2:string kel2.alignSelf
+                    if (((strlen kga2) == 0) || (kga2 == "auto")) {
+                        kga2 = parent.alignItems
+                    }
+                    if ((kga2 == "last baseline") && ((((itemAt placedRow lk) + (itemAt rowSpans lk)) - 1) == lrow)) {
+                        def kOuter:double ((kel2.calculatedHeight + kel2.box.marginTopPx) + kel2.box.marginBottomPx)
+                        def kLb:double (this.lastBaselineOffsetOf(lay kel2))
+                        if (kLb < 0.0) {
+                            kLb = kOuter
+                        }
+                        if ((kOuter - kLb) > maxD) {
+                            maxD = (kOuter - kLb)
+                        }
+                    }
+                    lk = (lk + 1)
+                }
+                def rowEnd:double ((startY + rowShift) + ((lay.gridRowOffset(rowSizes lrow rowGapPx)) + (itemAt rowSizes lrow)))
+                def lm:int lp
+                while (lm < itemCount) {
+                    def mel2:EVGElement (itemAt items lm)
+                    def mga2:string mel2.alignSelf
+                    if (((strlen mga2) == 0) || (mga2 == "auto")) {
+                        mga2 = parent.alignItems
+                    }
+                    if ((mga2 == "last baseline") && ((((itemAt placedRow lm) + (itemAt rowSpans lm)) - 1) == lrow)) {
+                        def mOuter:double ((mel2.calculatedHeight + mel2.box.marginTopPx) + mel2.box.marginBottomPx)
+                        def mLb:double (this.lastBaselineOffsetOf(lay mel2))
+                        if (mLb < 0.0) {
+                            mLb = mOuter
+                        }
+                        ; (its margin bottom edge that far above the row's end)
+                        def wantBottom:double (rowEnd - (maxD - (mOuter - mLb)))
+                        def nowBottom:double ((mel2.calculatedY + mel2.calculatedHeight) + mel2.box.marginBottomPx)
+                        def shiftL:double (wantBottom - nowBottom)
+                        ; (safe: not above the row's start)
+                        def topNow:double (mel2.calculatedY - mel2.box.marginTopPx)
+                        def rowTop:double ((startY + rowShift) + (lay.gridRowOffset(rowSizes (itemAt placedRow lm) rowGapPx)))
+                        if ((topNow + shiftL) < rowTop) {
+                            shiftL = (rowTop - topNow)
+                        }
+                        if (shiftL != 0.0) {
+                            lay.translateSubtree(mel2 0.0 shiftL)
+                        }
+                    }
+                    lm = (lm + 1)
+                }
+            }
+        }
+        lp = (lp + 1)
+    }
+
+    }
+
+    fn gridAbsAreas:boolean (lay:EVGLayout parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double colShift:double rowShift:double) {
+        this.layoutGridAbsAreas(lay parent cols colGap rowSizes rowGap rowTemplate innerWidth contentHeight startX startY colShift rowShift)
+        return true
+    }
+
+    ; grid-auto-flow: column: the items placed down the columns (CSS Grid
+    ; 8.5), as many rows as the explicit grid has, a new column when they
+    ; are full. The placements are written into the items for the row
+    ; algorithm and put back after
+    fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
+        def kids:[EVGElement]
+        def savedCols:[string]
+        def savedRows:[string]
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if (c.isAbsolute == false) {
+                push kids c
+                push savedCols c.gridColumn
+                push savedRows c.gridRow
+            }
+            i = (i + 1)
+        }
+        def colTpl:EVGGridTemplate (EVGGridTemplate.parse(parent.gridTemplateColumns))
+        def rowSpec:string parent.gridTemplateRows
+        if ((rowSpec == "none") || (rowSpec == "subgrid")) {
+            rowSpec = ""
+        }
+        def rowTpl:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        def nRows:int (rowTpl.count())
+        if ((strlen rowSpec) == 0) {
+            nRows = 0
+        }
+        def areas:EVGGridAreas (EVGGridAreas.parse(parent.gridTemplateAreas))
+        if ((strlen parent.gridTemplateAreas) > 0) {
+            if (areas.rows > nRows) {
+                nRows = areas.rows
+            }
+        }
+        def k:int (array_length kids)
+        def cs:[int]
+        def csp:[int]
+        def rs:[int]
+        def rsp:[int]
+        def j:int 0
+        while (j < k) {
+            def c:EVGElement (itemAt kids j)
+            def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+            cp.resolveNames(colTpl)
+            def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+            rp.resolveNames(rowTpl)
+            push cs (cp.start - 1)
+            push csp cp.span
+            push rs (rp.start - 1)
+            push rsp rp.span
+            if ((rp.start > 0) && (((rp.start - 1) + rp.span) > nRows)) {
+                nRows = ((rp.start - 1) + rp.span)
+            }
+            if ((rp.start <= 0) && (rp.span > nRows)) {
+                nRows = rp.span
+            }
+            j = (j + 1)
+        }
+        if (nRows < 1) {
+            nRows = 1
+        }
+        def taken:[string:boolean]
+        ; the items with both lines first, then the ones with a column,
+        ; then the rest from the cursor
+        def pass:int 0
+        def curC:int 0
+        def curR:int 0
+        while (pass < 3) {
+            def q:int 0
+            while (q < k) {
+                def c0:int (itemAt cs q)
+                def r0:int (itemAt rs q)
+                def sc:int (itemAt csp q)
+                def sr:int (itemAt rsp q)
+                def mine:boolean false
+                if ((pass == 0) && ((c0 >= 0) && (r0 >= 0))) {
+                    mine = true
+                }
+                if ((pass == 1) && ((c0 >= 0) && (r0 < 0))) {
+                    mine = true
+                    def rr:int 0
+                    while ((EVGLayoutFull.areaTaken(taken c0 rr sc sr)) && (rr < 10000)) {
+                        rr = (rr + 1)
+                    }
+                    r0 = rr
+                }
+                if ((pass == 2) && (c0 < 0)) {
+                    mine = true
+                    if (r0 >= 0) {
+                        if (r0 < curR) {
+                            curC = (curC + 1)
+                        }
+                        while ((EVGLayoutFull.areaTaken(taken curC r0 sc sr)) && (curC < 10000)) {
+                            curC = (curC + 1)
+                        }
+                        c0 = curC
+                        curR = (r0 + sr)
+                    } {
+                        def found:boolean false
+                        while ((found == false) && (curC < 10000)) {
+                            if ((curR + sr) > nRows) {
+                                curC = (curC + 1)
+                                curR = 0
+                            } {
+                                if (EVGLayoutFull.areaTaken(taken curC curR sc sr)) {
+                                    curR = (curR + 1)
+                                } {
+                                    found = true
+                                }
+                            }
+                        }
+                        c0 = curC
+                        r0 = curR
+                        curR = (curR + sr)
+                    }
+                }
+                if mine {
+                    def a:int 0
+                    while (a < sc) {
+                        def b:int 0
+                        while (b < sr) {
+                            set taken (((to_string (c0 + a)) + ",") + (to_string (r0 + b))) true
+                            b = (b + 1)
+                        }
+                        a = (a + 1)
+                    }
+                    def el:EVGElement (itemAt kids q)
+                    el.gridColumn = (((to_string (c0 + 1)) + " / span ") + (to_string sc))
+                    el.gridRow = (((to_string (r0 + 1)) + " / span ") + (to_string sr))
+                }
+                q = (q + 1)
+            }
+            pass = (pass + 1)
+        }
+        def h:double (lay.layoutGridFlow(parent))
+        def z:int 0
+        while (z < k) {
+            def c:EVGElement (itemAt kids z)
+            c.gridColumn = (itemAt savedCols z)
+            c.gridRow = (itemAt savedRows z)
+            z = (z + 1)
+        }
+        return h
+    }
+
+    fn implicitColumns:string (parent:EVGElement colSpec0:string) {
+        def colSpec:string colSpec0
+        ; an item placed past the explicit columns makes implicit ones, as
+        ; grid-auto-columns has them (CSS Grid 7.5)
+        def lastLine:int 0
+        def pi:int 0
+        while (pi < (parent.getChildCount())) {
+            def pc:EVGElement (parent.getChild(pi))
+            if (((pc.hasAbsolutePosition()) == false) && ((strlen pc.gridColumn) > 0)) {
+                def pp:EVGGridPlacement (EVGGridPlacement.parse(pc.gridColumn))
+                if (pp.start > 0) {
+                    def endL:int ((pp.start - 1) + pp.span)
+                    if (endL > lastLine) {
+                        lastLine = endL
+                    }
+                }
+            }
+            pi = (pi + 1)
+        }
+        def autoCol:string parent.gridAutoColumns
+        if ((strlen autoCol) == 0) {
+            autoCol = "auto"
+        }
+        if ((lastLine > 1) || ((lastLine == 1) && (((indexOf parent.gridAutoFlow "column") >= 0) && ((strlen parent.gridTemplateColumns) == 0)))) {
+            def have:int 0
+            if ((strlen parent.gridTemplateColumns) > 0) {
+                have = ((EVGGridTemplate.parse(colSpec)).count())
+            } {
+                colSpec = ""
+            }
+            while (have < lastLine) {
+                if ((strlen colSpec) > 0) {
+                    colSpec = (colSpec + " ")
+                }
+                colSpec = (colSpec + autoCol)
+                have = (have + 1)
+            }
+        }
+        return colSpec
+    }
+
+    ; Lays the absolute boxes under `node` whose containing block is `cb`
+    ; (cb-outer) out again in it, along the axes they have an inset on; the
+    ; other axis keeps the static place they got in their parent. A box
+    ; that is positioned itself is the containing block of what is in it.
+    fn placeOuterAbs:void (lay:EVGLayout cb:EVGElement node:EVGElement) {
+        def n:int (node.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (node.getChild(i))
+            if (((EVGLayoutFull.cx(c)).cbOuterX || (EVGLayoutFull.cx(c)).cbOuterY) && c.isAbsolute) {
+                def oldX:double c.calculatedX
+                def oldY:double c.calculatedY
+                def sx:double ((cb.calculatedX + cb.box.borderWidthPx) + cb.box.paddingLeftPx)
+                def sy:double ((cb.calculatedY + cb.box.borderWidthPx) + cb.box.paddingTopPx)
+                c.unitsResolved = false
+                c.resolveUnits(cb.calculatedInnerWidth cb.calculatedInnerHeight)
+                lay.layoutOutOfFlowChild(cb c cb.calculatedInnerWidth cb.calculatedInnerHeight sx sy true)
+                def dx:double 0.0
+                def dy:double 0.0
+                if ((EVGLayoutFull.cx(c)).cbOuterX == false) {
+                    dx = (oldX - c.calculatedX)
+                }
+                if ((EVGLayoutFull.cx(c)).cbOuterY == false) {
+                    dy = (oldY - c.calculatedY)
+                }
+                if ((dx != 0.0) || (dy != 0.0)) {
+                    c.moveSubtree(dx dy)
+                }
+            } {
+                if (((EVGLayoutFull.cx(c)).isCb == false) && ((c.isHidden()) == false)) {
+                    this.placeOuterAbs(lay cb c)
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
+    ; A wrapping column taller than its limit: its items in lines side by
+    ; side, each line as wide as its widest item, each placed down its
+    ; line by justify-content and across it by align-items (CSS Flexbox 9)
+    fn wrapLines:boolean (lay:EVGLayout parent:EVGElement limit:double startX:double startY:double innerWidth:double gapPx:double crossGap:double) {
+        def items:[EVGElement]
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                push items c
+            }
+            i = (i + 1)
+        }
+        def cnt:int (array_length items)
+        if (cnt < 2) {
+            return false
+        }
+        ; each item's own width (its set one, else its content's) and the
+        ; lines by height
+        def ownW:[double]
+        def lineOf:[int]
+        def lineCross:[double]
+        def lineMain:[double]
+        def lineCount:int 0
+        def run:double 0.0
+        def k:int 0
+        while (k < cnt) {
+            def it:EVGElement (itemAt items k)
+            def mX:double (it.box.marginLeftPx + it.box.marginRightPx)
+            def w:double (it.calculatedWidth + mX)
+            if (it.width.isSet == false) {
+                w = (lay.intrinsicWidth(it false))
+                if (w > innerWidth) {
+                    w = innerWidth
+                }
+            }
+            push ownW w
+            def h:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+            def need:double h
+            if (lineCount > 0) {
+                if (run > 0.0) {
+                    need = ((run + gapPx) + h)
+                }
+            }
+            if ((lineCount == 0) || ((need > (limit + 0.01)) && (run > 0.0))) {
+                push lineCross 0.0
+                push lineMain 0.0
+                lineCount = (lineCount + 1)
+                run = h
+            } {
+                run = need
+            }
+            push lineOf (lineCount - 1)
+            set lineMain (lineCount - 1) run
+            if (w > (itemAt lineCross (lineCount - 1))) {
+                set lineCross (lineCount - 1) w
+            }
+            k = (k + 1)
+        }
+        if (lineCount < 2) {
+            return false
+        }
+        ; align-content: stretch (normal) shares the spare width out
+        def ac:string parent.alignContent
+        def sumCross:double (crossGap * (to_double (lineCount - 1)))
+        def l0:int 0
+        while (l0 < lineCount) {
+            sumCross = (sumCross + (itemAt lineCross l0))
+            l0 = (l0 + 1)
+        }
+        def spare:double (innerWidth - sumCross)
+        def firstX:double 0.0
+        def betweenX:double crossGap
+        if (spare > 0.0) {
+            if ((ac == "stretch") || (ac == "normal")) {
+                def l1:int 0
+                while (l1 < lineCount) {
+                    set lineCross l1 ((itemAt lineCross l1) + (spare / (to_double lineCount)))
+                    l1 = (l1 + 1)
+                }
+            }
+            if (ac == "center") {
+                firstX = (spare / 2.0)
+            }
+            if ((ac == "flex-end") || (ac == "end")) {
+                firstX = spare
+            }
+            if ((ac == "space-between") && (lineCount > 1)) {
+                betweenX = (crossGap + (spare / (to_double (lineCount - 1))))
+            }
+            if (ac == "space-around") {
+                firstX = ((spare / (to_double lineCount)) / 2.0)
+                betweenX = (crossGap + (spare / (to_double lineCount)))
+            }
+            if (ac == "space-evenly") {
+                firstX = (spare / (to_double (lineCount + 1)))
+                betweenX = (crossGap + firstX)
+            }
+        }
+        def lineX:[double]
+        def x:double firstX
+        def l2:int 0
+        while (l2 < lineCount) {
+            push lineX x
+            x = ((x + (itemAt lineCross l2)) + betweenX)
+            l2 = (l2 + 1)
+        }
+        if (parent.flexWrap == "wrap-reverse") {
+            def l3:int 0
+            while (l3 < lineCount) {
+                set lineX l3 ((innerWidth - (itemAt lineX l3)) - (itemAt lineCross l3))
+                l3 = (l3 + 1)
+            }
+        }
+        ; down each line
+        def jc:string parent.justifyContent
+        def y:double 0.0
+        def line:int -1
+        def m:int 0
+        while (m < cnt) {
+            def it:EVGElement (itemAt items m)
+            def ln:int (itemAt lineOf m)
+            def lc:double (itemAt lineCross ln)
+            if (ln != line) {
+                line = ln
+                def free:double (limit - (itemAt lineMain ln))
+                y = 0.0
+                if (free > 0.0) {
+                    if (jc == "center") {
+                        y = (free / 2.0)
+                    }
+                    if ((jc == "flex-end") || (jc == "end")) {
+                        y = free
+                    }
+                }
+            }
+            def align:string (lay.crossAlignIn(true it parent.alignItems))
+            def mX:double (it.box.marginLeftPx + it.box.marginRightPx)
+            def w:double (itemAt ownW m)
+            def stretch:boolean (((align == "stretch") || ((align == "normal") || ((strlen align) == 0))) && (it.width.isSet == false))
+            if stretch {
+                w = lc
+            }
+            def bw:double (w - mX)
+            if (bw < 0.0) {
+                bw = 0.0
+            }
+            if ((it.width.isSet == false) && ((bw - it.calculatedWidth) * (bw - it.calculatedWidth) > 0.0001)) {
+                it.hasFlexWidth = true
+                it.calculatedFlexWidth = bw
+                lay.layoutElement(it it.calculatedX it.calculatedY bw it.calculatedHeight)
+            }
+            def dxIn:double 0.0
+            def outW:double (it.calculatedWidth + mX)
+            if (align == "center") {
+                dxIn = ((lc - outW) / 2.0)
+            }
+            if ((align == "flex-end") || (align == "end")) {
+                dxIn = (lc - outW)
+            }
+            def nx:double (((startX + (itemAt lineX ln)) + dxIn) + it.box.marginLeftPx)
+            def ny:double ((startY + y) + it.box.marginTopPx)
+            lay.translateSubtree(it (nx - it.calculatedX) (ny - it.calculatedY))
+            y = ((((y + it.calculatedHeight) + it.box.marginTopPx) + it.box.marginBottomPx) + gapPx)
+            m = (m + 1)
+        }
+        return true
+    }
+
+    ; Distance from the top margin edge to the last baseline, synthesized
+    ; from the bottom edge when there is none (baselineOffsetOf's rule)
+    fn lastBaselineOf:double (lay:EVGLayout el:EVGElement) {
+        def lb:double (this.lastBaselineOffsetOf(lay el))
+        if (lb >= 0.0) {
+            return lb
+        }
+        if lay.synthBorder {
+            return (el.box.marginTopPx + el.calculatedHeight)
+        }
+        return ((el.box.marginTopPx + el.calculatedHeight) + el.box.marginBottomPx)
+    }
+
+    ; Distance from an element's top margin edge to its LAST baseline: the
+    ; last line's of a text node, else the lowest in-flow child's that has
+    ; one; with none, -1 (synthesized from the bottom margin edge)
+    fn lastBaselineOffsetOf:double (lay:EVGLayout el:EVGElement) {
+        if (!null? el.css) {
+            def fx:EVGCssExtra (EVGLayoutFull.cx(el))
+            if (fx.flipBase && fx.flipDone) {
+                return (el.box.marginTopPx + fx.flipLast)
+            }
+        }
+        def n:int (el.getChildCount())
+        def best:double -1.0
+        def bestBottom:double -1.0
+        def i:int 0
+        ; (a flex container's is its last item's, synthesized from that
+        ; item's border box when it has none)
+        if ((EVGLayoutFull.cx(el)).flexBox && (el.display == "flex")) {
+            def li:int (n - 1)
+            while (li >= 0) {
+                def lc:EVGElement (el.getChild(li))
+                if ((lc.isAbsolute == false) && ((lc.isHidden()) == false)) {
+                    def lcb:double (this.lastBaselineOffsetOf(lay lc))
+                    if (lcb < 0.0) {
+                        lcb = (lc.box.marginTopPx + lc.calculatedHeight)
+                    }
+                    return ((((lc.calculatedY - lc.box.marginTopPx) - el.calculatedY) + lcb) + el.box.marginTopPx)
+                }
+                li = (li - 1)
+            }
+            return -1.0
+        }
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                def cb:double (this.lastBaselineOffsetOf(lay c))
+                if (cb >= 0.0) {
+                    def bottom:double (c.calculatedY + c.calculatedHeight)
+                    if (bottom >= bestBottom) {
+                        bestBottom = bottom
+                        best = ((((c.calculatedY - c.box.marginTopPx) - el.calculatedY) + cb) + el.box.marginTopPx)
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        if (best >= 0.0) {
+            return best
+        }
+        if (el.hasBaseline && (n == 0)) {
+            return (el.box.marginTopPx + el.calculatedLastBaseline)
+        }
+        ; (a line of boxes with no text: its one baseline is its last)
+        if el.hasBaseline {
+            return (el.box.marginTopPx + el.calculatedBaseline)
+        }
+        return -1.0
+    }
+
+    ; The out-of-flow children once the tracks are sized. One with grid
+    ; lines has its grid area for its containing block (CSS Grid 9.1): it is
+    ; laid out against the area and placed from the area's corner, and one
+    ; with no inset of its own (static-flex) is aligned in it by
+    ; justify-self and align-self as an item would be. Lines left auto are
+    ; the grid's own edges.
+    fn layoutGridAbsAreas:void (lay:EVGLayout parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double colShift:double rowShift:double) {
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if c.isAbsolute {
+                def ax:double 0.0
+                def ay:double 0.0
+                def aw:double innerWidth
+                def ah:double contentHeight
+                def colStarts:[double]
+                def colEnds:[double]
+                def cn:int 0
+                ; (with no template and no item there is no track)
+                def noItems:boolean true
+                for parent.children ck:EVGElement cki {
+                    if (ck.isAbsolute == false) {
+                        noItems = false
+                    }
+                }
+                def colsN:int (cols.count())
+                if (noItems && (((strlen parent.gridTemplateColumns) == 0) || (parent.gridTemplateColumns == "none"))) {
+                    colsN = 0
+                }
+                while (cn < colsN) {
+                    push colStarts (colShift + (cols.offsetOf(cn colGap)))
+                    push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap)))
+                    cn = (cn + 1)
+                }
+                ; (the padding edge: inside the border sides given as padding)
+                def pcx:EVGCssExtra (EVGLayoutFull.cx(parent))
+                def padS:double (parent.box.paddingLeftPx - pcx.foldL)
+                def padE:double (parent.box.paddingRightPx - pcx.foldR)
+                if parent.resolvedRtl {
+                    padS = (parent.box.paddingRightPx - pcx.foldR)
+                    padE = (parent.box.paddingLeftPx - pcx.foldL)
+                }
+                def colAuto:[double] (EVGLayoutFull.absAutoArea(c.gridColumn cols colStarts colEnds padS padE innerWidth))
+                if ((array_length colAuto) == 2) {
+                    ax = (itemAt colAuto 0)
+                    aw = (itemAt colAuto 1)
+                    if parent.resolvedRtl {
+                        ax = ((innerWidth - ax) - aw)
+                    }
+                }
+                if (((strlen c.gridColumn) > 0) && ((array_length colAuto) == 0)) {
+                    def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+                    cp.resolveNames(cols)
+                    if (cp.start > 0) {
+                        ; (lines past the tracks there are, the collapsed
+                        ; ones of an auto-fit repeat, are at the grid's end)
+                        def nc:int (cols.count())
+                        def c0:int (cp.start - 1)
+                        def cspan:int cp.span
+                        if (c0 > nc) {
+                            c0 = nc
+                        }
+                        if ((c0 + cspan) > nc) {
+                            cspan = (nc - c0)
+                        }
+                        ax = (colShift + (cols.offsetOf(c0 colGap)))
+                        aw = 0.0
+                        if (cspan > 0) {
+                            aw = (cols.extentOf(c0 cspan colGap))
+                        }
+                        ; (right to left the in-flow items are mirrored
+                        ; afterwards; an area is mirrored here)
+                        if parent.resolvedRtl {
+                            ax = ((innerWidth - ax) - aw)
+                        }
+                    }
+                }
+                def rowStarts:[double]
+                def rowEnds:[double]
+                def rn:int 0
+                def rowsN:int (array_length rowSizes)
+                if (noItems && (((strlen parent.gridTemplateRows) == 0) || (parent.gridTemplateRows == "none"))) {
+                    rowsN = 0
+                }
+                while (rn < rowsN) {
+                    push rowStarts (rowShift + (lay.gridRowOffset(rowSizes rn rowGap)))
+                    push rowEnds ((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn))
+                    rn = (rn + 1)
+                }
+                def rowAuto:[double] (EVGLayoutFull.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds (parent.box.paddingTopPx - pcx.foldT) (parent.box.paddingBottomPx - pcx.foldB) contentHeight))
+                if ((array_length rowAuto) == 2) {
+                    ay = (itemAt rowAuto 0)
+                    ah = (itemAt rowAuto 1)
+                }
+                if (((strlen c.gridRow) > 0) && ((array_length rowAuto) == 0)) {
+                    def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+                    rp.resolveNames(rowTemplate)
+                    if (rp.start > 0) {
+                        ay = (rowShift + (lay.gridRowOffset(rowSizes (rp.start - 1) rowGap)))
+                        ah = (lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))
+                    }
+                }
+                c.unitsResolved = false
+                c.resolveUnits(aw ah)
+                lay.layoutOutOfFlowChild(parent c aw ah (startX + ax) (startY + ay) true)
+                if ((EVGLayoutFull.cx(c)).staticFlex || ((strlen ((EVGLayoutFull.cx(c)).staticAxis)) > 0)) {
+                    def alongX:boolean ((EVGLayoutFull.cx(c)).staticFlex || ((EVGLayoutFull.cx(c)).staticAxis == "x"))
+                    def alongY:boolean ((EVGLayoutFull.cx(c)).staticFlex || ((EVGLayoutFull.cx(c)).staticAxis == "y"))
+                    def outW:double ((c.calculatedWidth + c.box.marginLeftPx) + c.box.marginRightPx)
+                    def outH:double ((c.calculatedHeight + c.box.marginTopPx) + c.box.marginBottomPx)
+                    def gj:string c.justifySelf
+                    if ((strlen gj) == 0) {
+                        gj = parent.justifyItems
+                    }
+                    def ga:string c.alignSelf
+                    if ((strlen ga) == 0) {
+                        ga = parent.alignItems
+                    }
+                    def dx:double 0.0
+                    def dy:double 0.0
+                    def toEndA:boolean ((gj == "end") || ((gj == "flex-end") || (gj == "self-end")))
+                    if parent.resolvedRtl {
+                        toEndA = ((toEndA == false) && (gj != "center"))
+                    }
+                    if (gj == "right") {
+                        toEndA = true
+                    }
+                    if (gj == "left") {
+                        toEndA = false
+                    }
+                    if (gj == "center") {
+                        dx = ((aw - outW) / 2.0)
+                    }
+                    if toEndA {
+                        dx = (aw - outW)
+                    }
+                    if (ga == "center") {
+                        dy = ((ah - outH) / 2.0)
+                    }
+                    if ((ga == "end") || ((ga == "flex-end") || (ga == "self-end"))) {
+                        dy = (ah - outH)
+                    }
+                    if (alongX == false) {
+                        dx = 0.0
+                    }
+                    if (alongY == false) {
+                        dy = 0.0
+                    }
+                    if ((dx != 0.0) || (dy != 0.0)) {
+                        lay.translateSubtree(c dx dy)
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
+    ; an absolutely positioned grid item's area along one axis when a side
+    ; of its placement is auto: that side is the grid container's padding
+    ; edge (CSS Grid 1, 10.1; "auto / auto", the padding box, CSS Grid 2,
+    ; 9.2). [from size] from the content edge, or nothing with no
+    ; placement (EVG's content box) or a line name alone (an area's,
+    ; resolved by the placement)
+    sfn absAutoArea:[double] (spec0:string tpl:EVGGridTemplate starts:[double] ends:[double] padS:double padE:double inner:double) {
+        def res:[double]
+        def spec:string (trim spec0)
+        if ((strlen spec) == 0) {
+            return res
+        }
+        def lhs:string spec
+        def rhs:string "auto"
+        def slash:int (indexOf spec "/")
+        if (slash >= 0) {
+            lhs = (trim (substring spec 0 slash))
+            rhs = (trim (substring spec (slash + 1) (strlen spec)))
+        } {
+            if ((lhs != "auto") && (EVGGridPlacement.isSpan(lhs) == false)) {
+                if (EVGGridPlacement.isNumericToken(lhs) == false) {
+                    return res
+                }
+                rhs = "span 1"
+            }
+        }
+        def n:int (array_length starts)
+        def lines:int (n + 1)
+        def sLine:int 0
+        def eLine:int 0
+        if ((lhs != "auto") && (EVGGridPlacement.isSpan(lhs) == false)) {
+            sLine = (EVGLayoutFull.lineOf(lhs tpl lines))
+        }
+        if ((rhs != "auto") && (EVGGridPlacement.isSpan(rhs) == false)) {
+            eLine = (EVGLayoutFull.lineOf(rhs tpl lines))
+        }
+        if ((sLine > 0) && EVGGridPlacement.isSpan(rhs)) {
+            eLine = (sLine + (EVGGridPlacement.spanCount(rhs)))
+        }
+        if ((eLine > 0) && EVGGridPlacement.isSpan(lhs)) {
+            sLine = (eLine - (EVGGridPlacement.spanCount(lhs)))
+            if (sLine < 1) {
+                sLine = 0
+            }
+        }
+        if (sLine < 0) {
+            sLine = 0
+        }
+        if (eLine < 0) {
+            eLine = 0
+        }
+        if (((sLine > 0) && (eLine > 0)) && (sLine > eLine)) {
+            def sw:int sLine
+            sLine = eLine
+            eLine = sw
+        }
+        ; (a line past the grid's is auto)
+        if (sLine > lines) {
+            sLine = 0
+        }
+        if (eLine > lines) {
+            eLine = 0
+        }
+        def from:double (0.0 - padS)
+        def to:double (inner + padE)
+        if (n == 0) {
+            ; (only line 1, at the content edge)
+            if (sLine == 1) {
+                from = 0.0
+            }
+            if (eLine == 1) {
+                to = 0.0
+            }
+            if (to < from) {
+                to = from
+            }
+            push res from
+            push res (to - from)
+            return res
+        }
+        if (sLine > 0) {
+            if (sLine <= n) {
+                from = (itemAt starts (sLine - 1))
+            } {
+                from = (itemAt ends (n - 1))
+            }
+        }
+        if (eLine > 0) {
+            if (eLine >= 2) {
+                to = (itemAt ends (eLine - 2))
+            } {
+                to = (itemAt starts 0)
+            }
+        }
+        if (to < from) {
+            to = from
+        }
+        push res from
+        push res (to - from)
+        return res
+    }
+
+    ; a grid line a placement's side names: a number (negative from the
+    ; end) or a name, or 0 when it is none of the grid's
+    sfn lineOf:int (tok:string tpl:EVGGridTemplate lines:int) {
+        if (EVGGridPlacement.isNumericToken(tok)) {
+            def v:int (EVGGridPlacement.lineNumber(tok))
+            if (v < 0) {
+                v = ((lines + 1) + v)
+                if (v < 1) {
+                    return 0
+                }
+            }
+            return v
+        }
+        def named:int (tpl.lineNumberNamed(tok))
+        if (named == 0) {
+            named = (tpl.lineNumberNamed((tok + "-start")))
+        }
+        ; (a name the grid does not have is a line past it)
+        if (named == 0) {
+            named = (lines + 1)
+        }
+        return named
+    }
+
+    sfn areaTaken:boolean (taken:[string:boolean] c:int r:int sc:int sr:int) {
+        def a:int 0
+        while (a < sc) {
+            def b:int 0
+            while (b < sr) {
+                if (has taken (((to_string (c + a)) + ",") + (to_string (r + b)))) {
+                    return true
+                }
+                b = (b + 1)
+            }
+            a = (a + 1)
+        }
+        return false
+    }
+
+}

@@ -1,0 +1,148 @@
+; ==============================================================================
+; EVGLayoutExt — where the CSS conformance layer joins the core layout
+; ==============================================================================
+;
+; EVGLayout is the light engine every native port carries. What a browser's
+; CSS needs beyond it (containing blocks above the parent, static positions
+; of absolute boxes, wrapping columns, last and synthesized baselines, grid
+; areas of absolute boxes, column auto-flow, implicit tracks) lives in
+; EVGLayoutFull, which extends this class. The core calls these hooks at a
+; few places, most of them only for an element that carries EVGCssExtra; this
+; base class answers each one the way the core layout did before there was a
+; Full layer, so a layout with nothing installed is the Lite one.
+;
+; One extension per compiled module (EVGLayoutExtDefault), the way
+; EVGDefaultMeasurer hands out the measurer, read by each EVGLayout when it is
+; made and at the start of each layout(): a front end that wants CSS installs
+; EVGLayoutFull once, before it lays its first page out.
+
+; a box an absolute child is laid out in, or (absStatic) the offset it is
+; moved by
+class EVGAbsFrame {
+    def x:double 0.0
+    def y:double 0.0
+    def w:double 0.0
+    def h:double 0.0
+}
+
+; the extent of a line's last-baseline group: the most above the last
+; baseline and the most under it (lastBaselineLine)
+class EVGLastLine {
+    def used:boolean false
+    def above:double 0.0
+    def below:double 0.0
+}
+
+class EVGLayoutExt {
+    ; an element with auto height has its inner height (for its children's
+    ; percentages) set here (css: height-through)
+    fn autoInnerHeight:void (lay:EVGLayout el:EVGElement parentHeight:double) {
+    }
+
+    ; the last step of an element's layout before the core takes the
+    ; baseline from its first child (css set)
+    fn finishElement:void (lay:EVGLayout el:EVGElement childCount:int) {
+    }
+
+    ; a grid that has no baseline from its items
+    fn gridBaseline:void (lay:EVGLayout el:EVGElement) {
+    }
+
+    ; the box an absolute child (css set) is laid out in
+    fn absFrame:EVGAbsFrame (lay:EVGLayout child:EVGElement startX:double startY:double innerWidth:double innerHeight:double) {
+        def f (new EVGAbsFrame())
+        f.x = startX
+        f.y = startY
+        f.w = innerWidth
+        f.h = innerHeight
+        return f
+    }
+
+    ; where an absolute child (css set) that was laid out goes: the offset
+    ; fixX, fixY from its frame's corner
+    fn absStatic:EVGAbsFrame (lay:EVGLayout parent:EVGElement child:EVGElement innerWidth:double innerHeight:double fixX:double fixY:double) {
+        def f (new EVGAbsFrame())
+        f.x = fixX
+        f.y = fixY
+        return f
+    }
+
+    ; the static top of the absolute child at `index` (css set) down a column
+    fn staticTop:double (lay:EVGLayout parent:EVGElement index:int currentY:double startY:double) {
+        return startY
+    }
+
+    ; the room an item (css set) that starts a line takes before it
+    fn lineStartGap:double (child:EVGElement gap:double) {
+        return 0.0
+    }
+
+    ; a wrapping column's lines; false when the core is to align it as one
+    fn wrapColumn:boolean (lay:EVGLayout parent:EVGElement totalHeight:double startX:double startY:double innerWidth:double innerHeight:double gapPx:double) {
+        return false
+    }
+
+    ; whether a box with no baseline in a row of `parent` has one at its
+    ; border box's bottom rather than its margin box's
+    fn synthBorder:boolean (parent:EVGElement) {
+        return false
+    }
+
+    ; the last-baseline group of a row's items (align-self: last
+    ; baseline); not used when the core aligns them at the start
+    fn lastBaselineLine:EVGLastLine (lay:EVGLayout row:[EVGElement] align:string) {
+        return (new EVGLastLine())
+    }
+
+    ; the distance from an element's top margin edge to its last baseline
+    fn lastBaselineOf:double (lay:EVGLayout el:EVGElement) {
+        return (lay.baselineOffsetOf(el))
+    }
+
+    ; a grid's items aligned on their last baselines
+    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
+    }
+
+    ; the absolute children of a grid in their grid areas; false when the
+    ; core places them in the grid's box
+    fn gridAbsAreas:boolean (lay:EVGLayout parent:EVGElement cols:EVGGridTemplate colGap:double rowSizes:[double] rowGap:double rowTemplate:EVGGridTemplate innerWidth:double contentHeight:double startX:double startY:double colShift:double rowShift:double) {
+        return false
+    }
+
+    ; grid-auto-flow: column; below 0 when the core lays the grid out by rows
+    fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
+        return -1.0
+    }
+
+    ; the column tracks with the implicit ones the items' placements make
+    fn implicitColumns:string (parent:EVGElement colSpec:string) {
+        return colSpec
+    }
+}
+
+class EVGLayoutExtDefault @singleton(true) {
+    def current@(optional):EVGLayoutExt
+
+    sfn install:void (e:EVGLayoutExt) {
+        def r:EVGLayoutExtDefault (EVGLayoutExtDefault.__singleton())
+        r.current = e
+    }
+
+    sfn uninstall:void () {
+        def r:EVGLayoutExtDefault (EVGLayoutExtDefault.__singleton())
+        def none@(optional):EVGLayoutExt
+        r.current = none
+    }
+
+    ; what a new layout extends itself with: the installed one, or the
+    ; core's own answers
+    sfn ext:EVGLayoutExt () {
+        def r:EVGLayoutExtDefault (EVGLayoutExtDefault.__singleton())
+        if (!null? r.current) {
+            return (unwrap r.current)
+        }
+        def e (new EVGLayoutExt())
+        r.current = e
+        return e
+    }
+}

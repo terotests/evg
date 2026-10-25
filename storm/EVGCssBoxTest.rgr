@@ -1,0 +1,504 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGCssBoxTest — CSS box rules the W3C WPT layout tests check
+; ==============================================================================
+;
+; Each case is a rule a WPT check-layout test (css-grid, css-flexbox, CSS2)
+; found missing, at the sizes Chromium gives:
+;
+;   1. justify-self / justify-items and auto margins in a grid cell
+;   2. aspect-ratio: an auto height from the width
+;   3. box-sizing: content-box, with a percentage padding
+;   4. align-content: stretch in a wrapping row sizes each line from its
+;      items and shares the free space between the lines
+;   5. a baseline-aligned line is as tall as the most above the baseline
+;      and the most under it
+;   6. a fit-content item in a wrapping row is measured as its content,
+;      not the whole line, when the row decides where to wrap
+;   7. an absolutely positioned child of a flex container with no inset
+;      (static-flex) is where justify-content and align-items put it
+;
+; Some of the rules are the CSS layer's (EVGLayoutFull), which the test
+; installs first, as a CSS front end does.
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGUnit.rgr"
+Import "EVGLayout.rgr"
+Import "EVGLayoutFull.rgr"
+
+class CssBoxCheck {
+    def passed:int 0
+    def failed:int 0
+
+    Constructor () {
+    }
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:boolean (a:double b:double) {
+        def d:double (a - b)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        return (d < 0.5)
+    }
+
+    fn layoutAt:void (root:EVGElement w:double h:double) {
+        def lay (new EVGLayout())
+        lay.setPageSize(w h)
+        lay.layout(root)
+    }
+
+    ; a one-column 300px grid holding one item of the given width
+    fn cellGrid:EVGElement (item:EVGElement) {
+        def page (EVGElement.createDiv())
+        page.setAttribute("width" "300px")
+        def g (EVGElement.createDiv())
+        g.display = "grid"
+        g.setAttribute("grid-template-columns" "300px")
+        g.setAttribute("grid-template-rows" "100px")
+        g.addChild(item)
+        page.addChild(g)
+        return page
+    }
+
+    fn run:void () {
+        print "EVGCssBoxTest"
+
+        ; --- 1. placing in a grid cell -----------------------------------------
+        def c1 (EVGElement.createDiv())
+        c1.setAttribute("width" "50px")
+        c1.setAttribute("height" "20px")
+        c1.setAttribute("justify-self" "center")
+        def p1:EVGElement (this.cellGrid(c1))
+        this.layoutAt(p1 300.0 600.0)
+        this.ok("justify-self: center puts a 50px item 125px in" (this.near(c1.calculatedX 125.0)))
+
+        def c2 (EVGElement.createDiv())
+        c2.setAttribute("height" "20px")
+        c2.setAttribute("justify-self" "end")
+        c2.setAttribute("display" "flex")
+        c2.setAttribute("flex-direction" "column")
+        def kid (EVGElement.createDiv())
+        kid.setAttribute("width" "40px")
+        kid.setAttribute("height" "10px")
+        c2.addChild(kid)
+        def p2:EVGElement (this.cellGrid(c2))
+        this.layoutAt(p2 300.0 600.0)
+        this.ok("justify-self: end keeps a width-less item its content's 40px, at the end" ((this.near(c2.calculatedWidth 40.0)) && (this.near(c2.calculatedX 260.0))))
+
+        def c3 (EVGElement.createDiv())
+        c3.setAttribute("width" "60px")
+        c3.setAttribute("height" "20px")
+        c3.setAttribute("margin" "auto")
+        def p3:EVGElement (this.cellGrid(c3))
+        this.layoutAt(p3 300.0 600.0)
+        this.ok("margin: auto centres an item in its cell" ((this.near(c3.calculatedX 120.0)) && (this.near(c3.calculatedY 40.0))))
+
+        ; --- 2. aspect-ratio ----------------------------------------------------
+        def page4 (EVGElement.createDiv())
+        page4.setAttribute("width" "400px")
+        def r4 (EVGElement.createDiv())
+        r4.setAttribute("width" "200px")
+        r4.setAttribute("aspect-ratio" "2 / 1")
+        page4.addChild(r4)
+        this.layoutAt(page4 400.0 600.0)
+        this.ok("aspect-ratio: 2 / 1 makes a 200px box 100px tall" (this.near(r4.calculatedHeight 100.0)))
+
+        ; --- 3. box-sizing: content-box ----------------------------------------
+        def page5 (EVGElement.createDiv())
+        page5.setAttribute("width" "500px")
+        def b5 (EVGElement.createDiv())
+        b5.setAttribute("box-sizing" "content-box")
+        b5.setAttribute("width" "50px")
+        b5.setAttribute("height" "100px")
+        b5.setAttribute("padding-left" "10%")
+        page5.addChild(b5)
+        this.layoutAt(page5 500.0 600.0)
+        this.ok("content-box: 50px and 10% of 500px padding is 100px wide" ((this.near(b5.calculatedWidth 100.0)) && (this.near(b5.calculatedHeight 100.0))))
+
+        ; --- 4. align-content: stretch -----------------------------------------
+        def page6 (EVGElement.createDiv())
+        page6.setAttribute("width" "200px")
+        def w6 (EVGElement.createDiv())
+        w6.setAttribute("display" "flex")
+        w6.setAttribute("flex-direction" "row")
+        w6.setAttribute("flex-wrap" "wrap")
+        w6.setAttribute("align-content" "stretch")
+        w6.setAttribute("width" "200px")
+        w6.setAttribute("height" "100px")
+        def l1 (EVGElement.createDiv())
+        l1.setAttribute("width" "100%")
+        def l1k (EVGElement.createDiv())
+        l1k.setAttribute("height" "10px")
+        l1.addChild(l1k)
+        def l2 (EVGElement.createDiv())
+        l2.setAttribute("width" "100%")
+        w6.addChild(l1)
+        w6.addChild(l2)
+        page6.addChild(w6)
+        this.layoutAt(page6 200.0 600.0)
+        this.ok("align-content: stretch gives each line its share: 55 and 45" ((this.near(l1.calculatedHeight 55.0)) && ((this.near(l2.calculatedHeight 45.0)) && (this.near(l2.calculatedY 55.0)))))
+
+        ; --- 5. baseline alignment sizes the line ------------------------------
+        def page7 (EVGElement.createDiv())
+        page7.setAttribute("width" "300px")
+        def r7 (EVGElement.createDiv())
+        r7.setAttribute("display" "flex")
+        r7.setAttribute("flex-direction" "row")
+        r7.setAttribute("align-items" "baseline")
+        def a7 (EVGElement.createDiv())
+        a7.setAttribute("width" "20px")
+        a7.setAttribute("height" "30px")
+        def b7 (EVGElement.createDiv())
+        b7.setAttribute("display" "flex")
+        b7.setAttribute("flex-direction" "column")
+        b7.setAttribute("width" "40px")
+        b7.setAttribute("height" "50px")
+        def t7 (EVGElement.createSpan())
+        t7.setAttribute("font-size" "10px")
+        t7.textContent = "x"
+        b7.addChild(t7)
+        r7.addChild(a7)
+        r7.addChild(b7)
+        page7.addChild(r7)
+        this.layoutAt(page7 300.0 600.0)
+        def bb:double (b7.calculatedBaseline)
+        this.ok("baseline: the picture's bottom on the text's baseline" (this.near((a7.calculatedY + 30.0) (b7.calculatedY + bb))))
+        this.ok("baseline: the line holds both (30 above, the rest of 50 under)" (this.near(r7.calculatedHeight ((30.0 + 50.0) - bb))))
+
+        ; --- 6. fit-content in a wrapping row -------------------------------------
+        def page8 (EVGElement.createDiv())
+        page8.setAttribute("width" "300px")
+        def r8 (EVGElement.createDiv())
+        r8.setAttribute("display" "flex")
+        r8.setAttribute("flex-direction" "row")
+        r8.setAttribute("flex-wrap" "wrap")
+        def a8 (EVGElement.createDiv())
+        a8.setAttribute("width" "100px")
+        a8.setAttribute("height" "20px")
+        def g8 (EVGElement.createDiv())
+        g8.display = "grid"
+        g8.setAttribute("width" "fit-content")
+        g8.setAttribute("grid-template-columns" "50px")
+        def k8 (EVGElement.createDiv())
+        k8.setAttribute("height" "20px")
+        g8.addChild(k8)
+        r8.addChild(a8)
+        r8.addChild(g8)
+        page8.addChild(r8)
+        this.layoutAt(page8 300.0 600.0)
+        this.ok("fit-content: a 50px grid stays beside a 100px box" ((this.near(g8.calculatedY a8.calculatedY)) && (this.near(g8.calculatedX 100.0))))
+
+        ; --- 7. static position in a flex container -----------------------------
+        def page9 (EVGElement.createDiv())
+        page9.setAttribute("width" "300px")
+        def f9 (EVGElement.createDiv())
+        f9.setAttribute("display" "flex")
+        f9.setAttribute("flex-direction" "row")
+        f9.setAttribute("justify-content" "center")
+        f9.setAttribute("align-items" "flex-end")
+        f9.setAttribute("width" "100px")
+        f9.setAttribute("height" "50px")
+        def a9 (EVGElement.createDiv())
+        a9.setAttribute("position" "absolute")
+        a9.setAttribute("top" "0px")
+        a9.setAttribute("left" "0px")
+        a9.setAttribute("static-flex" "true")
+        a9.setAttribute("width" "20px")
+        a9.setAttribute("height" "10px")
+        f9.addChild(a9)
+        page9.addChild(f9)
+        this.layoutAt(page9 300.0 600.0)
+        this.ok("static-flex: centred along the row, at the cross end" ((this.near((a9.calculatedX - f9.calculatedX) 40.0)) && (this.near((a9.calculatedY - f9.calculatedY) 40.0))))
+
+        ; --- 8. implicit grid tracks ----------------------------------------------
+        ; No templates: grid-column 2 makes a second auto column, and the
+        ; two auto rows share a definite height (align-content stretch).
+        def page10 (EVGElement.createDiv())
+        page10.setAttribute("width" "300px")
+        def g10 (EVGElement.createDiv())
+        g10.setAttribute("display" "grid")
+        g10.setAttribute("align-content" "stretch")
+        g10.setAttribute("width" "200px")
+        g10.setAttribute("height" "200px")
+        def b10 (EVGElement.createDiv())
+        b10.setAttribute("grid-row" "2")
+        b10.setAttribute("grid-column" "2")
+        b10.setAttribute("height" "10px")
+        def c10 (EVGElement.createDiv())
+        c10.setAttribute("grid-row" "1")
+        c10.setAttribute("grid-column" "1")
+        c10.setAttribute("height" "10px")
+        g10.addChild(c10)
+        g10.addChild(b10)
+        page10.addChild(g10)
+        this.layoutAt(page10 300.0 600.0)
+        this.ok("implicit tracks: item at column 2 / row 2 sits at 100,100" ((this.near((b10.calculatedX - g10.calculatedX) 100.0)) && (this.near((b10.calculatedY - g10.calculatedY) 100.0))))
+
+        def g11 (EVGElement.createDiv())
+        g11.setAttribute("display" "grid")
+        g11.setAttribute("grid-auto-rows" "30px")
+        g11.setAttribute("width" "200px")
+        def a11 (EVGElement.createDiv())
+        def b11 (EVGElement.createDiv())
+        b11.setAttribute("grid-row" "2")
+        g11.addChild(a11)
+        g11.addChild(b11)
+        def page11 (EVGElement.createDiv())
+        page11.setAttribute("width" "300px")
+        page11.addChild(g11)
+        this.layoutAt(page11 300.0 600.0)
+        this.ok("grid-auto-rows: 30px rows" (this.near((b11.calculatedY - g11.calculatedY) 30.0)))
+
+        ; --- 9. an empty item's negative margin in a fit-content width -------------
+        def page12 (EVGElement.createDiv())
+        page12.setAttribute("width" "300px")
+        def r12 (EVGElement.createDiv())
+        r12.setAttribute("display" "flex")
+        r12.setAttribute("flex-direction" "row")
+        r12.setAttribute("column-gap" "10px")
+        r12.setAttribute("width" "fit-content")
+        def a12 (EVGElement.createDiv())
+        a12.setAttribute("width" "50px")
+        a12.setAttribute("height" "10px")
+        def z12 (EVGElement.createDiv())
+        z12.setAttribute("margin-left" "-10px")
+        r12.addChild(a12)
+        r12.addChild(z12)
+        page12.addChild(r12)
+        this.layoutAt(page12 300.0 600.0)
+        this.ok("fit-content: an empty item's -10px margin takes back the gap" (this.near(r12.calculatedWidth 50.0)))
+
+        ; --- 10. one axis aligned in a grid area ------------------------------------
+        def page13 (EVGElement.createDiv())
+        page13.setAttribute("width" "300px")
+        def g13 (EVGElement.createDiv())
+        g13.setAttribute("display" "grid")
+        g13.setAttribute("position" "relative")
+        g13.setAttribute("grid-template-columns" "100px")
+        g13.setAttribute("grid-template-rows" "100px")
+        g13.setAttribute("width" "100px")
+        g13.setAttribute("height" "100px")
+        def a13 (EVGElement.createDiv())
+        a13.setAttribute("position" "absolute")
+        a13.setAttribute("grid-row" "1")
+        a13.setAttribute("grid-column" "1")
+        a13.setAttribute("left" "5px")
+        a13.setAttribute("top" "0px")
+        a13.setAttribute("static-flex" "y")
+        a13.setAttribute("justify-self" "end")
+        a13.setAttribute("align-self" "end")
+        a13.setAttribute("width" "20px")
+        a13.setAttribute("height" "20px")
+        g13.addChild(a13)
+        page13.addChild(g13)
+        this.layoutAt(page13 300.0 600.0)
+        this.ok("static-flex y: aligned down only, left inset kept" ((this.near((a13.calculatedX - g13.calculatedX) 5.0)) && (this.near((a13.calculatedY - g13.calculatedY) 80.0))))
+
+        ; --- 11. a wrapping column -------------------------------------------------
+        def page14 (EVGElement.createDiv())
+        page14.setAttribute("width" "300px")
+        def f14 (EVGElement.createDiv())
+        f14.setAttribute("display" "flex")
+        f14.setAttribute("flex-direction" "column")
+        f14.setAttribute("flex-wrap" "wrap")
+        f14.setAttribute("align-content" "flex-start")
+        f14.setAttribute("justify-content" "center")
+        f14.setAttribute("max-height" "200px")
+        f14.setAttribute("width" "300px")
+        def a14 (EVGElement.createDiv())
+        a14.setAttribute("width" "100px")
+        a14.setAttribute("height" "200px")
+        def b14 (EVGElement.createDiv())
+        b14.setAttribute("width" "100px")
+        b14.setAttribute("height" "100px")
+        f14.addChild(a14)
+        f14.addChild(b14)
+        page14.addChild(f14)
+        this.layoutAt(page14 300.0 600.0)
+        this.ok("column wrap: the second item starts a line beside, centred down it" ((this.near((b14.calculatedX - f14.calculatedX) 100.0)) && (this.near((b14.calculatedY - f14.calculatedY) 50.0))))
+
+        ; --- 12. auto-fit collapses empty tracks; an abspos item stays in its area --
+        def page15 (EVGElement.createDiv())
+        page15.setAttribute("width" "300px")
+        def g15 (EVGElement.createDiv())
+        g15.setAttribute("display" "grid")
+        g15.setAttribute("position" "relative")
+        g15.setAttribute("width" "200px")
+        g15.setAttribute("grid-template-rows" "10px")
+        g15.setAttribute("grid-template-columns" "repeat(auto-fit, 30px)")
+        def a15 (EVGElement.createDiv())
+        a15.setAttribute("position" "absolute")
+        a15.setAttribute("top" "0px")
+        a15.setAttribute("right" "0px")
+        a15.setAttribute("bottom" "0px")
+        a15.setAttribute("left" "0px")
+        a15.setAttribute("grid-column" "1 / 5")
+        def b15 (EVGElement.createDiv())
+        b15.setAttribute("grid-column" "2")
+        g15.addChild(a15)
+        g15.addChild(b15)
+        page15.addChild(g15)
+        this.layoutAt(page15 300.0 600.0)
+        this.ok("auto-fit: the empty first track collapses, the item is at the start" (this.near((b15.calculatedX - g15.calculatedX) 0.0)))
+        this.ok("auto-fit: an area over collapsed tracks is the used one's width" (this.near(a15.calculatedWidth 30.0)))
+
+        ; --- 13. negative lines count from the explicit grid's end -------------------
+        def page16 (EVGElement.createDiv())
+        page16.setAttribute("width" "300px")
+        def g16 (EVGElement.createDiv())
+        g16.setAttribute("display" "grid")
+        g16.setAttribute("width" "200px")
+        g16.setAttribute("grid-template-columns" "100px 100px")
+        g16.setAttribute("grid-template-rows" "50px 50px")
+        def a16 (EVGElement.createDiv())
+        a16.setAttribute("grid-column" "-2")
+        a16.setAttribute("grid-row" "-2")
+        g16.addChild(a16)
+        page16.addChild(g16)
+        this.layoutAt(page16 300.0 600.0)
+        this.ok("grid-column: -2 / grid-row: -2 is the last cell" ((this.near((a16.calculatedX - g16.calculatedX) 100.0)) && (this.near((a16.calculatedY - g16.calculatedY) 50.0))))
+
+        ; --- 14. justify-content / align-content spread the tracks ----------------
+        def page17 (EVGElement.createDiv())
+        page17.setAttribute("width" "300px")
+        def g17 (EVGElement.createDiv())
+        g17.setAttribute("display" "grid")
+        g17.setAttribute("width" "200px")
+        g17.setAttribute("height" "200px")
+        g17.setAttribute("grid-template-columns" "50px 50px")
+        g17.setAttribute("grid-template-rows" "50px 50px")
+        g17.setAttribute("justify-content" "space-between")
+        g17.setAttribute("align-content" "center")
+        def a17 (EVGElement.createDiv())
+        def b17 (EVGElement.createDiv())
+        def c17 (EVGElement.createDiv())
+        c17.setAttribute("position" "absolute")
+        c17.setAttribute("grid-column" "auto / 2")
+        c17.setAttribute("grid-row" "2")
+        c17.setAttribute("width" "10px")
+        c17.setAttribute("height" "10px")
+        c17.setAttribute("justify-self" "end")
+        g17.setAttribute("position" "relative")
+        g17.addChild(a17)
+        g17.addChild(b17)
+        g17.addChild(c17)
+        page17.addChild(g17)
+        this.layoutAt(page17 300.0 600.0)
+        this.ok("justify-content: space-between puts the second column at the end" (this.near((b17.calculatedX - g17.calculatedX) 150.0)))
+        this.ok("align-content: center moves the rows down" (this.near((a17.calculatedY - g17.calculatedY) 50.0)))
+        this.ok("an abspos item's auto start line is the padding edge, its end line 2" (this.near((c17.calculatedX - g17.calculatedX) 40.0)))
+
+        ; --- 15. "auto / 3" is the track before line 3 ---------------------------------
+        def page18 (EVGElement.createDiv())
+        page18.setAttribute("width" "300px")
+        def g18 (EVGElement.createDiv())
+        g18.setAttribute("display" "grid")
+        g18.setAttribute("width" "300px")
+        g18.setAttribute("grid-template-columns" "100px 100px 100px")
+        def a18 (EVGElement.createDiv())
+        a18.setAttribute("grid-column" "auto / 3")
+        a18.setAttribute("height" "10px")
+        def b18 (EVGElement.createDiv())
+        b18.setAttribute("grid-column" "span 2 / 4")
+        b18.setAttribute("grid-row" "2")
+        b18.setAttribute("height" "10px")
+        g18.addChild(a18)
+        g18.addChild(b18)
+        page18.addChild(g18)
+        this.layoutAt(page18 300.0 600.0)
+        this.ok("grid-column: auto / 3 is in the second column" (this.near((a18.calculatedX - g18.calculatedX) 100.0)))
+        this.ok("grid-column: span 2 / 4 covers columns 2 and 3" ((this.near((b18.calculatedX - g18.calculatedX) 100.0)) && (this.near(b18.calculatedWidth 200.0))))
+
+        ; --- 16. grid-auto-flow: column fills the rows, then a new column -----------
+        def page19 (EVGElement.createDiv())
+        page19.setAttribute("width" "300px")
+        def g19 (EVGElement.createDiv())
+        g19.setAttribute("display" "grid")
+        g19.setAttribute("width" "300px")
+        g19.setAttribute("grid-auto-flow" "column")
+        g19.setAttribute("grid-template-rows" "20px 20px")
+        g19.setAttribute("grid-auto-columns" "50px")
+        def a19 (EVGElement.createDiv())
+        def b19 (EVGElement.createDiv())
+        def c19 (EVGElement.createDiv())
+        g19.addChild(a19)
+        g19.addChild(b19)
+        g19.addChild(c19)
+        page19.addChild(g19)
+        this.layoutAt(page19 300.0 600.0)
+        this.ok("column flow: the second item is under the first" ((this.near((b19.calculatedX - g19.calculatedX) 0.0)) && (this.near((b19.calculatedY - g19.calculatedY) 20.0))))
+        this.ok("column flow: the third item starts the next column" ((this.near((c19.calculatedX - g19.calculatedX) 50.0)) && (this.near((c19.calculatedY - g19.calculatedY) 0.0))))
+        this.ok("column flow: the items' own placements are kept" ((strlen c19.gridColumn) == 0))
+
+        ; --- 17. align-items: baseline in a grid row ---------------------------------
+        def page20 (EVGElement.createDiv())
+        page20.setAttribute("width" "300px")
+        def g20 (EVGElement.createDiv())
+        g20.setAttribute("display" "grid")
+        g20.setAttribute("width" "300px")
+        g20.setAttribute("grid-template-columns" "50px 50px")
+        g20.setAttribute("grid-template-rows" "100px")
+        g20.setAttribute("align-items" "baseline")
+        def a20 (EVGElement.createDiv())
+        a20.setAttribute("height" "20px")
+        def b20 (EVGElement.createDiv())
+        b20.setAttribute("height" "50px")
+        g20.addChild(a20)
+        g20.addChild(b20)
+        page20.addChild(g20)
+        this.layoutAt(page20 300.0 600.0)
+        this.ok("baseline: boxes with no text share their bottoms" ((this.near((a20.calculatedY - g20.calculatedY) 30.0)) && (this.near((b20.calculatedY - g20.calculatedY) 0.0))))
+
+        ; --- 18. a wrapping row's lines are their items' height ---------------------
+        def page21 (EVGElement.createDiv())
+        page21.setAttribute("width" "300px")
+        def w21 (EVGElement.createDiv())
+        w21.setAttribute("display" "flex")
+        w21.setAttribute("flex-direction" "row")
+        w21.setAttribute("flex-wrap" "wrap")
+        w21.setAttribute("align-items" "stretch")
+        w21.setAttribute("align-content" "center")
+        w21.setAttribute("width" "20px")
+        w21.setAttribute("height" "200px")
+        def a21 (EVGElement.createDiv())
+        a21.setAttribute("width" "20px")
+        a21.setAttribute("height" "10px")
+        def b21 (EVGElement.createDiv())
+        b21.setAttribute("width" "20px")
+        def b21k (EVGElement.createDiv())
+        b21k.setAttribute("height" "30px")
+        b21.addChild(b21k)
+        w21.addChild(a21)
+        w21.addChild(b21)
+        page21.addChild(w21)
+        this.layoutAt(page21 300.0 600.0)
+        this.ok("wrap: a stretched item is as tall as its line" (this.near(b21.calculatedHeight 30.0)))
+        this.ok("align-content: center puts the lines in the middle" (this.near((a21.calculatedY - w21.calculatedY) 80.0)))
+
+        print ""
+        print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
+        if (failed > 0) {
+            print "FAILED"
+        } {
+            print "OK"
+        }
+    }
+
+    sfn m@(main):void () {
+        EVGLayoutFull.install()
+        def c (new CssBoxCheck())
+        c.run()
+    }
+}

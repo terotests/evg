@@ -7,6 +7,7 @@ Import "EVGReject.rgr"
 Import "EVGColor.rgr"
 Import "EVGEasing.rgr"
 Import "EVGBox.rgr"
+Import "EVGCssExtra.rgr"
 Import "EVGGradient.rgr"
 Import "SvgParser.rgr"
 Import "SVGPathParser.rgr"
@@ -151,6 +152,16 @@ class EVGElement {
     def pageWidth:double 0.0       ; Resolved page width in points
     def pageHeight:double 0.0      ; Resolved page height in points
     
+    ; `margin: auto` per side (top, right, bottom, left). In a flex
+    ; container an auto margin takes the free space of its axis before
+    ; justify-content does (CSS Flexbox 8.1); a block's left and right
+    ; centre it. The margin itself resolves to zero until the layout
+    ; hands it the space.
+    def marginAutoTop:boolean false
+    def marginAutoRight:boolean false
+    def marginAutoBottom:boolean false
+    def marginAutoLeft:boolean false
+
     ; Tree structure
     def parent@(optional):EVGElement
     def children:[EVGElement]
@@ -696,6 +707,8 @@ class EVGElement {
     ; not say" — CSS spells that `auto`, and both are accepted — so an item
     ; that never mentions it costs one string comparison and nothing else.
     def alignSelf:string ""
+    def justifySelf:string ""
+    def justifyItems:string ""
     ; align-content: how WRAPPED LINES are distributed along the cross axis,
     ; as opposed to alignItems which positions children within one line. Only
     ; meaningful when the content wraps and the container has room to spare.
@@ -703,6 +716,8 @@ class EVGElement {
     ; flexWrap: "wrap" (row auto-wraps — historical EVG default) or "nowrap"
     ; (CSS default; children never wrap, they overflow / shrink instead).
     def flexWrap:string "wrap"
+    ; whether flex-wrap was written (EVG's own default is wrap, CSS's nowrap)
+    def flexWrapSet:boolean false
     def gap:EVGUnit
     ; Axis-specific gaps. When unset, `gap` applies to both axes.
     def rowGap:EVGUnit
@@ -737,6 +752,9 @@ class EVGElement {
     ; grid-auto-flow: "row" (default) or "row dense" — dense backfills earlier
     ; holes instead of only moving forward.
     def gridAutoFlow:string "row"
+    ; the size of an implicit column, an implicit row ("" is auto)
+    def gridAutoColumns:string ""
+    def gridAutoRows:string ""
     ; Full-bleed: this element should run past the trim edge into the bleed
     ; area, so the cut falls inside its ink rather than at its edge. Only has
     ; an effect when the output was asked for a bleed, and only on the edges
@@ -793,6 +811,14 @@ class EVGElement {
     ; Image sizing: "cover", "contain", "fill", "none"
     ; Default is "cover" - preserves aspect ratio, fills container, clips overflow
     def objectFit:string "cover"
+    ; aspect-ratio as width / height; 0 for none
+    def aspectRatio:double 0.0
+    ; box-sizing: content-box: width, height and their limits are the
+    ; content box's (EVG's own default is the border box)
+    def contentBox:boolean false
+    ; what only the CSS conformance layer reads (EVGCssExtra), made the
+    ; first time one of its attributes is set
+    def css@(optional):EVGCssExtra
     ; Original image dimensions (set by image loader)
     def sourceWidth:double 0.0
     def sourceHeight:double 0.0
@@ -1030,6 +1056,9 @@ class EVGElement {
     ; in-flow child for containers, so `align-items: baseline` has something to
     ; line up. 0 means "no text baseline" — CSS then uses the bottom margin edge.
     def calculatedBaseline:double 0.0
+    ; a text node's LAST line's baseline the same way (align-self: last
+    ; baseline); EVGLayoutFull.lastBaselineOffsetOf finds a container's
+    def calculatedLastBaseline:double 0.0
     def calculatedDescent:double 0.0
     def hasBaseline:boolean false
     ; True when this element's height was definite (explicit, page-sized, or
@@ -2354,6 +2383,11 @@ class EVGElement {
             inheritedFontSize = fontSize.pixels
         } {
             inheritedFontSize = fontSizeBase
+            ; (a re-layout finds the size it inherited last time: the unit
+            ; it made then is kept rather than made again)
+            if (fontSizeInherited && ((fontSize.unitType == 0) && ((fontSize.pixels == fontSizeBase) && (fontSize.value == fontSizeBase)))) {
+                return
+            }
             fontSize = (EVGUnit.px(fontSizeBase))
             fontSizeInherited = true
         }
@@ -2411,6 +2445,31 @@ class EVGElement {
         
         ; Box model
         box.resolveUnits(parentWidth parentHeight fs rfs vpw vph)
+        if contentBox {
+            def ex:double ((box.paddingLeftPx + box.paddingRightPx) + (box.borderWidthPx * 2.0))
+            def ey:double ((box.paddingTopPx + box.paddingBottomPx) + (box.borderWidthPx * 2.0))
+            if width.isSet {
+                width.pixels = (width.pixels + ex)
+            }
+            if minWidth.isSet {
+                minWidth.pixels = (minWidth.pixels + ex)
+            }
+            if maxWidth.isSet {
+                maxWidth.pixels = (maxWidth.pixels + ex)
+            }
+            if flexBasis.isSet {
+                flexBasis.pixels = (flexBasis.pixels + ex)
+            }
+            if height.isSet {
+                height.pixels = (height.pixels + ey)
+            }
+            if minHeight.isSet {
+                minHeight.pixels = (minHeight.pixels + ey)
+            }
+            if maxHeight.isSet {
+                maxHeight.pixels = (maxHeight.pixels + ey)
+            }
+        }
         
         ; Shadow
         shadowRadius.resolve(parentWidth fs)
@@ -3279,6 +3338,14 @@ class EVGElement {
     ; on every rebuild, which is a bug that shows up as "it works until you
     ; interact with it". `scripts/check-evg-adopt.mjs` fails the build when the
     ; two lists disagree, so this cannot rot quietly.
+    ; the CSS layer's flags, made on first use
+    fn cssExtra:EVGCssExtra () {
+        if (null? css) {
+            css = (new EVGCssExtra())
+        }
+        return (unwrap css)
+    }
+
     fn adoptFrom:void (other:EVGElement) {
         id = other.id
         key = other.key
@@ -3287,6 +3354,16 @@ class EVGElement {
         ; href is an annotation rather than blue ink, there is nothing left on
         ; the page to say it ever was one.
         href = other.href
+        marginAutoTop = other.marginAutoTop
+        justifySelf = other.justifySelf
+        aspectRatio = other.aspectRatio
+        contentBox = other.contentBox
+        ; (shared: the element adopted from is the freshly built one)
+        css = other.css
+        justifyItems = other.justifyItems
+        marginAutoRight = other.marginAutoRight
+        marginAutoBottom = other.marginAutoBottom
+        marginAutoLeft = other.marginAutoLeft
         tagName = other.tagName
         elementType = other.elementType
         format = other.format
@@ -3398,6 +3475,7 @@ class EVGElement {
         alignSelf = other.alignSelf
         alignContent = other.alignContent
         flexWrap = other.flexWrap
+        flexWrapSet = other.flexWrapSet
         gap = other.gap
         rowGap = other.rowGap
         columnGap = other.columnGap
@@ -3409,6 +3487,8 @@ class EVGElement {
         subgridPending = other.subgridPending
         gridTemplateAreas = other.gridTemplateAreas
         gridAutoFlow = other.gridAutoFlow
+        gridAutoColumns = other.gridAutoColumns
+        gridAutoRows = other.gridAutoRows
         fullBleed = other.fullBleed
         gridArea = other.gridArea
         gridColumn = other.gridColumn
@@ -3536,6 +3616,7 @@ class EVGElement {
         calculatedFlexHeight = other.calculatedFlexHeight
         hasFlexHeight = other.hasFlexHeight
         calculatedBaseline = other.calculatedBaseline
+        calculatedLastBaseline = other.calculatedLastBaseline
         calculatedDescent = other.calculatedDescent
         hasBaseline = other.hasBaseline
         hasDefiniteHeight = other.hasDefiniteHeight
@@ -3691,7 +3772,7 @@ class EVGElement {
     ; Rave's strip counted it as one for every button on the page.
     fn unitOf:EVGUnit (name:string value:string) {
         def u:EVGUnit (EVGUnit.parse(value))
-        if ((u.isSet == false) && (u.unitType != 6)) {
+        if ((u.isSet == false) && ((u.unitType != 6) && ((u.unitType != 7) && (u.unitType != 8)))) {
             if ((EVGReject.isAbsent(value)) == false) {
                 EVGReject.note("unsupported length" name value)
             }
@@ -4063,6 +4144,28 @@ class EVGElement {
         
         ; Margin
         if (name == "margin") {
+            def mw:[string] (EVGElement.splitWords(value))
+            def mn:int (array_length mw)
+            if ((mn >= 1) && (mn <= 4)) {
+                ; top, right, bottom, left as the shorthand repeats them
+                def wt:string (itemAt mw 0)
+                def wr:string wt
+                if (mn >= 2) {
+                    wr = (itemAt mw 1)
+                }
+                def wb:string wt
+                if (mn >= 3) {
+                    wb = (itemAt mw 2)
+                }
+                def wl:string wr
+                if (mn >= 4) {
+                    wl = (itemAt mw 3)
+                }
+                marginAutoTop = (wt == "auto")
+                marginAutoRight = (wr == "auto")
+                marginAutoBottom = (wb == "auto")
+                marginAutoLeft = (wl == "auto")
+            }
             def ms:[EVGUnit] (EVGElement.boxSides(value true))
             if ((array_length ms) == 4) {
                 box.setMarginValues((itemAt ms 0) (itemAt ms 1) (itemAt ms 2) (itemAt ms 3))
@@ -4070,18 +4173,22 @@ class EVGElement {
             return
         }
         if ((name == "margin-left") || (name == "marginLeft")) {
+            marginAutoLeft = ((trim value) == "auto")
             box.marginLeft = (this.unitOf(name value))
             return
         }
         if ((name == "margin-right") || (name == "marginRight")) {
+            marginAutoRight = ((trim value) == "auto")
             box.marginRight = (this.unitOf(name value))
             return
         }
         if ((name == "margin-top") || (name == "marginTop")) {
+            marginAutoTop = ((trim value) == "auto")
             box.marginTop = (this.unitOf(name value))
             return
         }
         if ((name == "margin-bottom") || (name == "marginBottom")) {
+            marginAutoBottom = ((trim value) == "auto")
             box.marginBottom = (this.unitOf(name value))
             return
         }
@@ -4270,6 +4377,19 @@ class EVGElement {
         }
         
         ; Image properties
+        if (EVGCssExtra.owns(name)) {
+            def cx:EVGCssExtra (this.cssExtra())
+            cx.set(name value)
+            return
+        }
+        if ((name == "box-sizing") || (name == "boxSizing")) {
+            contentBox = (value == "content-box")
+            return
+        }
+        if ((name == "aspect-ratio") || (name == "aspectRatio")) {
+            aspectRatio = (EVGElement.ratioOf(value))
+            return
+        }
         if ((name == "object-fit") || (name == "objectFit")) {
             objectFit = value
             return
@@ -4509,6 +4629,7 @@ class EVGElement {
         }
         if ((name == "flex-wrap") || (name == "flexWrap")) {
             flexWrap = value
+            flexWrapSet = true
             return
         }
         ; `flex-grow`, WHICH WAS NOT HERE. `flex-shrink`, `flex-basis` and the
@@ -4606,6 +4727,14 @@ class EVGElement {
             gridTemplateAreas = value
             return
         }
+        if ((name == "grid-auto-columns") || (name == "gridAutoColumns")) {
+            gridAutoColumns = value
+            return
+        }
+        if ((name == "grid-auto-rows") || (name == "gridAutoRows")) {
+            gridAutoRows = value
+            return
+        }
         if ((name == "grid-auto-flow") || (name == "gridAutoFlow")) {
             gridAutoFlow = value
             return
@@ -4632,6 +4761,18 @@ class EVGElement {
         }
         if ((name == "align-content") || (name == "alignContent")) {
             alignContent = value
+            return
+        }
+        if ((name == "justify-self") || (name == "justifySelf")) {
+            if (value == "auto") {
+                justifySelf = ""
+            } {
+                justifySelf = value
+            }
+            return
+        }
+        if ((name == "justify-items") || (name == "justifyItems")) {
+            justifyItems = value
             return
         }
         if ((name == "align-self") || (name == "alignSelf")) {
@@ -4893,6 +5034,34 @@ class EVGElement {
         if ((EVGElement.isHostProp(name)) == false) {
             EVGReject.note("unknown property" name value)
         }
+    }
+
+    ; `aspect-ratio`: "16 / 9", "1.5", "auto 2 / 1"; 0 for auto or junk
+    sfn ratioOf:double (value:string) {
+        def v:string (trim value)
+        if ((indexOf v "auto") == 0) {
+            v = (trim (substring v 4 (strlen v)))
+        }
+        if ((strlen v) == 0) {
+            return 0.0
+        }
+        def slash:int (indexOf v "/")
+        if (slash < 0) {
+            def one@(optional):double (to_double v)
+            if one {
+                return (unwrap one)
+            }
+            return 0.0
+        }
+        def a@(optional):double (to_double (trim (substring v 0 slash)))
+        def b@(optional):double (to_double (trim (substring v (slash + 1) (strlen v))))
+        if (a && b) {
+            def bv:double (unwrap b)
+            if (bv > 0.0) {
+                return ((unwrap a) / bv)
+            }
+        }
+        return 0.0
     }
 
     ; Names that reach `setAttribute` from an authoring layer and are NOT

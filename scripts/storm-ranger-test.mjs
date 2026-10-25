@@ -104,6 +104,7 @@ const RGR_SUITES = [
   "EVGFlexRulesTest.rgr",
   "EVGFlexWrapTest.rgr",
   "EVGDashboardLayoutTest.rgr",
+  "EVGCssBoxTest.rgr",
   "EVGBoxShorthandTest.rgr",
   "EVGStyleStateTest.rgr",
   "EVGFocusTest.rgr",

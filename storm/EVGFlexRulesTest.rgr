@@ -422,14 +422,23 @@ class FlexRulesCheck {
         print "-- a declaration the engine cannot use is reported, not swallowed"
         EVGReject.clearNotes()
         def bad:[string]
-        push bad "width:calc(100% - 40px);height:40px"
+        push bad "width:calc(100% - 2em);height:40px"
         def r13 (this.row("600px" bad))
         def l13 (this.lay(r13))
-        this.ok("calc() is a warning" ((l13.warningCount()) > 0))
+        this.ok("calc() with an em term is a warning" ((l13.warningCount()) > 0))
+
+        ; (calc() of px and % is a percentage with an offset)
+        EVGReject.clearNotes()
+        def good:[string]
+        push good "width:calc(100% - 40px);height:40px"
+        def r13b (this.row("600px" good))
+        def l13b (this.lay(r13b))
+        def c13:EVGElement (r13b.getChild(0))
+        this.ok("calc(100% - 40px) is the row less 40px" (((c13.calculatedWidth - 560.0) < 0.5) && ((560.0 - c13.calculatedWidth) < 0.5)))
 
         EVGReject.clearNotes()
         def ar:[string]
-        push ar "width:200px;aspect-ratio:2/1"
+        push ar "width:200px;height:40px;shape-outside:circle(50%)"
         def r14 (this.row("600px" ar))
         def l14 (this.lay(r14))
         this.ok("an unimplemented property is a warning" ((l14.warningCount()) > 0))
