@@ -1,0 +1,179 @@
+Import "EVGElement.rgr"
+Import "EVGUnit.rgr"
+Import "EVGLayout.rgr"
+Import "EVGDisplayList.rgr"
+
+; Perf gate fixtures (scripts/storm-perf-gate.mjs): four pages of 10k
+; elements laid out and listed; the gate counts the instructions of each
+; gate* function under callgrind (C++ build), base vs head.
+class EvgPerfGate {
+    sfn el:EVGElement (css:string) {
+        def e (EVGElement.createDiv())
+        def parts:[string] (strsplit css ";")
+        def i:int 0
+        while (i < (array_length parts)) {
+            def d:string (itemAt parts i)
+            def k:int (indexOf d ":")
+            if (k > 0) {
+                e.setAttribute((trim (substring d 0 k)) (trim (substring d (k + 1) (strlen d))))
+            }
+            i = (i + 1)
+        }
+        return e
+    }
+    sfn flex:EVGElement (n:int withText:boolean) {
+        def page (EvgPerfGate.el("display:flex;flex-direction:column;flex-wrap:nowrap;width:1200px;gap:8px;align-items:stretch"))
+        def cards:int n
+        def i:int 0
+        while ((i * 7) < cards) {
+            def card (EvgPerfGate.el("display:flex;flex-direction:row;flex-wrap:nowrap;gap:12px;padding:8px;align-items:stretch"))
+            card.addChild(EvgPerfGate.el("width:48px;height:56px;background-color:#e4e4e7"))
+            def body (EvgPerfGate.el("display:flex;flex-direction:column;flex-wrap:nowrap;flex-grow:1;gap:4px;align-items:stretch"))
+            def j:int 0
+            while (j < 4) {
+                if (withText && (j == 0)) {
+                    def t (EvgPerfGate.el("font-size:14px"))
+                    t.elementType = 1
+                    t.textContent = "Grace Hopper and Alan Turing"
+                    body.addChild(t)
+                } {
+                    body.addChild(EvgPerfGate.el("height:16px;background-color:#f4f4f5"))
+                }
+                j = (j + 1)
+            }
+            card.addChild(body)
+            page.addChild(card)
+            i = (i + 1)
+        }
+        return page
+    }
+    sfn grid:EVGElement (n:int) {
+        def page (EvgPerfGate.el("display:grid;grid-template-columns:repeat(4, 1fr);gap:10px;width:1200px"))
+        def cells:int n
+        def i:int 0
+        while ((i * 5) < cells) {
+            def cell (EvgPerfGate.el("display:flex;flex-direction:column;flex-wrap:nowrap;gap:4px;padding:6px;align-items:stretch"))
+            def j:int 0
+            while (j < 4) {
+                cell.addChild(EvgPerfGate.el("height:16px;background-color:#f4f4f5"))
+                j = (j + 1)
+            }
+            page.addChild(cell)
+            i = (i + 1)
+        }
+        return page
+    }
+    ; dashboard: auto-fill grid of tiles, each tile a header row (abs badge), wrapping chip row and text
+    sfn dash:EVGElement (n:int) {
+        def page (EvgPerfGate.el("display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;width:1200px;padding:16px"))
+        def tiles:int n
+        def i:int 0
+        while ((i * 10) < tiles) {
+            def tile (EvgPerfGate.el("display:flex;flex-direction:column;flex-wrap:nowrap;gap:6px;padding:10px;position:relative;min-width:0"))
+            def head (EvgPerfGate.el("display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:8px"))
+            head.addChild(EvgPerfGate.el("width:24px;height:24px"))
+            def title (EvgPerfGate.el("font-size:14px;flex-grow:1;min-width:0"))
+            title.elementType = 1
+            title.textContent = "Contracts awaiting signature"
+            head.addChild(title)
+            tile.addChild(head)
+            tile.addChild(EvgPerfGate.el("position:absolute;top:4px;right:4px;width:10px;height:10px"))
+            def chips (EvgPerfGate.el("display:flex;flex-direction:row;flex-wrap:wrap;gap:4px"))
+            def j:int 0
+            while (j < 4) {
+                chips.addChild(EvgPerfGate.el("width:60px;height:18px;flex-grow:1"))
+                j = (j + 1)
+            }
+            tile.addChild(chips)
+            tile.addChild(EvgPerfGate.el("width:100%;aspect-ratio:4"))
+            page.addChild(tile)
+            i = (i + 1)
+        }
+        return page
+    }
+    sfn gateLayFlex:void (root:EVGElement lay:EVGLayout) {
+        def r:int 0
+        while (r < 3) {
+            lay.layout(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateListFlex:void (root:EVGElement dl:EVGDisplayList) {
+        def r:int 0
+        while (r < 3) {
+            dl.build(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateLayGrid:void (root:EVGElement lay:EVGLayout) {
+        def r:int 0
+        while (r < 3) {
+            lay.layout(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateListGrid:void (root:EVGElement dl:EVGDisplayList) {
+        def r:int 0
+        while (r < 3) {
+            dl.build(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateLayText:void (root:EVGElement lay:EVGLayout) {
+        def r:int 0
+        while (r < 3) {
+            lay.layout(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateListText:void (root:EVGElement dl:EVGDisplayList) {
+        def r:int 0
+        while (r < 3) {
+            dl.build(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateLayDash:void (root:EVGElement lay:EVGLayout) {
+        def r:int 0
+        while (r < 3) {
+            lay.layout(root)
+            r = (r + 1)
+        }
+    }
+    sfn gateListDash:void (root:EVGElement dl:EVGDisplayList) {
+        def r:int 0
+        while (r < 3) {
+            dl.build(root)
+            r = (r + 1)
+        }
+    }
+    sfn newLayout:EVGLayout () {
+        def lay (new EVGLayout())
+        lay.setPageSize(1232.0 900.0)
+        return lay
+    }
+    sfn newList:EVGDisplayList (lay:EVGLayout) {
+        def dl (new EVGDisplayList())
+        dl.setTextEngine(lay.getTextEngine())
+        return dl
+    }
+    sfn m@(main):void () {
+        def f (EvgPerfGate.flex(10000 false))
+        def l1 (EvgPerfGate.newLayout())
+        EvgPerfGate.gateLayFlex(f l1)
+        EvgPerfGate.gateListFlex(f (EvgPerfGate.newList(l1)))
+        def g (EvgPerfGate.grid(10000))
+        def l2 (EvgPerfGate.newLayout())
+        EvgPerfGate.gateLayGrid(g l2)
+        EvgPerfGate.gateListGrid(g (EvgPerfGate.newList(l2)))
+        def t (EvgPerfGate.flex(10000 true))
+        def l3 (EvgPerfGate.newLayout())
+        EvgPerfGate.gateLayText(t l3)
+        EvgPerfGate.gateListText(t (EvgPerfGate.newList(l3)))
+        def d (EvgPerfGate.dash(10000))
+        def l4 (EvgPerfGate.newLayout())
+        EvgPerfGate.gateLayDash(d l4)
+        EvgPerfGate.gateListDash(d (EvgPerfGate.newList(l4)))
+        print "perf gate fixtures done"
+    }
+}

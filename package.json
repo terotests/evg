@@ -24,6 +24,7 @@
     "build": "node build.js",
     "prepublishOnly": "npm run build",
     "storm:test": "node scripts/storm-ranger-test.mjs",
+    "storm:perf": "node scripts/storm-perf-gate.mjs",
     "storm:adopt": "node scripts/check-adopt.mjs",
     "storm:drops:test": "node storm/gl/drops-model-test.mjs",
     "docs:dev": "npm --prefix docs/site run dev",
