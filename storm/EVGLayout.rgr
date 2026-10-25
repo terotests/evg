@@ -4524,7 +4524,171 @@ class EVGLayout {
         }
     }
 
+    ; grid-auto-flow: column: the items placed down the columns (CSS Grid
+    ; 8.5), as many rows as the explicit grid has, a new column when they
+    ; are full. The placements are written into the items for the row
+    ; algorithm and put back after (layoutGrid)
     fn layoutGrid:double (parent:EVGElement) {
+        if ((indexOf parent.gridAutoFlow "column") < 0) {
+            return (this.layoutGridFlow(parent))
+        }
+        def kids:[EVGElement]
+        def savedCols:[string]
+        def savedRows:[string]
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if (c.isAbsolute == false) {
+                push kids c
+                push savedCols c.gridColumn
+                push savedRows c.gridRow
+            }
+            i = (i + 1)
+        }
+        def colTpl:EVGGridTemplate (EVGGridTemplate.parse(parent.gridTemplateColumns))
+        def rowSpec:string parent.gridTemplateRows
+        if ((rowSpec == "none") || (rowSpec == "subgrid")) {
+            rowSpec = ""
+        }
+        def rowTpl:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        def nRows:int (rowTpl.count())
+        if ((strlen rowSpec) == 0) {
+            nRows = 0
+        }
+        def areas:EVGGridAreas (EVGGridAreas.parse(parent.gridTemplateAreas))
+        if ((strlen parent.gridTemplateAreas) > 0) {
+            if (areas.rows > nRows) {
+                nRows = areas.rows
+            }
+        }
+        def k:int (array_length kids)
+        def cs:[int]
+        def csp:[int]
+        def rs:[int]
+        def rsp:[int]
+        def j:int 0
+        while (j < k) {
+            def c:EVGElement (itemAt kids j)
+            def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+            cp.resolveNames(colTpl)
+            def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+            rp.resolveNames(rowTpl)
+            push cs (cp.start - 1)
+            push csp cp.span
+            push rs (rp.start - 1)
+            push rsp rp.span
+            if ((rp.start > 0) && (((rp.start - 1) + rp.span) > nRows)) {
+                nRows = ((rp.start - 1) + rp.span)
+            }
+            if ((rp.start <= 0) && (rp.span > nRows)) {
+                nRows = rp.span
+            }
+            j = (j + 1)
+        }
+        if (nRows < 1) {
+            nRows = 1
+        }
+        def taken:[string:boolean]
+        ; the items with both lines first, then the ones with a column,
+        ; then the rest from the cursor
+        def pass:int 0
+        def curC:int 0
+        def curR:int 0
+        while (pass < 3) {
+            def q:int 0
+            while (q < k) {
+                def c0:int (itemAt cs q)
+                def r0:int (itemAt rs q)
+                def sc:int (itemAt csp q)
+                def sr:int (itemAt rsp q)
+                def mine:boolean false
+                if ((pass == 0) && ((c0 >= 0) && (r0 >= 0))) {
+                    mine = true
+                }
+                if ((pass == 1) && ((c0 >= 0) && (r0 < 0))) {
+                    mine = true
+                    def rr:int 0
+                    while ((EVGLayout.areaTaken(taken c0 rr sc sr)) && (rr < 10000)) {
+                        rr = (rr + 1)
+                    }
+                    r0 = rr
+                }
+                if ((pass == 2) && (c0 < 0)) {
+                    mine = true
+                    if (r0 >= 0) {
+                        if (r0 < curR) {
+                            curC = (curC + 1)
+                        }
+                        while ((EVGLayout.areaTaken(taken curC r0 sc sr)) && (curC < 10000)) {
+                            curC = (curC + 1)
+                        }
+                        c0 = curC
+                        curR = (r0 + sr)
+                    } {
+                        def found:boolean false
+                        while ((found == false) && (curC < 10000)) {
+                            if ((curR + sr) > nRows) {
+                                curC = (curC + 1)
+                                curR = 0
+                            } {
+                                if (EVGLayout.areaTaken(taken curC curR sc sr)) {
+                                    curR = (curR + 1)
+                                } {
+                                    found = true
+                                }
+                            }
+                        }
+                        c0 = curC
+                        r0 = curR
+                        curR = (curR + sr)
+                    }
+                }
+                if mine {
+                    def a:int 0
+                    while (a < sc) {
+                        def b:int 0
+                        while (b < sr) {
+                            set taken (((to_string (c0 + a)) + ",") + (to_string (r0 + b))) true
+                            b = (b + 1)
+                        }
+                        a = (a + 1)
+                    }
+                    def el:EVGElement (itemAt kids q)
+                    el.gridColumn = (((to_string (c0 + 1)) + " / span ") + (to_string sc))
+                    el.gridRow = (((to_string (r0 + 1)) + " / span ") + (to_string sr))
+                }
+                q = (q + 1)
+            }
+            pass = (pass + 1)
+        }
+        def h:double (this.layoutGridFlow(parent))
+        def z:int 0
+        while (z < k) {
+            def c:EVGElement (itemAt kids z)
+            c.gridColumn = (itemAt savedCols z)
+            c.gridRow = (itemAt savedRows z)
+            z = (z + 1)
+        }
+        return h
+    }
+
+    sfn areaTaken:boolean (taken:[string:boolean] c:int r:int sc:int sr:int) {
+        def a:int 0
+        while (a < sc) {
+            def b:int 0
+            while (b < sr) {
+                if (has taken (((to_string (c + a)) + ",") + (to_string (r + b)))) {
+                    return true
+                }
+                b = (b + 1)
+            }
+            a = (a + 1)
+        }
+        return false
+    }
+
+    fn layoutGridFlow:double (parent:EVGElement) {
         def innerWidth:double parent.calculatedInnerWidth
         def innerHeight:double parent.calculatedInnerHeight
 
@@ -4688,7 +4852,7 @@ class EVGLayout {
         if ((strlen autoCol) == 0) {
             autoCol = "auto"
         }
-        if (lastLine > 1) {
+        if ((lastLine > 1) || ((lastLine == 1) && (((indexOf parent.gridAutoFlow "column") >= 0) && ((strlen parent.gridTemplateColumns) == 0)))) {
             def have:int 0
             if ((strlen parent.gridTemplateColumns) > 0) {
                 have = ((EVGGridTemplate.parse(colSpec)).count())
@@ -5259,7 +5423,8 @@ class EVGLayout {
             if (((strlen ga) == 0) || (ga == "auto")) {
                 ga = parent.alignItems
             }
-            def placedV:boolean ((ga == "center") || ((ga == "end") || ((ga == "flex-end") || ((ga == "start") || (ga == "self-end")))))
+            def byBaseline:boolean ((ga == "baseline") || (ga == "first baseline"))
+            def placedV:boolean ((ga == "center") || ((ga == "end") || ((ga == "flex-end") || ((ga == "start") || ((ga == "self-end") || byBaseline)))))
             if (el.marginAutoTop || el.marginAutoBottom) {
                 placedV = true
             }
@@ -5382,6 +5547,69 @@ class EVGLayout {
                 }
             }
             p = (p + 1)
+        }
+
+        ; align-self: baseline: the items of a row that align so share the
+        ; lowest of their baselines (CSS Align 9.3), a box with no text its
+        ; bottom margin edge (baselineOffsetOf)
+        def bp:int 0
+        while (bp < itemCount) {
+            def bel:EVGElement (itemAt items bp)
+            def bga:string bel.alignSelf
+            if (((strlen bga) == 0) || (bga == "auto")) {
+                bga = parent.alignItems
+            }
+            if (((bga == "baseline") || (bga == "first baseline")) && ((bel.marginAutoTop || bel.marginAutoBottom) == false)) {
+                def brow:int (itemAt placedRow bp)
+                def done:boolean false
+                ; (each row's group once, at its first item)
+                def bq:int 0
+                while (bq < bp) {
+                    def qel:EVGElement (itemAt items bq)
+                    def qga:string qel.alignSelf
+                    if (((strlen qga) == 0) || (qga == "auto")) {
+                        qga = parent.alignItems
+                    }
+                    if (((qga == "baseline") || (qga == "first baseline")) && ((itemAt placedRow bq) == brow)) {
+                        done = true
+                    }
+                    bq = (bq + 1)
+                }
+                if (done == false) {
+                    def maxB:double 0.0
+                    def bk:int bp
+                    while (bk < itemCount) {
+                        def kel:EVGElement (itemAt items bk)
+                        def kga:string kel.alignSelf
+                        if (((strlen kga) == 0) || (kga == "auto")) {
+                            kga = parent.alignItems
+                        }
+                        if (((kga == "baseline") || (kga == "first baseline")) && ((itemAt placedRow bk) == brow)) {
+                            def kb:double (this.baselineOffsetOf(kel))
+                            if (kb > maxB) {
+                                maxB = kb
+                            }
+                        }
+                        bk = (bk + 1)
+                    }
+                    def bm:int bp
+                    while (bm < itemCount) {
+                        def mel:EVGElement (itemAt items bm)
+                        def mga:string mel.alignSelf
+                        if (((strlen mga) == 0) || (mga == "auto")) {
+                            mga = parent.alignItems
+                        }
+                        if (((mga == "baseline") || (mga == "first baseline")) && ((itemAt placedRow bm) == brow)) {
+                            def shiftB:double (maxB - (this.baselineOffsetOf(mel)))
+                            if (shiftB != 0.0) {
+                                this.translateSubtree(mel 0.0 shiftB)
+                            }
+                        }
+                        bm = (bm + 1)
+                    }
+                }
+            }
+            bp = (bp + 1)
         }
 
         ; Leave the rows behind for an enclosing grid that has to size its own
