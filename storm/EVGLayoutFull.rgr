@@ -275,6 +275,32 @@ class EVGLayoutFull {
             fixY = (fixY + crossOff)
         }
         }
+        ; (between two insets a box narrower than the room left has its
+        ; auto margins share it, CSS 2.1 10.3.7 and 10.6.4)
+        if ((child.left.isSet && child.right.isSet) && (child.marginAutoLeft || child.marginAutoRight)) {
+            def freeX:double ((((innerWidth - child.left.pixels) - child.right.pixels) - child.calculatedWidth) - (child.box.marginLeftPx + child.box.marginRightPx))
+            if (freeX > 0.0) {
+                if (child.marginAutoLeft && child.marginAutoRight) {
+                    fixX = (fixX + (freeX / 2.0))
+                } {
+                    if child.marginAutoLeft {
+                        fixX = (fixX + freeX)
+                    }
+                }
+            }
+        }
+        if ((child.top.isSet && child.bottom.isSet) && (child.marginAutoTop || child.marginAutoBottom)) {
+            def freeY:double ((((innerHeight - child.top.pixels) - child.bottom.pixels) - child.calculatedHeight) - (child.box.marginTopPx + child.box.marginBottomPx))
+            if (freeY > 0.0) {
+                if (child.marginAutoTop && child.marginAutoBottom) {
+                    fixY = (fixY + (freeY / 2.0))
+                } {
+                    if child.marginAutoTop {
+                        fixY = (fixY + freeY)
+                    }
+                }
+            }
+        }
         f.x = fixX
         f.y = fixY
         return f
@@ -318,6 +344,55 @@ class EVGLayoutFull {
     ; or as the painter draws them
     fn pixelMetrics:boolean () {
         return true
+    }
+
+    ; a content-sized row holds its baseline-aligned items (align-self:
+    ; baseline, span 1) shifted to their shared baseline: as tall as the
+    ; most above it and the most under it (CSS Grid 11.5, the shim)
+    fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
+        def wasTop:boolean lay.synthTop
+        lay.synthTop = (this.synthTop(parent))
+        def above:[double]
+        def below:[double]
+        def r:int 0
+        while (r < (array_length rowSizes)) {
+            push above 0.0
+            push below 0.0
+            r = (r + 1)
+        }
+        def any:boolean false
+        def i:int 0
+        while (i < (array_length items)) {
+            def it:EVGElement (itemAt items i)
+            def ga:string it.alignSelf
+            if (((strlen ga) == 0) || (ga == "auto")) {
+                ga = parent.alignItems
+            }
+            def ri:int (itemAt placedRow i)
+            if ((((ga == "baseline") || (ga == "first baseline")) && ((itemAt rowSpans i) == 1)) && ((ri < (array_length rowSizes)) && ((it.marginAutoTop || it.marginAutoBottom) == false))) {
+                def b:double (lay.baselineOffsetOf(it))
+                def outer:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+                if (b > (itemAt above ri)) {
+                    set above ri b
+                }
+                if ((outer - b) > (itemAt below ri)) {
+                    set below ri (outer - b)
+                }
+                any = true
+            }
+            i = (i + 1)
+        }
+        if any {
+            def k:int 0
+            while (k < (array_length rowSizes)) {
+                def need:double ((itemAt above k) + (itemAt below k))
+                if (need > (itemAt rowSizes k)) {
+                    set rowSizes k need
+                }
+                k = (k + 1)
+            }
+        }
+        lay.synthTop = wasTop
     }
 
     fn synthTop:boolean (parent:EVGElement) {

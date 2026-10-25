@@ -120,6 +120,10 @@ class EVGLayoutExt {
         return -1.0
     }
 
+    ; content-sized grid rows grown by their items' baseline shifts
+    fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
+    }
+
     ; an item with no baseline has it at its top, not its bottom
     fn synthTop:boolean (parent:EVGElement) {
         return false

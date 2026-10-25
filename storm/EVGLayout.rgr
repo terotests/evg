@@ -562,7 +562,8 @@ class EVGLayout {
                         ; width is the border box's)
                         def intrinsic:double (((this.intrinsicWidth(element false)) - element.box.marginLeftPx) - element.box.marginRightPx)
                         ; (an empty box fits to nothing but its edges)
-                        def emptyBox:boolean (((element.getChildCount()) == 0) && (((strlen element.textContent) == 0) && (((strlen element.svgSource) == 0) && ((strlen element.src) == 0))))
+                        ; (and so does one with only empty boxes in it)
+                        def emptyBox:boolean (EVGLayout.emptyTree(element))
                         if ((emptyBox && (element.display == "flex")) && (element.minWidth.isSet == false)) {
                             width = ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
                         }
@@ -4018,6 +4019,28 @@ class EVGLayout {
     ; It was written when the alternative was reporting a made-up number; the
     ; alternative now is every component hand-setting a width its own children
     ; already know, which is worse and does not stay correct.
+    ; nothing in it to be wide: no text, picture or source, and only boxes
+    ; like it with no width of their own
+    sfn emptyTree:boolean (el:EVGElement) {
+        if ((((strlen el.textContent) > 0) || ((strlen el.svgSource) > 0)) || ((strlen el.src) > 0)) {
+            return false
+        }
+        def i:int 0
+        while (i < (el.getChildCount())) {
+            def c:EVGElement (el.getChild(i))
+            if (c.isAbsolute == false) {
+                if ((c.width.isSet || c.minWidth.isSet) || (c.display != "flex")) {
+                    return false
+                }
+                if ((EVGLayout.emptyTree(c)) == false) {
+                    return false
+                }
+            }
+            i = (i + 1)
+        }
+        return true
+    }
+
     fn intrinsicWidthOf:double (el:EVGElement) {
         return (this.intrinsicWidth(el false))
     }
@@ -5062,6 +5085,7 @@ class EVGLayout {
                     }
                     rm = (rm + 1)
                 }
+                ext.gridRowBaselines(this parent items placedRow rowSpans rowContent)
                 def acS:string parent.alignContent
                 rows.stretchAutos = (((strlen acS) == 0) || ((acS == "normal") || ((acS == "stretch") || (acS == "flex-start"))))
                 rows.resolveWithContent((innerHeight - rowGapTotal) rowContent rowContent)
@@ -5143,6 +5167,9 @@ class EVGLayout {
                 }
                 m = (m + 1)
             }
+            ; (baseline-aligned items need the room their shift takes, the
+            ; CSS layer's)
+            ext.gridRowBaselines(this parent items placedRow rowSpans rowSizes)
 
             ; An explicit row template on a container with no definite height
             ; used to be dropped whole, so `grid-template-rows: 170px auto` on
