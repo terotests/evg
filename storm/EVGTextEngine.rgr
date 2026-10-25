@@ -184,10 +184,25 @@ class EVGTextEngine {
             keySize = fontSize
             keyMax = maxWidth
             keyMeasure = mk
-            keyPrefix = (kind + "\n" + (to_string fontSize) + "\n" + (to_string maxWidth)
+            keyPrefix = (kind + "\n" + (EVGTextEngine.numKey(fontSize)) + "\n" + (EVGTextEngine.numKey(maxWidth))
                 + "\n" + mk + "\n" + fontFamily + "\n")
         }
         return (keyPrefix + text)
+    }
+
+    ; A size as a key, exactly: a whole number of 1/1024 px (what sizes and
+    ; widths nearly always are) as that integer, which is far cheaper to
+    ; write than a double; anything else as the double. The two cannot meet,
+    ; since only the second has a point or an exponent.
+    sfn numKey:string (v:double) {
+        def q:double (v * 1024.0)
+        if ((q < 1000000000000000.0) && (q > -1000000000000000.0)) {
+            def qi:int (to_int q)
+            if ((to_double qi) == q) {
+                return ((to_string qi) + "q")
+            }
+        }
+        return (to_string v)
     }
 
     fn setStrict:void (s:boolean) {

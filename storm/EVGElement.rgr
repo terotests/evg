@@ -2383,6 +2383,11 @@ class EVGElement {
             inheritedFontSize = fontSize.pixels
         } {
             inheritedFontSize = fontSizeBase
+            ; (a re-layout finds the size it inherited last time: the unit
+            ; it made then is kept rather than made again)
+            if (fontSizeInherited && ((fontSize.unitType == 0) && ((fontSize.pixels == fontSizeBase) && (fontSize.value == fontSizeBase)))) {
+                return
+            }
             fontSize = (EVGUnit.px(fontSizeBase))
             fontSizeInherited = true
         }
