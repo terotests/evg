@@ -5209,6 +5209,7 @@ class EVGLayout {
             if (rows.hadError) {
                 this.warn(("grid-template-rows: " + rows.errorText))
             }
+            ext.gridFrRowMin(this rows items placedRow rowSpans placedCol colSpans cols measureGap innerHeight)
             ; intrinsic rows are as tall as their items (span 1), and only
             ; align-content normal or stretch grows the auto ones
             if (rows.hasIntrinsicTrack()) {

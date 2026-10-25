@@ -656,6 +656,39 @@ class CssBoxCheck {
         this.layoutAt(page29 300.0 600.0)
         this.ok("abs bottom 0 / top 50% in an auto-height box of 80: y 70 and 40" ((this.near((a29.calculatedY - p29.calculatedY) 70.0)) && (this.near((h29.calculatedY - p29.calculatedY) 40.0))))
 
+        ; --- 27. fr factors summing under 1 take that share; auto takes the rest --
+        def page30 (EVGElement.createDiv())
+        page30.setAttribute("width" "200px")
+        def g30 (EVGElement.createDiv())
+        g30.setAttribute("display" "grid")
+        g30.setAttribute("grid-template-columns" "auto 0.25fr")
+        def a30 (EVGElement.createDiv())
+        a30.setAttribute("height" "10px")
+        g30.addChild(a30)
+        def b30 (EVGElement.createDiv())
+        b30.setAttribute("height" "10px")
+        g30.addChild(b30)
+        page30.addChild(g30)
+        this.layoutAt(page30 300.0 600.0)
+        this.ok("auto 0.25fr in 200: 150 and 50" ((this.near(a30.calculatedWidth 150.0)) && (this.near(b30.calculatedWidth 50.0))))
+
+        ; --- 28. fr rows share the room a max-height gives, floored by their mins --
+        def page31 (EVGElement.createDiv())
+        page31.setAttribute("width" "300px")
+        def g31 (EVGElement.createDiv())
+        g31.setAttribute("display" "grid")
+        g31.setAttribute("width" "50px")
+        g31.setAttribute("grid-template-rows" "minmax(10px, 1fr) minmax(10px, 4fr)")
+        g31.setAttribute("row-gap" "33px")
+        g31.setAttribute("max-height" "70px")
+        def a31 (EVGElement.createDiv())
+        g31.addChild(a31)
+        def b31 (EVGElement.createDiv())
+        g31.addChild(b31)
+        page31.addChild(g31)
+        this.layoutAt(page31 300.0 600.0)
+        this.ok("fr rows in max-height 70 with gap 33: 10 and 27" ((this.near(a31.calculatedHeight 10.0)) && (this.near(b31.calculatedHeight 27.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

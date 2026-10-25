@@ -826,30 +826,6 @@ class EVGGridTemplate {
         if (poolSpace < 0.0) {
             poolSpace = 0.0
         }
-        ; with no fr track the space left goes to the auto tracks, evenly
-        if (((totalFr == 0.0) && (poolSpace > 0.0)) && stretchAutos) {
-            def autos:int 0
-            def ai:int 0
-            while (ai < n) {
-                def a0:EVGGridTrack (itemAt tracks ai)
-                if a0.autoTrack {
-                    autos = (autos + 1)
-                }
-                ai = (ai + 1)
-            }
-            if (autos > 0) {
-                def share:double (poolSpace / (to_double autos))
-                ai = 0
-                while (ai < n) {
-                    def at:EVGGridTrack (itemAt tracks ai)
-                    if at.autoTrack {
-                        at.sizePx = (at.sizePx + share)
-                    }
-                    ai = (ai + 1)
-                }
-                poolSpace = 0.0
-            }
-        }
         def poolFr:double totalFr
         def pass:int 0
         def settled:boolean false
@@ -860,8 +836,14 @@ class EVGGridTemplate {
                 def t2:EVGGridTrack (itemAt tracks j)
                 if ((t2.kind == 2) && (t2.frozen == false)) {
                     def size:double 0.0
+                    ; (flex factors summing under 1 take that share of
+                    ; the room, not all of it: CSS Grid 12.7.1)
                     if (poolFr > 0.0) {
-                        size = ((poolSpace * t2.value) / poolFr)
+                        def frSum:double poolFr
+                        if (frSum < 1.0) {
+                            frSum = 1.0
+                        }
+                        size = ((poolSpace * t2.value) / frSum)
                     }
                     def clamped:double size
                     if t2.hasMin {
@@ -894,6 +876,38 @@ class EVGGridTemplate {
                 j = (j + 1)
             }
             pass = (pass + 1)
+        }
+
+        ; the space no fr track takes (none, or fr summing under 1) goes to
+        ; the auto tracks, evenly
+        def autoRoom:double available
+        def ar:int 0
+        while (ar < n) {
+            def rt:EVGGridTrack (itemAt tracks ar)
+            autoRoom = (autoRoom - rt.sizePx)
+            ar = (ar + 1)
+        }
+        if (((totalFr < 1.0) && (autoRoom > 0.0)) && stretchAutos) {
+            def autos:int 0
+            def ai:int 0
+            while (ai < n) {
+                def a0:EVGGridTrack (itemAt tracks ai)
+                if a0.autoTrack {
+                    autos = (autos + 1)
+                }
+                ai = (ai + 1)
+            }
+            if (autos > 0) {
+                def share:double (autoRoom / (to_double autos))
+                ai = 0
+                while (ai < n) {
+                    def at:EVGGridTrack (itemAt tracks ai)
+                    if at.autoTrack {
+                        at.sizePx = (at.sizePx + share)
+                    }
+                    ai = (ai + 1)
+                }
+            }
         }
 
         ; A fixed or percentage track can still carry a minmax() floor.

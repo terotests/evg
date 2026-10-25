@@ -898,6 +898,50 @@ class EVGLayoutFull {
         }
     }
 
+    ; A `1fr` row is minmax(auto, 1fr) too: no shorter than the items in
+    ; it alone, laid out at their columns' width, unless they clip
+    fn gridFrRowMin:void (lay:EVGLayout rows:EVGGridTemplate items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double innerHeight:double) {
+        def nr:int (rows.count())
+        def any:boolean false
+        def t0:int 0
+        while (t0 < nr) {
+            def tk:EVGGridTrack (rows.trackAt(t0))
+            if (((tk.kind == 2) && (tk.hasMin == false)) && (tk.minIntrinsic == 0)) {
+                any = true
+            }
+            push rows.frMin 0.0
+            t0 = (t0 + 1)
+        }
+        if (any == false) {
+            return
+        }
+        rows.frAutoMin = true
+        for items it:EVGElement k {
+            def r:int (itemAt placedRow k)
+            if ((((itemAt rowSpans k) == 1) && (r < nr)) && ((it.overflow == "visible") && (it.gridTemplateRows != "subgrid"))) {
+                def tk2:EVGGridTrack (rows.trackAt(r))
+                if (((tk2.kind == 2) && (tk2.hasMin == false)) && (tk2.minIntrinsic == 0)) {
+                    def w:double (cols.extentOf((itemAt placedCol k) (itemAt colSpans k) colGap))
+                    it.calculatedFlexHeight = 0.0
+                    it.unitsResolved = false
+                    it.resolveUnits(w innerHeight)
+                    def pct:boolean (it.height.isSet && (it.height.isPercent()))
+                    if pct {
+                        it.height.isSet = false
+                    }
+                    lay.layoutElement(it 0.0 0.0 ((w - it.box.marginLeftPx) - it.box.marginRightPx) 0.0)
+                    if pct {
+                        it.height.isSet = true
+                    }
+                    def h:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+                    if (h > (itemAt rows.frMin r)) {
+                        set rows.frMin r h
+                    }
+                }
+            }
+        }
+    }
+
     fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
         def nc:int (cols.count())
         def maxSpan:int 1
@@ -1021,7 +1065,20 @@ class EVGLayoutFull {
                 if ((t.kind == 2) && (t.value > 0.0)) {
                     isFr = true
                     flexSum = (flexSum + t.value)
-                    def need:double ((itemAt rowSizes i) / t.value)
+                    ; (its base size counts too, and a factor under 1
+                    ; divides as 1: CSS Grid 12.7.1)
+                    def base:double (itemAt rowSizes i)
+                    if t.hasMin {
+                        t.minUnit.resolve(0.0 parent.inheritedFontSize)
+                        if (t.minUnit.pixels > base) {
+                            base = t.minUnit.pixels
+                        }
+                    }
+                    def per:double t.value
+                    if (per < 1.0) {
+                        per = 1.0
+                    }
+                    def need:double (base / per)
                     if (need > unit) {
                         unit = need
                     }
@@ -1053,29 +1110,118 @@ class EVGLayoutFull {
         if (flexSum <= 0.0) {
             return
         }
-        def total:double (fixedSum + (unit * flexSum))
-        if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
-            def maxIn:double (parent.maxHeight.pixels - chrome)
-            if (total > maxIn) {
-                unit = ((maxIn - fixedSum) / flexSum)
+        ; (an fr row's floor: its fixed min, else what is in it)
+        def floors:[double]
+        def fk:int 0
+        while (fk < n) {
+            def fl:double 0.0
+            if (fk < (declared.count())) {
+                def tf:EVGGridTrack (declared.trackAt(fk))
+                if ((tf.kind == 2) && (tf.value > 0.0)) {
+                    fl = (itemAt rowSizes fk)
+                    if tf.hasMin {
+                        tf.minUnit.resolve(0.0 parent.inheritedFontSize)
+                        fl = tf.minUnit.pixels
+                    }
+                }
             }
+            push floors fl
+            fk = (fk + 1)
+        }
+        ; the room: a max-height is a definite one for the fr rows to
+        ; share (CSS Grid 12.1, 12.7.1), a min-height one the content
+        ; does not fill; else the rows are what their content needs
+        def room:double -1.0
+        if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
+            room = (parent.maxHeight.pixels - chrome)
+        }
+        def total:double fixedSum
+        def tk:int 0
+        while ((tk < n) && (tk < (declared.count()))) {
+            def tt:EVGGridTrack (declared.trackAt(tk))
+            if ((tt.kind == 2) && (tt.value > 0.0)) {
+                def want:double (unit * tt.value)
+                if ((itemAt floors tk) > want) {
+                    want = (itemAt floors tk)
+                }
+                total = (total + want)
+            }
+            tk = (tk + 1)
         }
         if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
             def minIn:double (parent.minHeight.pixels - chrome)
-            if (total < minIn) {
-                unit = ((minIn - fixedSum) / flexSum)
+            if ((room >= 0.0) && (minIn > room)) {
+                room = minIn
+            }
+            if ((room < 0.0) && (total < minIn)) {
+                room = minIn
             }
         }
-        if (unit < 0.0) {
-            unit = 0.0
-        }
-        def j:int 0
-        while ((j < n) && (j < (declared.count()))) {
-            def t2:EVGGridTrack (declared.trackAt(j))
-            if ((t2.kind == 2) && (t2.value > 0.0)) {
-                set rowSizes j (unit * t2.value)
+        if (room < 0.0) {
+            ; (the content's need, each row at least its floor)
+            def j0:int 0
+            while ((j0 < n) && (j0 < (declared.count()))) {
+                def t0:EVGGridTrack (declared.trackAt(j0))
+                if ((t0.kind == 2) && (t0.value > 0.0)) {
+                    def sz0:double (unit * t0.value)
+                    if ((itemAt floors j0) > sz0) {
+                        sz0 = (itemAt floors j0)
+                    }
+                    set rowSizes j0 sz0
+                }
+                j0 = (j0 + 1)
             }
-            j = (j + 1)
+            return
+        }
+        ; share the room left by the other rows, a row its floor holds
+        ; out of the share (12.7.1: such a row is inflexible)
+        def frozen:[boolean]
+        def zk:int 0
+        while (zk < n) {
+            push frozen false
+            zk = (zk + 1)
+        }
+        def pass:int 0
+        def settled:boolean false
+        while ((settled == false) && (pass <= n)) {
+            settled = true
+            def left:double (room - fixedSum)
+            def sum:double 0.0
+            def q:int 0
+            while ((q < n) && (q < (declared.count()))) {
+                def tq:EVGGridTrack (declared.trackAt(q))
+                if ((tq.kind == 2) && (tq.value > 0.0)) {
+                    if (itemAt frozen q) {
+                        left = (left - (itemAt floors q))
+                    } {
+                        sum = (sum + tq.value)
+                    }
+                }
+                q = (q + 1)
+            }
+            if (sum < 1.0) {
+                sum = 1.0
+            }
+            def u:double (left / sum)
+            if (u < 0.0) {
+                u = 0.0
+            }
+            def r:int 0
+            while ((r < n) && (r < (declared.count()))) {
+                def tr:EVGGridTrack (declared.trackAt(r))
+                if (((tr.kind == 2) && (tr.value > 0.0)) && ((itemAt frozen r) == false)) {
+                    if ((u * tr.value) < (itemAt floors r)) {
+                        set frozen r true
+                        settled = false
+                    }
+                    set rowSizes r (u * tr.value)
+                }
+                if (((tr.kind == 2) && (tr.value > 0.0)) && (itemAt frozen r)) {
+                    set rowSizes r (itemAt floors r)
+                }
+                r = (r + 1)
+            }
+            pass = (pass + 1)
         }
     }
 

@@ -136,6 +136,11 @@ class EVGLayoutExt {
     fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
     }
 
+    ; the content floors of plain fr rows against a definite height
+    ; (rows.frMin, frAutoMin)
+    fn gridFrRowMin:void (lay:EVGLayout rows:EVGGridTemplate items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double innerHeight:double) {
+    }
+
     ; content-sized rows grown by the items that span several
     fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
     }
