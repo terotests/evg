@@ -2058,6 +2058,10 @@ class EVGLayout {
                                 if (finalH < 0.0) {
                                     finalH = 0.0
                                 }
+                                ; (never under its own padding and border)
+                                if (finalH < (c.box.getVerticalChrome())) {
+                                    finalH = (c.box.getVerticalChrome())
+                                }
                                 ; Said with a flag, as `hasFlexWidth` says it
                                 ; along a row: clearing `height.isSet` here
                                 ; destroyed the declaration, so the next pass
@@ -2249,6 +2253,10 @@ class EVGLayout {
                                         }
                                     }
                                     def floorW:double (itemAt minsW jw)
+                                    ; (never under its own padding and border)
+                                    if (floorW < (c.box.getHorizontalChrome())) {
+                                        floorW = (c.box.getHorizontalChrome())
+                                    }
                                     if (finalW < floorW) {
                                         finalW = floorW
                                     }
