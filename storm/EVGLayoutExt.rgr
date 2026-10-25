@@ -73,6 +73,19 @@ class EVGLayoutExt {
     }
 
     ; the room an item (css set) that starts a line takes before it
+    ; the column each child of a grid lands in, for the grid's own
+    ; intrinsic width (-1 for one out of flow); empty: the caller counts
+    ; the items along the columns itself
+    fn gridItemColumns:[int] (lay:EVGLayout el:EVGElement tpl:EVGGridTemplate) {
+        def none:[int]
+        return none
+    }
+
+    ; how far a box that clears floats goes down from currentY
+    fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
+        return 0.0
+    }
+
     fn lineStartGap:double (child:EVGElement gap:double) {
         return 0.0
     }

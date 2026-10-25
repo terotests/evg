@@ -69,6 +69,14 @@ class EVGCssExtra {
     def synthTop:boolean false
     def flipDone:boolean false
     def flipLast:double 0.0
+    ; a row of floats (float-row: true) and its floats' sides
+    ; (float-side: left or right): laid out by the float rules of CSS 2.1
+    ; 9.5.1 instead of as wrapped flex lines
+    def floatRow:boolean false
+    def floatSide:string ""
+    ; a box that clears the floats before it (clear-floats: true): its top
+    ; goes under their bottom
+    def clearFloats:boolean false
     def foldT:double 0.0
     def foldR:double 0.0
     def foldB:double 0.0
@@ -76,7 +84,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || (name == "baseline-synth-top")))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || (name == "clear-floats")))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -119,6 +127,18 @@ class EVGCssExtra {
         }
         if (name == "baseline-flip") {
             flipBase = (value == "true")
+            return
+        }
+        if (name == "float-row") {
+            floatRow = (value == "true")
+            return
+        }
+        if (name == "clear-floats") {
+            clearFloats = (value == "true")
+            return
+        }
+        if (name == "float-side") {
+            floatSide = value
             return
         }
         if (name == "skip-first-baseline") {
@@ -183,6 +203,9 @@ class EVGCssExtra {
         c.skipFirst = skipFirst
         c.under = under
         c.synthTop = synthTop
+        c.floatRow = floatRow
+        c.floatSide = floatSide
+        c.clearFloats = clearFloats
         c.foldT = foldT
         c.foldR = foldR
         c.foldB = foldB

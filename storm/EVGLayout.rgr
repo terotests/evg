@@ -2374,6 +2374,11 @@ class EVGLayout {
             if (((isColumn == false) && (!null? child.css)) && ((array_length rowElements) == 0)) {
                 currentX = (currentX + (ext.lineStartGap(child gapPx)))
             }
+            if (isColumn && (!null? child.css)) {
+                def clr:double (ext.clearance(this parent i currentY))
+                currentY = (currentY + clr)
+                totalHeight = (totalHeight + clr)
+            }
             ; Position child
             child.calculatedX = currentX + child.box.marginLeftPx
             child.calculatedY = currentY + child.box.marginTopPx
@@ -4325,6 +4330,10 @@ class EVGLayout {
         def widths:[double]
         def defWidths:[double]
         def fitMins:[double]
+        def spanKids:[EVGElement]
+        def spanCols:[int]
+        def spanSpans:[int]
+        def autoCols:[int] (ext.gridItemColumns(this el tpl))
         def c0:int 0
         while (c0 < nc) {
             push widths 0.0
@@ -4340,14 +4349,16 @@ class EVGLayout {
             if ((kid.isAbsolute || (kid.isHidden())) == false) {
                 def wasResolved:boolean kid.unitsResolved
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
-                def w:double (this.intrinsicWidth(kid wantMin))
-                if ((wasResolved || kid.unitsFixed) == false) {
-                    kid.unitsResolved = false
-                }
                 def col:int (at % nc)
                 ; (an item placed on a line: its column, one past the
                 ; explicit ones an implicit auto column)
                 def kp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridColumn))
+                kp.resolveNames(tpl)
+                if (i < (array_length autoCols)) {
+                    if ((itemAt autoCols i) >= 0) {
+                        kp.start = ((itemAt autoCols i) + 1)
+                    }
+                }
                 def placedKid:boolean false
                 if (kp.start > 0) {
                     placedKid = true
@@ -4358,8 +4369,25 @@ class EVGLayout {
                         push fitMins 0.0
                     }
                 }
+                ; (which contribution the track's size takes: its base
+                ; under a min-content constraint, its growth limit under a
+                ; max-content one, CSS Grid 12.3)
+                def useMin:boolean wantMin
+                if (col < nc) {
+                    useMin = (EVGGridTemplate.sizedByMinContent((tpl.trackAt(col)) wantMin))
+                }
+                def w:double 0.0
                 if (placedKid && (kp.span > 1)) {
-                    w = 0.0
+                    ; (sized after the single-column items, by the layout
+                    ; extension's span step)
+                    push spanKids kid
+                    push spanCols col
+                    push spanSpans kp.span
+                } {
+                    w = (this.intrinsicWidth(kid useMin))
+                }
+                if ((wasResolved || kid.unitsFixed) == false) {
+                    kid.unitsResolved = false
                 }
                 if (w > (itemAt widths col)) {
                     set widths col w
@@ -4385,6 +4413,29 @@ class EVGLayout {
                 }
             }
             i = (i + 1)
+        }
+        if ((array_length spanKids) > 0) {
+            def sMax:[double]
+            def sMin:[double]
+            def sc:int 0
+            while (sc < nc) {
+                push sMax (itemAt widths sc)
+                push sMin (itemAt widths sc)
+                sc = (sc + 1)
+            }
+            ext.gridSpanContent(this tpl spanKids spanCols spanSpans sMax sMin gapPx)
+            sc = 0
+            while (sc < nc) {
+                def st:EVGGridTrack (tpl.trackAt(sc))
+                def sv:double (itemAt sMax sc)
+                if ((wantMin && (st.kind == 3)) || ((st.kind == 0) && (st.minIntrinsic == 2))) {
+                    sv = (itemAt sMin sc)
+                }
+                if ((st.kind == 3) || ((st.kind == 0) && (st.minIntrinsic > 1))) {
+                    set widths sc sv
+                }
+                sc = (sc + 1)
+            }
         }
         ; (fr tracks share one size per fr, the largest any of them
         ; needs: CSS Grid 12.7.1 with no free space to divide; under a
@@ -4413,6 +4464,43 @@ class EVGLayout {
                 }
             }
             cf = (cf + 1)
+        }
+        ; (an item spanning fr tracks: what it needs beyond the other
+        ; tracks it crosses, per fr, CSS Grid 12.7.1)
+        if (wantMin == false) {
+            def sk:int 0
+            while (sk < (array_length spanKids)) {
+                def sc0:int (itemAt spanCols sk)
+                def sn:int (itemAt spanSpans sk)
+                def frs:double 0.0
+                def rest:double ((to_double (sn - 1)) * gapPx)
+                def st0:int sc0
+                while (st0 < (sc0 + sn)) {
+                    if (st0 < nc) {
+                        def stk:EVGGridTrack (tpl.trackAt(st0))
+                        if (stk.kind == 2) {
+                            frs = (frs + stk.value)
+                        } {
+                            if (stk.kind == 0) {
+                                rest = (rest + stk.value)
+                            } {
+                                rest = (rest + (itemAt widths st0))
+                            }
+                        }
+                    }
+                    st0 = (st0 + 1)
+                }
+                if (frs > 0.0) {
+                    if (frs < 1.0) {
+                        frs = 1.0
+                    }
+                    def sneed:double (((this.intrinsicWidth((itemAt spanKids sk) false)) - rest) / frs)
+                    if (sneed > frUnit) {
+                        frUnit = sneed
+                    }
+                }
+                sk = (sk + 1)
+            }
         }
         def total:double 0.0
         def c:int 0
@@ -4446,7 +4534,8 @@ class EVGLayout {
                 }
             }
             if (t.kind == 0) {
-                ; (minmax() with an intrinsic min: at least its items)
+                ; (minmax() with an intrinsic min: at least its items; under
+                ; a min-content constraint the track is its base)
                 def floorW:double 0.0
                 if (t.minIntrinsic == 1) {
                     floorW = (itemAt defWidths c)
@@ -4455,13 +4544,22 @@ class EVGLayout {
                     floorW = tw
                 }
                 tw = t.value
+                if wantMin {
+                    if (t.minIntrinsic > 0) {
+                        tw = floorW
+                    }
+                    if t.hasMin {
+                        t.minUnit.resolve(0.0 el.inheritedFontSize)
+                        tw = t.minUnit.pixels
+                    }
+                }
                 if (floorW > tw) {
                     tw = floorW
                 }
             }
             if (t.hasMin && ((t.kind == 2) || (t.kind == 3))) {
                 t.minUnit.resolve(0.0 el.inheritedFontSize)
-                if ((t.minUnit.pixels > tw) || (wantMin && (t.kind == 2))) {
+                if ((t.minUnit.pixels > tw) || (wantMin && ((t.kind == 2) || ((t.minUnit.isPercent()) == false)))) {
                     tw = t.minUnit.pixels
                 }
             }
@@ -5143,6 +5241,7 @@ class EVGLayout {
         def giveBack:double ((to_double (array_length collapsed)) * colGapPx)
         def jcS:string parent.justifyContent
         cols.stretchAutos = (((strlen jcS) == 0) || ((jcS == "normal") || ((jcS == "stretch") || (jcS == "flex-start"))))
+        cols.percentOf = innerWidth
         cols.resolveWithContent(((innerWidth - colGapTotal) + giveBack) colContent colMinContent)
         for collapsed ck:int cki {
             def ctk:EVGGridTrack (cols.trackAt(ck))
@@ -5208,6 +5307,9 @@ class EVGLayout {
             def rows:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
             if (rows.hadError) {
                 this.warn(("grid-template-rows: " + rows.errorText))
+            }
+            if parent.hasDefiniteHeight {
+                rows.percentOf = innerHeight
             }
             ext.gridFrRowMin(this rows items placedRow rowSpans placedCol colSpans cols measureGap innerHeight)
             ; intrinsic rows are as tall as their items (span 1), and only

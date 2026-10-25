@@ -689,6 +689,108 @@ class CssBoxCheck {
         this.layoutAt(page31 300.0 600.0)
         this.ok("fr rows in max-height 70 with gap 33: 10 and 27" ((this.near(a31.calculatedHeight 10.0)) && (this.near(b31.calculatedHeight 27.0))))
 
+        ; --- 29. an item spanning a max-content track and minmax(20px,
+        ; max-content): the length stays the base, the max-content track
+        ; takes the rest (CSS Grid 12.5.3) -----------------------------------
+        def page32 (EVGElement.createDiv())
+        page32.setAttribute("width" "100px")
+        def g32 (EVGElement.createDiv())
+        g32.setAttribute("display" "grid")
+        g32.setAttribute("grid-template-columns" "max-content minmax(20px, max-content) 1fr")
+        g32.setAttribute("column-gap" "19px")
+        def a32 (EVGElement.createDiv())
+        a32.setAttribute("grid-column" "1 / span 2")
+        def a32in (EVGElement.createDiv())
+        a32in.setAttribute("width" "90px")
+        a32in.setAttribute("height" "10px")
+        a32.addChild(a32in)
+        g32.addChild(a32)
+        def b32 (EVGElement.createDiv())
+        b32.setAttribute("grid-column" "2")
+        b32.setAttribute("grid-row" "2")
+        g32.addChild(b32)
+        page32.addChild(g32)
+        this.layoutAt(page32 300.0 600.0)
+        this.ok("span over max-content and minmax(20px, max-content): 51 and 20" ((this.near(b32.calculatedWidth 20.0)) && (this.near((b32.calculatedX - g32.calculatedX) 70.0))))
+
+        ; --- 30. percentage tracks are of the content box, gaps included -------
+        def page33 (EVGElement.createDiv())
+        page33.setAttribute("width" "120px")
+        def g33 (EVGElement.createDiv())
+        g33.setAttribute("display" "grid")
+        g33.setAttribute("grid-template-columns" "50% 1fr")
+        g33.setAttribute("column-gap" "19px")
+        def a33 (EVGElement.createDiv())
+        g33.addChild(a33)
+        def b33 (EVGElement.createDiv())
+        g33.addChild(b33)
+        page33.addChild(g33)
+        this.layoutAt(page33 300.0 600.0)
+        this.ok("50% 1fr in 120 with gap 19: 60 and 41" ((this.near(a33.calculatedWidth 60.0)) && (this.near(b33.calculatedWidth 41.0))))
+
+        ; --- 31. a grid's own width: bases under min-content, growth limits
+        ; under max-content --------------------------------------------------
+        def page34 (EVGElement.createDiv())
+        page34.setAttribute("width" "400px")
+        def g34 (EVGElement.createDiv())
+        g34.setAttribute("display" "grid")
+        g34.setAttribute("width" "min-content")
+        g34.setAttribute("grid-template-columns" "minmax(30px, min-content) minmax(30px, min-content)")
+        def h34 (EVGElement.createDiv())
+        h34.setAttribute("display" "grid")
+        h34.setAttribute("width" "max-content")
+        h34.setAttribute("grid-template-columns" "minmax(30px, min-content) minmax(30px, min-content)")
+        def gk:int 0
+        while (gk < 4) {
+            def it34 (EVGElement.createDiv())
+            def in34 (EVGElement.createDiv())
+            in34.setAttribute("width" "50px")
+            in34.setAttribute("height" "10px")
+            it34.addChild(in34)
+            if (gk < 2) {
+                g34.addChild(it34)
+            } {
+                h34.addChild(it34)
+            }
+            gk = (gk + 1)
+        }
+        page34.addChild(g34)
+        page34.addChild(h34)
+        this.layoutAt(page34 400.0 600.0)
+        this.ok("minmax(30px, min-content) x2: min-content 60, max-content 100" ((this.near(g34.calculatedWidth 60.0)) && (this.near(h34.calculatedWidth 100.0))))
+
+        ; --- 32. floats: each as high as it fits beside the ones before ------
+        def page35 (EVGElement.createDiv())
+        page35.setAttribute("width" "200px")
+        def row35 (EVGElement.createDiv())
+        row35.setAttribute("display" "flex")
+        row35.setAttribute("flex-direction" "row")
+        row35.setAttribute("flex-wrap" "wrap")
+        row35.setAttribute("align-items" "flex-start")
+        row35.setAttribute("float-row" "true")
+        ; (floats take no height in a block that does not hold them)
+        row35.setAttribute("height" "0px")
+        def hs35:[string] ([] _:string ("50px" "20px" "20px"))
+        def fl35:[EVGElement]
+        for hs35 h35:string hi35 {
+            def f35 (EVGElement.createDiv())
+            f35.setAttribute("width" "100px")
+            f35.setAttribute("height" h35)
+            f35.setAttribute("flex-shrink" "0")
+            f35.setAttribute("float-side" "left")
+            row35.addChild(f35)
+            push fl35 f35
+        }
+        page35.addChild(row35)
+        def after35 (EVGElement.createDiv())
+        after35.setAttribute("height" "5px")
+        after35.setAttribute("clear-floats" "true")
+        page35.addChild(after35)
+        this.layoutAt(page35 200.0 600.0)
+        def c35:EVGElement (itemAt fl35 2)
+        this.ok("third left float goes under the short second one: x 100, y 20" ((this.near((c35.calculatedX - page35.calculatedX) 100.0)) && (this.near((c35.calculatedY - page35.calculatedY) 20.0))))
+        this.ok("a clearing box after a 0-high float row goes under the floats: y 50" ((this.near(row35.calculatedHeight 0.0)) && (this.near((after35.calculatedY - page35.calculatedY) 50.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

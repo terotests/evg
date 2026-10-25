@@ -57,6 +57,9 @@ class EVGGridTrack {
     ; how far an auto or fit-content() track may grow from its min-content
     ; base when there is room (CSS Grid 12.6, maximize tracks)
     def growTo:double 0.0
+    ; a minmax(intrinsic, <length>) track growing from its items to the
+    ; length (resolveWithContent)
+    def growFixed:boolean false
     ; minmax() with an intrinsic min: 1 auto, 2 min-content, 3 max-content
     ; (the track is at least what its items need, CSS Grid 12.5)
     def minIntrinsic:int 0
@@ -95,6 +98,9 @@ class EVGGridTemplate {
     ; justify-content / align-content normal or stretch: the space left
     ; goes to the auto tracks (CSS Grid 11.8); any other leaves it free
     def stretchAutos:boolean true
+    ; what percentage tracks are of: the grid's content box, gaps
+    ; included (CSS Grid 7.2.1); under 0 the space resolve() is given
+    def percentOf:double -1.0
     ; per track, the widest item whose own size (or min size) is definite:
     ; the floor of a minmax(auto, <fixed>) track, where an item sized by its
     ; content is clamped to the track instead (CSS Grid 6.6)
@@ -573,6 +579,37 @@ class EVGGridTemplate {
         }
     }
 
+    ; Whether a track's size under a min-content (wantMin) or max-content
+    ; constraint is measured from its items' min-content contributions:
+    ; its base or growth limit is (CSS Grid 12.3, 12.5)
+    sfn sizedByMinContent:boolean (t:EVGGridTrack wantMin:boolean) {
+        if (t.kind == 0) {
+            if (t.minIntrinsic == 2) {
+                return true
+            }
+            if (t.minIntrinsic == 3) {
+                return false
+            }
+            return wantMin
+        }
+        if (t.kind == 3) {
+            if t.minContentTrack {
+                return true
+            }
+            if (wantMin == false) {
+                return false
+            }
+            if (t.minIntrinsic == 3) {
+                return false
+            }
+            if ((t.autoTrack || t.hasFitLimit) || (t.minIntrinsic > 0)) {
+                return true
+            }
+            return false
+        }
+        return wantMin
+    }
+
     sfn isFrToken:boolean (tok:string) {
         def len:int (strlen tok)
         if (len < 2) {
@@ -697,6 +734,10 @@ class EVGGridTemplate {
         def n:int (array_length tracks)
         def used:double 0.0
         def totalFr:double 0.0
+        def pctOf:double available
+        if (percentOf >= 0.0) {
+            pctOf = percentOf
+        }
         def i:int 0
         while (i < n) {
             def t:EVGGridTrack (itemAt tracks i)
@@ -704,15 +745,15 @@ class EVGGridTemplate {
             ; Resolve any minmax() bounds against the container first, so the
             ; clamp below is in pixels like everything else.
             if t.hasMin {
-                t.minUnit.resolve(available 16.0)
+                t.minUnit.resolve(pctOf 16.0)
             }
             if t.hasMax {
-                t.maxUnit.resolve(available 16.0)
+                t.maxUnit.resolve(pctOf 16.0)
             }
             if ((t.kind == 0) || (t.kind == 1)) {
                 t.sizePx = t.value
                 if (t.kind == 1) {
-                    t.sizePx = ((available * t.value) / 100.0)
+                    t.sizePx = ((pctOf * t.value) / 100.0)
                 }
                 ; (an intrinsic min floors the fixed max)
                 def floorI:double 0.0
@@ -727,6 +768,15 @@ class EVGGridTemplate {
                 }
                 if (floorI > t.sizePx) {
                     t.sizePx = floorI
+                }
+                ; (minmax(min-content or max-content, <length>) starts at its
+                ; items and grows to the length while there is room: CSS
+                ; Grid 12.5, maximize tracks before the fr ones expand)
+                t.growFixed = false
+                if (((t.kind == 0) && (t.minIntrinsic > 1)) && (floorI < t.sizePx)) {
+                    t.growTo = t.sizePx
+                    t.sizePx = floorI
+                    t.growFixed = true
                 }
                 used = (used + t.sizePx)
                 t.frozen = true
@@ -769,10 +819,19 @@ class EVGGridTemplate {
                 ; (an auto or fit-content() track starts at its items'
                 ; min-content and grows toward c while there is room)
                 def base:double c
-                if (((t.minContentTrack == false) && (t.autoTrack || t.hasFitLimit)) && (i < (array_length minContent))) {
+                def fromMin:boolean ((t.autoTrack || t.hasFitLimit) || ((t.minIntrinsic == 1) || (t.minIntrinsic == 2)))
+                if (((t.minContentTrack == false) && (fromMin && (t.minIntrinsic != 3))) && (i < (array_length minContent))) {
                     def mc0:double (itemAt minContent i)
                     if (mc0 < base) {
                         base = mc0
+                    }
+                }
+                ; (minmax(<length>, max-content): the length is the base,
+                ; the content how far it grows)
+                if (t.hasMin && ((t.minUnit.isPercent()) == false)) {
+                    base = t.minUnit.pixels
+                    if (c < base) {
+                        c = base
                     }
                 }
                 t.sizePx = base
@@ -784,14 +843,30 @@ class EVGGridTemplate {
         }
         ; maximize tracks: the free space goes to the growing tracks evenly,
         ; each up to its limit
+        ; (the fr tracks' floors are taken before anything grows)
+        def frBase:double 0.0
+        def fb:int 0
+        while (fb < n) {
+            def fbt:EVGGridTrack (itemAt tracks fb)
+            if (fbt.kind == 2) {
+                if fbt.hasMin {
+                    frBase = (frBase + fbt.minUnit.pixels)
+                } {
+                    if (frAutoMin && (fb < (array_length frMin))) {
+                        frBase = (frBase + (itemAt frMin fb))
+                    }
+                }
+            }
+            fb = (fb + 1)
+        }
         def growPass:int 0
         while (growPass <= n) {
-            def growFree:double (available - used)
+            def growFree:double ((available - used) - frBase)
             def growing:int 0
             def gi:int 0
             while (gi < n) {
                 def gt:EVGGridTrack (itemAt tracks gi)
-                if ((gt.kind == 3) && (gt.growTo > (gt.sizePx + 0.01))) {
+                if (((gt.kind == 3) || gt.growFixed) && (gt.growTo > (gt.sizePx + 0.01))) {
                     growing = (growing + 1)
                 }
                 gi = (gi + 1)
@@ -803,7 +878,7 @@ class EVGGridTemplate {
             gi = 0
             while (gi < n) {
                 def gt2:EVGGridTrack (itemAt tracks gi)
-                if ((gt2.kind == 3) && (gt2.growTo > (gt2.sizePx + 0.01))) {
+                if (((gt2.kind == 3) || gt2.growFixed) && (gt2.growTo > (gt2.sizePx + 0.01))) {
                     def room:double (gt2.growTo - gt2.sizePx)
                     def add:double gShare
                     if (add > room) {

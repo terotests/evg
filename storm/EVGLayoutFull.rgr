@@ -49,6 +49,9 @@ class EVGLayoutFull {
     ; whose parents are not
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        if (css.floatRow && (childCount > 0)) {
+            EVGLayoutFull.placeFloats(element childCount)
+        }
         if (css.skipFirst && (element.hasBaseline == false)) {
             def si:int 1
             while ((si < childCount) && (element.hasBaseline == false)) {
@@ -331,6 +334,223 @@ class EVGLayoutFull {
             pi = (pi - 1)
         }
         return staticY
+    }
+
+    ; Grid item placement (CSS Grid 8.5, row flow, sparse) for the grid's
+    ; own intrinsic width: the items with both lines first, then those with
+    ; a row, then the rest by the cursor. A placement past the explicit
+    ; columns or a dense or column flow gives up (empty).
+    fn gridItemColumns:[int] (lay:EVGLayout el:EVGElement tpl:EVGGridTemplate) {
+        def none:[int]
+        if (((indexOf el.gridAutoFlow "column") >= 0) || ((indexOf el.gridAutoFlow "dense") >= 0)) {
+            return none
+        }
+        def nc:int (tpl.count())
+        def rowTpl:EVGGridTemplate (EVGGridTemplate.parse(el.gridTemplateRows))
+        def n:int (el.getChildCount())
+        def cols:[int]
+        def colSpan:[int]
+        def rows:[int]
+        def rowSpan:[int]
+        def i:int 0
+        while (i < n) {
+            def kid:EVGElement (el.getChild(i))
+            if (kid.isAbsolute || (kid.isHidden())) {
+                push cols (0 - 2)
+                push colSpan 1
+                push rows -1
+                push rowSpan 1
+            } {
+                def cp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridColumn))
+                cp.resolveNames(tpl)
+                def rp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridRow))
+                rp.resolveNames(rowTpl)
+                if ((strlen kid.gridArea) > 0) {
+                    return none
+                }
+                if ((cp.span > nc) || ((cp.start > 0) && (((cp.start - 1) + cp.span) > nc))) {
+                    return none
+                }
+                push cols (cp.start - 1)
+                push colSpan cp.span
+                push rows (rp.start - 1)
+                push rowSpan rp.span
+            }
+            i = (i + 1)
+        }
+        ; occupied cells, nc per row
+        def occ:[boolean]
+        def nRows:int 0
+        ; 1: both lines
+        i = 0
+        while (i < n) {
+            if (((itemAt cols i) >= 0) && ((itemAt rows i) >= 0)) {
+                nRows = (EVGLayoutFull.markCells(occ nRows nc (itemAt rows i) (itemAt rowSpan i) (itemAt cols i) (itemAt colSpan i)))
+            }
+            i = (i + 1)
+        }
+        ; 2: a row and no column: the first columns free in it
+        i = 0
+        while (i < n) {
+            if (((itemAt cols i) == (0 - 1)) && ((itemAt rows i) >= 0)) {
+                def c:int 0
+                def found:boolean false
+                while ((found == false) && ((c + (itemAt colSpan i)) <= nc)) {
+                    if (EVGLayoutFull.cellsFree(occ nRows nc (itemAt rows i) (itemAt rowSpan i) c (itemAt colSpan i))) {
+                        found = true
+                    } {
+                        c = (c + 1)
+                    }
+                }
+                if (found == false) {
+                    return none
+                }
+                set cols i c
+                nRows = (EVGLayoutFull.markCells(occ nRows nc (itemAt rows i) (itemAt rowSpan i) c (itemAt colSpan i)))
+            }
+            i = (i + 1)
+        }
+        ; 3: the rest by the cursor
+        def curR:int 0
+        def curC:int 0
+        i = 0
+        while (i < n) {
+            if (((itemAt rows i) == (0 - 1)) && ((itemAt cols i) != (0 - 2))) {
+                def sp:int (itemAt colSpan i)
+                def rs:int (itemAt rowSpan i)
+                if ((itemAt cols i) >= 0) {
+                    def fc:int (itemAt cols i)
+                    if (fc < curC) {
+                        curR = (curR + 1)
+                    }
+                    while ((EVGLayoutFull.cellsFree(occ nRows nc curR rs fc sp)) == false) {
+                        curR = (curR + 1)
+                    }
+                    curC = fc
+                } {
+                    def placed:boolean false
+                    while (placed == false) {
+                        if ((curC + sp) > nc) {
+                            curC = 0
+                            curR = (curR + 1)
+                        } {
+                            if (EVGLayoutFull.cellsFree(occ nRows nc curR rs curC sp)) {
+                                placed = true
+                            } {
+                                curC = (curC + 1)
+                            }
+                        }
+                    }
+                    set cols i curC
+                }
+                nRows = (EVGLayoutFull.markCells(occ nRows nc curR rs (itemAt cols i) sp))
+                curC = ((itemAt cols i) + sp)
+            }
+            i = (i + 1)
+        }
+        i = 0
+        while (i < n) {
+            if ((itemAt cols i) == (0 - 2)) {
+                set cols i (0 - 1)
+            }
+            i = (i + 1)
+        }
+        return cols
+    }
+
+    sfn cellsFree:boolean (occ:[boolean] nRows:int nc:int r:int rs:int c:int cs:int) {
+        def rr:int r
+        while (rr < (r + rs)) {
+            if (rr < nRows) {
+                def cc:int c
+                while (cc < (c + cs)) {
+                    if (itemAt occ ((rr * nc) + cc)) {
+                        return false
+                    }
+                    cc = (cc + 1)
+                }
+            }
+            rr = (rr + 1)
+        }
+        return true
+    }
+
+    ; marks the cells, growing the rows; the row count after
+    sfn markCells:int (occ:[boolean] nRows:int nc:int r:int rs:int c:int cs:int) {
+        def rows:int nRows
+        while (rows < (r + rs)) {
+            def k:int 0
+            while (k < nc) {
+                push occ false
+                k = (k + 1)
+            }
+            rows = (rows + 1)
+        }
+        def rr:int r
+        while (rr < (r + rs)) {
+            def cc:int c
+            while (cc < (c + cs)) {
+                set occ ((rr * nc) + cc) true
+                cc = (cc + 1)
+            }
+            rr = (rr + 1)
+        }
+        return rows
+    }
+
+    ; the lowest margin edge of the floats in a box, those of the boxes in
+    ; it included (the floats of a block flow on past its end); -1 for none
+    sfn floatBottom:double (el:EVGElement) {
+        def fb:double -1.0
+        def n:int (el.getChildCount())
+        def isRow:boolean ((!null? el.css) && ((EVGLayoutFull.cx(el)).floatRow))
+        def k:int 0
+        while (k < n) {
+            def f:EVGElement (el.getChild(k))
+            if (f.isAbsolute == false) {
+                if isRow {
+                    def b:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                    if (b > fb) {
+                        fb = b
+                    }
+                } {
+                    if ((f.getChildCount()) > 0) {
+                        def b2:double (EVGLayoutFull.floatBottom(f))
+                        if (b2 > fb) {
+                            fb = b2
+                        }
+                    }
+                }
+            }
+            k = (k + 1)
+        }
+        return fb
+    }
+
+    ; a box that clears (clear-floats) has its border top under the floats
+    ; of the float rows before it (CSS 2.1 9.5.2)
+    fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
+        def child:EVGElement (parent.getChild(index))
+        if ((EVGLayoutFull.cx(child)).clearFloats == false) {
+            return 0.0
+        }
+        def fb:double -1.0
+        def pi:int 0
+        while (pi < index) {
+            def pc:EVGElement (parent.getChild(pi))
+            if (pc.isAbsolute == false) {
+                def b:double (EVGLayoutFull.floatBottom(pc))
+                if (b > fb) {
+                    fb = b
+                }
+            }
+            pi = (pi + 1)
+        }
+        def top:double (currentY + child.box.marginTopPx)
+        if (fb > top) {
+            return (fb - top)
+        }
+        return 0.0
     }
 
     ; an item joined to the one before (line-join) takes the gap back with
@@ -867,14 +1087,15 @@ class EVGLayoutFull {
     ; to the fr step
     ; A `1fr` column is minmax(auto, 1fr): no narrower than the min-content
     ; of the items in it alone, unless they clip (CSS Grid 6.6), and a
-    ; column that floor holds no longer flexes (12.7.1)
+    ; column that floor holds no longer flexes (12.7.1); minmax(min-content
+    ; or max-content, fr) the same with that content
     fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
         def nc:int (cols.count())
         def any:boolean false
         def t0:int 0
         while (t0 < nc) {
             def tk:EVGGridTrack (cols.trackAt(t0))
-            if (((tk.kind == 2) && (tk.hasMin == false)) && (tk.minIntrinsic == 0)) {
+            if ((tk.kind == 2) && (tk.hasMin == false)) {
                 any = true
             }
             push cols.frMin 0.0
@@ -886,10 +1107,16 @@ class EVGLayoutFull {
         cols.frAutoMin = true
         for items it:EVGElement k {
             def c:int (itemAt placedCol k)
-            if ((((itemAt colSpans k) == 1) && (c < nc)) && (it.overflow == "visible")) {
+            if (((itemAt colSpans k) == 1) && (c < nc)) {
                 def tk2:EVGGridTrack (cols.trackAt(c))
-                if (((tk2.kind == 2) && (tk2.hasMin == false)) && (tk2.minIntrinsic == 0)) {
-                    def m:double (lay.minIntrinsicWidthOf(it))
+                if (((tk2.kind == 2) && (tk2.hasMin == false)) && ((it.overflow == "visible") || (tk2.minIntrinsic > 1))) {
+                    ; (minmax(max-content, fr): its items' max-content)
+                    def m:double 0.0
+                    if (tk2.minIntrinsic == 3) {
+                        m = (lay.intrinsicWidthOf(it))
+                    } {
+                        m = (lay.minIntrinsicWidthOf(it))
+                    }
                     if (m > (itemAt cols.frMin c)) {
                         set cols.frMin c m
                     }
@@ -906,7 +1133,7 @@ class EVGLayoutFull {
         def t0:int 0
         while (t0 < nr) {
             def tk:EVGGridTrack (rows.trackAt(t0))
-            if (((tk.kind == 2) && (tk.hasMin == false)) && (tk.minIntrinsic == 0)) {
+            if ((tk.kind == 2) && (tk.hasMin == false)) {
                 any = true
             }
             push rows.frMin 0.0
@@ -918,9 +1145,9 @@ class EVGLayoutFull {
         rows.frAutoMin = true
         for items it:EVGElement k {
             def r:int (itemAt placedRow k)
-            if ((((itemAt rowSpans k) == 1) && (r < nr)) && ((it.overflow == "visible") && (it.gridTemplateRows != "subgrid"))) {
+            if ((((itemAt rowSpans k) == 1) && (r < nr)) && (it.gridTemplateRows != "subgrid")) {
                 def tk2:EVGGridTrack (rows.trackAt(r))
-                if (((tk2.kind == 2) && (tk2.hasMin == false)) && (tk2.minIntrinsic == 0)) {
+                if (((tk2.kind == 2) && (tk2.hasMin == false)) && ((it.overflow == "visible") || (tk2.minIntrinsic > 1))) {
                     def w:double (cols.extentOf((itemAt placedCol k) (itemAt colSpans k) colGap))
                     it.calculatedFlexHeight = 0.0
                     it.unitsResolved = false
@@ -942,6 +1169,131 @@ class EVGLayoutFull {
         }
     }
 
+    ; Floats by CSS 2.1 9.5.1: each as high as it fits, no higher than the
+    ; one before it, a left one as far left and a right one as far right
+    ; as the floats beside it allow; the row is as tall as its floats
+    ; unless it is given a height. A row holding anything but floats
+    ; keeps its flex lines.
+    sfn placeFloats:void (row:EVGElement childCount:int) {
+        def i:int 0
+        while (i < childCount) {
+            def c:EVGElement (row.getChild(i))
+            if (c.isAbsolute == false) {
+                def fs:string ((EVGLayoutFull.cx(c)).floatSide)
+                if ((fs != "left") && (fs != "right")) {
+                    return
+                }
+            }
+            i = (i + 1)
+        }
+        def sx:double ((row.calculatedX + row.box.borderWidthPx) + row.box.paddingLeftPx)
+        def sy:double ((row.calculatedY + row.box.borderWidthPx) + row.box.paddingTopPx)
+        def W:double row.calculatedInnerWidth
+        def fx:[double]
+        def fy:[double]
+        def fw:[double]
+        def fh:[double]
+        def fr:[boolean]
+        def minTop:double 0.0
+        def bottom:double 0.0
+        i = 0
+        while (i < childCount) {
+            def c2:EVGElement (row.getChild(i))
+            if (c2.isAbsolute == false) {
+                def right:boolean (((EVGLayoutFull.cx(c2)).floatSide) == "right")
+                ; (an auto margin is nothing on a float)
+                def ml:double c2.box.marginLeftPx
+                if c2.marginAutoLeft {
+                    ml = 0.0
+                }
+                def ow:double ((c2.calculatedWidth + ml) + c2.box.marginRightPx)
+                def oh:double ((c2.calculatedHeight + c2.box.marginTopPx) + c2.box.marginBottomPx)
+                def y:double minTop
+                def x:double 0.0
+                def found:boolean false
+                def guard:int 0
+                while ((found == false) && (guard <= (array_length fx))) {
+                    def le:double 0.0
+                    def re:double W
+                    def any:boolean false
+                    def nextY:double -1.0
+                    def band:double oh
+                    if (band < 0.01) {
+                        band = 0.01
+                    }
+                    def j:int 0
+                    while (j < (array_length fx)) {
+                        def top:double (itemAt fy j)
+                        def bot:double (top + (itemAt fh j))
+                        if ((top < (y + band)) && (bot > y)) {
+                            any = true
+                            if (itemAt fr j) {
+                                if ((itemAt fx j) < re) {
+                                    re = (itemAt fx j)
+                                }
+                            } {
+                                def edge:double ((itemAt fx j) + (itemAt fw j))
+                                if (edge > le) {
+                                    le = edge
+                                }
+                            }
+                            if ((nextY < 0.0) || (bot < nextY)) {
+                                nextY = bot
+                            }
+                        }
+                        j = (j + 1)
+                    }
+                    if ((any == false) || ((re - le) >= (ow - 0.01))) {
+                        found = true
+                        if right {
+                            x = (re - ow)
+                        } {
+                            x = le
+                        }
+                    } {
+                        y = nextY
+                    }
+                    guard = (guard + 1)
+                }
+                if (found == false) {
+                    x = 0.0
+                    if right {
+                        x = (W - ow)
+                    }
+                }
+                push fx x
+                push fy y
+                push fw ow
+                push fh oh
+                push fr right
+                minTop = y
+                if ((y + oh) > bottom) {
+                    bottom = (y + oh)
+                }
+                def dx:double (((sx + x) + ml) - c2.calculatedX)
+                def dy:double (((sy + y) + c2.box.marginTopPx) - c2.calculatedY)
+                if ((dx != 0.0) || (dy != 0.0)) {
+                    c2.moveSubtree(dx dy)
+                }
+            }
+            i = (i + 1)
+        }
+        if (row.height.isSet == false) {
+            row.calculatedInnerHeight = bottom
+            row.calculatedHeight = (bottom + (row.box.getVerticalChrome()))
+        }
+    }
+
+    ; minmax(<length>, ...): a track whose base is a length
+    sfn fixedMinTrack:boolean (t:EVGGridTrack) {
+        return (t.hasMin && ((t.minUnit.isPercent()) == false))
+    }
+
+    ; Items spanning several columns, the narrower spans first (CSS Grid
+    ; 12.5.3): each track has a base size and a growth limit, which the
+    ; items' min-content and max-content contributions raise in four
+    ; steps. The results go back into minContent / content in the form
+    ; resolveWithContent reads them for each kind of track.
     fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
         def nc:int (cols.count())
         def maxSpan:int 1
@@ -950,77 +1302,383 @@ class EVGLayoutFull {
                 maxSpan = sp0
             }
         }
+        if (maxSpan < 2) {
+            return
+        }
+        ; per track: min type (0 fixed, 1 auto, 2 min-content, 3 max-content),
+        ; max type (0 fixed, 1 auto, 2 min-content, 3 max-content,
+        ; 4 fit-content), base B, limit G and whether G is still infinite
+        def minT:[int]
+        def maxT:[int]
+        def B:[double]
+        def G:[double]
+        def inf:[int]
+        def grow:[int]
+        def fitL:[double]
+        def hasOne:[int]
+        def i:int 0
+        while (i < nc) {
+            push hasOne 0
+            i = (i + 1)
+        }
+        def k0:int 0
+        while (k0 < (array_length items)) {
+            if ((itemAt colSpans k0) == 1) {
+                def pc:int (itemAt placedCol k0)
+                if (pc < nc) {
+                    set hasOne pc 1
+                }
+            }
+            k0 = (k0 + 1)
+        }
+        i = 0
+        while (i < nc) {
+            def t:EVGGridTrack (cols.trackAt(i))
+            def mc:double 0.0
+            def xc:double 0.0
+            if (i < (array_length minContent)) {
+                mc = (itemAt minContent i)
+            }
+            if (i < (array_length content)) {
+                xc = (itemAt content i)
+            }
+            def mn:int 0
+            def mx:int 0
+            def b:double 0.0
+            def g:double 0.0
+            def fl:double 0.0
+            if (t.kind == 0) {
+                mn = t.minIntrinsic
+                g = t.value
+                if (mn == 1) {
+                    if (i < (array_length cols.definiteMin)) {
+                        b = (itemAt cols.definiteMin i)
+                    }
+                }
+                if (mn == 2) {
+                    b = mc
+                }
+                if (mn == 3) {
+                    b = xc
+                }
+                if (mn == 0) {
+                    b = g
+                }
+            }
+            if (t.kind == 3) {
+                mx = 3
+                if t.autoTrack {
+                    mx = 1
+                }
+                if t.minContentTrack {
+                    mx = 2
+                }
+                if t.hasFitLimit {
+                    mx = 4
+                    t.fitLimit.resolve(0.0 16.0)
+                    fl = t.fitLimit.pixels
+                }
+                if (EVGLayoutFull.fixedMinTrack(t)) {
+                    mn = 0
+                    t.minUnit.resolve(0.0 16.0)
+                    b = t.minUnit.pixels
+                } {
+                    if (t.minIntrinsic > 0) {
+                        mn = t.minIntrinsic
+                    } {
+                        mn = 3
+                        if ((mx == 1) || (mx == 4)) {
+                            mn = 1
+                        }
+                        if (mx == 2) {
+                            mn = 2
+                        }
+                    }
+                    if (mn == 3) {
+                        b = xc
+                    } {
+                        b = mc
+                    }
+                }
+                g = xc
+                if (mx == 2) {
+                    g = mc
+                }
+                if ((mx == 4) && (g > fl)) {
+                    g = fl
+                    if (g < mc) {
+                        g = mc
+                    }
+                }
+                if (g < b) {
+                    g = b
+                }
+            }
+            push minT mn
+            push maxT mx
+            push B b
+            push G g
+            push fitL fl
+            push grow 0
+            ; (no item of its own: an infinite limit; the grid's own
+            ; intrinsic width passes only the spanning items, so a measured
+            ; track counts as having some)
+            if (((t.kind == 3) && ((itemAt hasOne i) == 0)) && ((xc <= 0.0) && (mc <= 0.0))) {
+                push inf 1
+            } {
+                push inf 0
+            }
+            i = (i + 1)
+        }
         def span:int 2
         while (span <= maxSpan) {
+            ; the span's items, those that cross no fr or percentage track
+            def group:[int]
             def k:int 0
             while (k < (array_length items)) {
                 def c0:int (itemAt placedCol k)
                 if (((itemAt colSpans k) == span) && ((c0 + span) <= nc)) {
-                    def fixed:double ((to_double (span - 1)) * gap)
-                    def nI:int 0
-                    def skip:boolean false
-                    def curMin:double 0.0
-                    def curMax:double 0.0
-                    def t:int c0
-                    while (t < (c0 + span)) {
-                        def tk:EVGGridTrack (cols.trackAt(t))
+                    def ok:boolean true
+                    def t1:int c0
+                    while (t1 < (c0 + span)) {
+                        def tk:EVGGridTrack (cols.trackAt(t1))
                         if ((tk.kind == 2) || (tk.kind == 1)) {
-                            skip = true
+                            ok = false
                         }
-                        if (tk.kind == 0) {
-                            fixed = (fixed + tk.value)
-                        }
-                        if (tk.kind == 3) {
-                            nI = (nI + 1)
-                            curMin = (curMin + (itemAt minContent t))
-                            curMax = (curMax + (itemAt content t))
-                        }
-                        t = (t + 1)
+                        t1 = (t1 + 1)
                     }
-                    if ((skip == false) && (nI > 0)) {
-                        def it:EVGElement (itemAt items k)
-                        def m:double ((lay.minIntrinsicWidthOf(it)) - (fixed + curMin))
-                        def w:double ((lay.intrinsicWidthOf(it)) - (fixed + curMax))
-                        ; (the max-content part goes to the tracks no item
-                        ; sizes yet, their growth limits being infinite,
-                        ; when there are such)
-                        def nE:int 0
-                        def e:int c0
-                        while (e < (c0 + span)) {
-                            def te:EVGGridTrack (cols.trackAt(e))
-                            if ((te.kind == 3) && ((itemAt content e) <= 0.0)) {
-                                nE = (nE + 1)
-                            }
-                            e = (e + 1)
-                        }
-                        def u:int c0
-                        while (u < (c0 + span)) {
-                            def tu:EVGGridTrack (cols.trackAt(u))
-                            if (tu.kind == 3) {
-                                def wasEmpty:boolean ((itemAt content u) <= 0.0)
-                                if (m > 0.0) {
-                                    set minContent u ((itemAt minContent u) + (m / (to_double nI)))
-                                }
-                                if (w > 0.0) {
-                                    if (nE == 0) {
-                                        set content u ((itemAt content u) + (w / (to_double nI)))
-                                    } {
-                                        if wasEmpty {
-                                            set content u ((itemAt content u) + (w / (to_double nE)))
-                                        }
-                                    }
-                                }
-                                if ((itemAt content u) < (itemAt minContent u)) {
-                                    set content u (itemAt minContent u)
-                                }
-                            }
-                            u = (u + 1)
-                        }
+                    if ok {
+                        push group k
                     }
                 }
                 k = (k + 1)
             }
+            if ((array_length group) > 0) {
+                ; 1: intrinsic minimums, min-content contributions
+                this.spanStep(lay cols items placedCol group span gap 1 minT maxT B G inf grow fitL)
+                ; 3: max-content minimums
+                this.spanStep(lay cols items placedCol group span gap 3 minT maxT B G inf grow fitL)
+                def q:int 0
+                while (q < nc) {
+                    if (((itemAt inf q) == 0) && ((itemAt G q) < (itemAt B q))) {
+                        set G q (itemAt B q)
+                    }
+                    q = (q + 1)
+                }
+                ; 5 and 6: intrinsic and max-content maximums
+                this.spanStep(lay cols items placedCol group span gap 5 minT maxT B G inf grow fitL)
+                this.spanStep(lay cols items placedCol group span gap 6 minT maxT B G inf grow fitL)
+            }
             span = (span + 1)
+        }
+        ; back into the arrays resolveWithContent reads
+        i = 0
+        while (i < nc) {
+            def t9:EVGGridTrack (cols.trackAt(i))
+            def b9:double (itemAt B i)
+            def g9:double (itemAt G i)
+            if ((itemAt inf i) == 1) {
+                g9 = b9
+            }
+            if (t9.kind == 0) {
+                if (t9.minIntrinsic == 1) {
+                    if (i < (array_length cols.definiteMin)) {
+                        set cols.definiteMin i b9
+                    }
+                }
+                if (t9.minIntrinsic == 2) {
+                    set minContent i b9
+                }
+                if (t9.minIntrinsic == 3) {
+                    set content i b9
+                }
+            }
+            if (t9.kind == 3) {
+                if t9.minContentTrack {
+                    set minContent i g9
+                    set content i g9
+                } {
+                    set content i g9
+                    set minContent i b9
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
+    ; one step of 12.5.3 for a group of items of one span: step 1 the
+    ; bases of intrinsic-min tracks take min-content contributions, 3 the
+    ; bases of max-content-min tracks max-content ones, 5 the limits of
+    ; intrinsic-max tracks min-content ones and 6 the limits of
+    ; max-content-max tracks max-content ones (12.5.1 distributes)
+    fn spanStep:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] group:[int] span:int gap:double step:int minT:[int] maxT:[int] B:[double] G:[double] inf:[int] grow:[int] fitL:[double]) {
+        def nc:int (array_length B)
+        def onLimits:boolean (step >= 5)
+        def maxContent:boolean ((step == 3) || (step == 6))
+        def plan:[double]
+        def p0:int 0
+        while (p0 < nc) {
+            push plan 0.0
+            p0 = (p0 + 1)
+        }
+        for group k:int gk {
+            def c0:int (itemAt placedCol k)
+            def it:EVGElement (itemAt items k)
+            def size:double 0.0
+            if maxContent {
+                size = (lay.intrinsicWidthOf(it))
+            } {
+                size = (lay.minIntrinsicWidthOf(it))
+            }
+            size = (size - ((to_double (span - 1)) * gap))
+            ; the affected tracks, and what is left to distribute
+            def aff:[int]
+            def t:int c0
+            while (t < (c0 + span)) {
+                def a:double (itemAt B t)
+                if (onLimits && ((itemAt inf t) == 0)) {
+                    a = (itemAt G t)
+                }
+                size = (size - a)
+                def mn:int (itemAt minT t)
+                def mx:int (itemAt maxT t)
+                def isAff:boolean false
+                if ((step == 1) && (mn > 0)) {
+                    isAff = true
+                }
+                if ((step == 3) && (mn == 3)) {
+                    isAff = true
+                }
+                if ((step == 5) && (mx > 0)) {
+                    isAff = true
+                }
+                if ((step == 6) && (((mx == 1) || (mx == 3)) || (mx == 4))) {
+                    isAff = true
+                }
+                if isAff {
+                    push aff t
+                }
+                t = (t + 1)
+            }
+            def na:int (array_length aff)
+            if ((size > 0.0) && (na > 0)) {
+                ; up to the limits, evenly
+                def inc:[double]
+                def lim:[double]
+                for aff ta:int ai {
+                    push inc 0.0
+                    def cur:double (itemAt B ta)
+                    def l:double 1000000000.0
+                    if onLimits {
+                        if ((itemAt inf ta) == 0) {
+                            cur = (itemAt G ta)
+                            if ((itemAt grow ta) == 0) {
+                                l = cur
+                            }
+                        }
+                        if ((itemAt maxT ta) == 4) {
+                            if (l > (itemAt fitL ta)) {
+                                l = (itemAt fitL ta)
+                            }
+                            if (l < cur) {
+                                l = cur
+                            }
+                        }
+                    } {
+                        if ((itemAt inf ta) == 0) {
+                            l = (itemAt G ta)
+                        }
+                        if (((itemAt maxT ta) == 4) && (l > (itemAt fitL ta))) {
+                            l = (itemAt fitL ta)
+                        }
+                        if (l < cur) {
+                            l = cur
+                        }
+                    }
+                    push lim (l - cur)
+                }
+                def left:double size
+                def pass:int 0
+                while ((left > 0.001) && (pass <= na)) {
+                    def open:int 0
+                    for aff tb:int bi {
+                        if ((itemAt inc bi) < ((itemAt lim bi) - 0.001)) {
+                            open = (open + 1)
+                        }
+                    }
+                    if (open == 0) {
+                        pass = na
+                    } {
+                        def share:double (left / (to_double open))
+                        for aff tc:int ci {
+                            def room:double ((itemAt lim ci) - (itemAt inc ci))
+                            if (room > 0.001) {
+                                def add:double share
+                                if (add > room) {
+                                    add = room
+                                }
+                                set inc ci ((itemAt inc ci) + add)
+                                left = (left - add)
+                            }
+                        }
+                    }
+                    pass = (pass + 1)
+                }
+                ; beyond the limits: to the tracks whose max matches the
+                ; contribution, else to every affected track
+                if (left > 0.001) {
+                    def beyond:[int]
+                    for aff td:int di {
+                        def mx2:int (itemAt maxT td)
+                        def pick:boolean true
+                        if (onLimits == false) {
+                            if maxContent {
+                                pick = (((mx2 == 1) || (mx2 == 3)) || (mx2 == 4))
+                            } {
+                                pick = (mx2 > 0)
+                            }
+                        }
+                        if pick {
+                            push beyond di
+                        }
+                    }
+                    if ((array_length beyond) == 0) {
+                        def bj:int 0
+                        while (bj < na) {
+                            push beyond bj
+                            bj = (bj + 1)
+                        }
+                    }
+                    def per:double (left / (to_double (array_length beyond)))
+                    for beyond bk:int bki {
+                        set inc bk ((itemAt inc bk) + per)
+                    }
+                }
+                for aff te:int ei {
+                    if ((itemAt inc ei) > (itemAt plan te)) {
+                        set plan te (itemAt inc ei)
+                    }
+                }
+            }
+        }
+        ; the planned increases, the largest any item asked for
+        def u:int 0
+        while (u < nc) {
+            def pu:double (itemAt plan u)
+            if onLimits {
+                if ((itemAt inf u) == 1) {
+                    if (pu > 0.0) {
+                        set G u ((itemAt B u) + pu)
+                        set inf u 0
+                        set grow u 1
+                    }
+                } {
+                    set G u ((itemAt G u) + pu)
+                }
+            } {
+                set B u ((itemAt B u) + pu)
+            }
+            u = (u + 1)
         }
     }
 
@@ -1244,15 +1902,27 @@ class EVGLayoutFull {
                 if ((((itemAt rowSpans k) == span) && ((r0 + span) <= nr)) && (it.gridTemplateRows != "subgrid")) {
                     def cur:double ((to_double (span - 1)) * rowGap)
                     def nI:int 0
+                    ; (an item crossing fr rows of a grid with no definite
+                    ; height sizes those instead, CSS Grid 12.7.1)
+                    def frSum:double 0.0
                     def t:int r0
                     while (t < (r0 + span)) {
                         cur = (cur + (itemAt rowSizes t))
                         if ((EVGLayoutFull.fixedRow(t declared autoRows)) == false) {
                             nI = (nI + 1)
                         }
+                        if ((parent.hasDefiniteHeight == false) && (t < (declared.count()))) {
+                            def ft:EVGGridTrack (declared.trackAt(t))
+                            if (ft.kind == 2) {
+                                frSum = (frSum + ft.value)
+                            }
+                        }
                         t = (t + 1)
                     }
-                    if (nI > 0) {
+                    if (frSum > 0.0) {
+                        nI = 0
+                    }
+                    if ((nI > 0) || (frSum > 0.0)) {
                         def cw:double (cols.extentOf((itemAt placedCol k) (itemAt colSpans k) colGap))
                         it.unitsResolved = false
                         it.resolveUnits(cw innerHeight)
@@ -1269,8 +1939,17 @@ class EVGLayoutFull {
                         if (need > 0.0) {
                             def u:int r0
                             while (u < (r0 + span)) {
-                                if ((EVGLayoutFull.fixedRow(u declared autoRows)) == false) {
-                                    set rowSizes u ((itemAt rowSizes u) + (need / (to_double nI)))
+                                if (frSum > 0.0) {
+                                    if (u < (declared.count())) {
+                                        def fu:EVGGridTrack (declared.trackAt(u))
+                                        if (fu.kind == 2) {
+                                            set rowSizes u ((itemAt rowSizes u) + ((need * fu.value) / frSum))
+                                        }
+                                    }
+                                } {
+                                    if ((EVGLayoutFull.fixedRow(u declared autoRows)) == false) {
+                                        set rowSizes u ((itemAt rowSizes u) + (need / (to_double nI)))
+                                    }
                                 }
                                 u = (u + 1)
                             }
