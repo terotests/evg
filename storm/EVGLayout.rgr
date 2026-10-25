@@ -554,6 +554,11 @@ class EVGLayout {
                         ; (the intrinsic width is the margin box's; the
                         ; width is the border box's)
                         def intrinsic:double (((this.intrinsicWidth(element false)) - element.box.marginLeftPx) - element.box.marginRightPx)
+                        ; (an empty box fits to nothing but its edges)
+                        def emptyBox:boolean (((element.getChildCount()) == 0) && (((strlen element.textContent) == 0) && (((strlen element.svgSource) == 0) && ((strlen element.src) == 0))))
+                        if (emptyBox && (element.minWidth.isSet == false)) {
+                            width = ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
+                        }
                         if (intrinsic > 0.0) {
                             if (intrinsic < parentWidth) {
                                 width = intrinsic
@@ -4850,7 +4855,7 @@ class EVGLayout {
         ; keeps `display: grid` from silently collapsing content to zero width.
         def colSpec:string parent.gridTemplateColumns
         if ((strlen colSpec) == 0) {
-            colSpec = "1fr"
+            colSpec = "auto"
             ; (no explicit column: the implicit ones are grid-auto-columns)
             if ((strlen parent.gridAutoColumns) > 0) {
                 colSpec = parent.gridAutoColumns
@@ -5285,6 +5290,8 @@ class EVGLayout {
             }
         }
         def giveBack:double ((to_double (array_length collapsed)) * colGapPx)
+        def jcS:string parent.justifyContent
+        cols.stretchAutos = (((strlen jcS) == 0) || ((jcS == "normal") || ((jcS == "stretch") || (jcS == "flex-start"))))
         cols.resolveWithContent(((innerWidth - colGapTotal) + giveBack) colContent colMinContent)
         for collapsed ck:int cki {
             def ctk:EVGGridTrack (cols.trackAt(ck))
@@ -5574,6 +5581,38 @@ class EVGLayout {
             if (el.marginAutoLeft || el.marginAutoRight) {
                 placedH = true
             }
+            ; the cell is placed left to right and mirrored afterwards, so
+            ; under rtl the physical sides swap; self-start and self-end
+            ; follow the item's own direction
+            def autoL:boolean el.marginAutoLeft
+            def autoR:boolean el.marginAutoRight
+            def itemRtl:boolean parent.resolvedRtl
+            if (el.textDir == "rtl") {
+                itemRtl = true
+            }
+            if (el.textDir == "ltr") {
+                itemRtl = false
+            }
+            if parent.resolvedRtl {
+                autoL = el.marginAutoRight
+                autoR = el.marginAutoLeft
+                if (gj == "left") {
+                    gj = "end"
+                } {
+                    if (gj == "right") {
+                        gj = "start"
+                    }
+                }
+            }
+            if (itemRtl != parent.resolvedRtl) {
+                if (gj == "self-start") {
+                    gj = "end"
+                } {
+                    if (gj == "self-end") {
+                        gj = "start"
+                    }
+                }
+            }
             if ((boxH > 0.0) && (placedV == false)) {
                 el.calculatedFlexHeight = boxH
             }
@@ -5633,10 +5672,10 @@ class EVGLayout {
                 def freeX:double (boxW - el.calculatedWidth)
                 if (freeX > 0.0) {
                     def dx:double 0.0
-                    if (el.marginAutoLeft || el.marginAutoRight) {
-                        if el.marginAutoLeft {
+                    if (autoL || autoR) {
+                        if autoL {
                             dx = freeX
-                            if el.marginAutoRight {
+                            if autoR {
                                 dx = (freeX / 2.0)
                             }
                         }
@@ -6033,9 +6072,8 @@ class EVGLayout {
                 shift = extra
             }
         } {
-            if ((mode == "space-around") || (mode == "space-evenly")) {
-                shift = (free / 2.0)
-            }
+            ; (space-around and space-evenly fall back to safe center,
+            ; which an overflow puts at the start)
             if safe {
                 shift = 0.0
             }

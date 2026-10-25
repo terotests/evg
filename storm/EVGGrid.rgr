@@ -80,6 +80,9 @@ class EVGGridTemplate {
     ; Set when the spec named a track type this subset does not implement.
     def hadError:boolean false
     def errorText:string ""
+    ; justify-content / align-content normal or stretch: the space left
+    ; goes to the auto tracks (CSS Grid 11.8); any other leaves it free
+    def stretchAutos:boolean true
 
     Constructor () {
         hadError = false
@@ -639,7 +642,7 @@ class EVGGridTemplate {
             poolSpace = 0.0
         }
         ; with no fr track the space left goes to the auto tracks, evenly
-        if ((totalFr == 0.0) && (poolSpace > 0.0)) {
+        if (((totalFr == 0.0) && (poolSpace > 0.0)) && stretchAutos) {
             def autos:int 0
             def ai:int 0
             while (ai < n) {
