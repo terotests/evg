@@ -4385,7 +4385,18 @@ class EVGLayout {
                 def colStarts:[double]
                 def colEnds:[double]
                 def cn:int 0
-                while (cn < (cols.count())) {
+                ; (with no template and no item there is no track)
+                def noItems:boolean true
+                for parent.children ck:EVGElement cki {
+                    if (ck.isAbsolute == false) {
+                        noItems = false
+                    }
+                }
+                def colsN:int (cols.count())
+                if (noItems && (((strlen parent.gridTemplateColumns) == 0) || (parent.gridTemplateColumns == "none"))) {
+                    colsN = 0
+                }
+                while (cn < colsN) {
                     push colStarts (colShift + (cols.offsetOf(cn colGap)))
                     push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap)))
                     cn = (cn + 1)
@@ -4434,7 +4445,11 @@ class EVGLayout {
                 def rowStarts:[double]
                 def rowEnds:[double]
                 def rn:int 0
-                while (rn < (array_length rowSizes)) {
+                def rowsN:int (array_length rowSizes)
+                if (noItems && (((strlen parent.gridTemplateRows) == 0) || (parent.gridTemplateRows == "none"))) {
+                    rowsN = 0
+                }
+                while (rn < rowsN) {
                     push rowStarts (rowShift + (this.gridRowOffset(rowSizes rn rowGap)))
                     push rowEnds ((rowShift + (this.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn))
                     rn = (rn + 1)
@@ -4801,7 +4816,8 @@ class EVGLayout {
         if ((itemCount == 0) && (explicitRows == 0)) {
             ; No tracks to size, but an overlay or a connector may still be
             ; sitting here out of flow.
-            this.layoutGridOutOfFlow(parent innerWidth innerHeight startX startY)
+            def noRows:[double]
+            this.layoutGridAbsAreas(parent cols colGapPx noRows rowGapPx rowTemplate innerWidth innerHeight startX startY 0.0 0.0)
             return 0.0
         }
 
@@ -5415,9 +5431,10 @@ class EVGLayout {
 
     ; an absolutely positioned grid item's area along one axis when a side
     ; of its placement is auto: that side is the grid container's padding
-    ; edge (CSS Grid 1, 10.1). [from size] from the content edge, or nothing
-    ; when both sides are lines (or the placement is wholly auto, whose
-    ; area is the content box)
+    ; edge (CSS Grid 1, 10.1; "auto / auto", the padding box, CSS Grid 2,
+    ; 9.2). [from size] from the content edge, or nothing with no
+    ; placement (EVG's content box) or a line name alone (an area's,
+    ; resolved by the placement)
     sfn absAutoArea:[double] (spec0:string tpl:EVGGridTemplate starts:[double] ends:[double] padS:double padE:double inner:double) {
         def res:[double]
         def spec:string (trim spec0)
@@ -5438,13 +5455,7 @@ class EVGLayout {
                 rhs = "span 1"
             }
         }
-        if ((lhs == "auto") && (rhs == "auto")) {
-            return res
-        }
         def n:int (array_length starts)
-        if (n == 0) {
-            return res
-        }
         def lines:int (n + 1)
         def sLine:int 0
         def eLine:int 0
@@ -5469,6 +5480,11 @@ class EVGLayout {
         if (eLine < 0) {
             eLine = 0
         }
+        if (((sLine > 0) && (eLine > 0)) && (sLine > eLine)) {
+            def sw:int sLine
+            sLine = eLine
+            eLine = sw
+        }
         ; (a line past the grid's is auto)
         if (sLine > lines) {
             sLine = 0
@@ -5478,6 +5494,21 @@ class EVGLayout {
         }
         def from:double (0.0 - padS)
         def to:double (inner + padE)
+        if (n == 0) {
+            ; (only line 1, at the content edge)
+            if (sLine == 1) {
+                from = 0.0
+            }
+            if (eLine == 1) {
+                to = 0.0
+            }
+            if (to < from) {
+                to = from
+            }
+            push res from
+            push res (to - from)
+            return res
+        }
         if (sLine > 0) {
             if (sLine <= n) {
                 from = (itemAt starts (sLine - 1))
@@ -5516,6 +5547,10 @@ class EVGLayout {
         def named:int (tpl.lineNumberNamed(tok))
         if (named == 0) {
             named = (tpl.lineNumberNamed((tok + "-start")))
+        }
+        ; (a name the grid does not have is a line past it)
+        if (named == 0) {
+            named = (lines + 1)
         }
         return named
     }

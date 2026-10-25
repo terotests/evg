@@ -954,6 +954,8 @@ class EVGGridPlacement {
     ; True when the span came from an explicit "span N", which outranks any
     ; end line.
     def spanExplicit:boolean false
+    ; the span is before the end line ("span 2 / 4")
+    def backSpan:boolean false
 
     Constructor () {
         start = 0
@@ -999,7 +1001,13 @@ class EVGGridPlacement {
 
         def lhs:string (trim (substring s 0 slash))
         def rhs:string (trim (substring s (slash + 1) (strlen s)))
-        p.takeStart(lhs)
+        if (EVGGridPlacement.isSpan(lhs)) {
+            ; ("span 2 / 4": the end line, and the span back from it)
+            p.span = (EVGGridPlacement.spanCount(lhs))
+            p.backSpan = true
+        } {
+            p.takeStart(lhs)
+        }
         if (EVGGridPlacement.isSpan(rhs)) {
             p.span = (EVGGridPlacement.spanCount(rhs))
             p.spanExplicit = true
@@ -1015,6 +1023,9 @@ class EVGGridPlacement {
     ; negative line, CSS's count-from-the-end form — is rejected outright
     ; rather than treated as a name it plainly is not.
     fn takeStart:void (token:string) {
+        if (token == "auto") {
+            return
+        }
         if (EVGGridPlacement.isNumericToken(token)) {
             start = (EVGGridPlacement.lineNumber(token))
             if (start == 0) {
@@ -1026,6 +1037,9 @@ class EVGGridPlacement {
     }
 
     fn takeEnd:void (token:string) {
+        if (token == "auto") {
+            return
+        }
         if (EVGGridPlacement.isNumericToken(token)) {
             endLine = (EVGGridPlacement.lineNumber(token))
             if (endLine == 0) {
@@ -1042,6 +1056,13 @@ class EVGGridPlacement {
             return
         }
         if (start < 1) {
+            ; (an auto start before an end line: the span back from it)
+            if ((endLine >= 1) && ((strlen startName) == 0)) {
+                start = (endLine - span)
+                if (start < 1) {
+                    start = 1
+                }
+            }
             return
         }
         if (endLine > start) {

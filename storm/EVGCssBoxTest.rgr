@@ -396,6 +396,27 @@ class CssBoxCheck {
         this.ok("align-content: center moves the rows down" (this.near((a17.calculatedY - g17.calculatedY) 50.0)))
         this.ok("an abspos item's auto start line is the padding edge, its end line 2" (this.near((c17.calculatedX - g17.calculatedX) 40.0)))
 
+        ; --- 15. "auto / 3" is the track before line 3 ---------------------------------
+        def page18 (EVGElement.createDiv())
+        page18.setAttribute("width" "300px")
+        def g18 (EVGElement.createDiv())
+        g18.setAttribute("display" "grid")
+        g18.setAttribute("width" "300px")
+        g18.setAttribute("grid-template-columns" "100px 100px 100px")
+        def a18 (EVGElement.createDiv())
+        a18.setAttribute("grid-column" "auto / 3")
+        a18.setAttribute("height" "10px")
+        def b18 (EVGElement.createDiv())
+        b18.setAttribute("grid-column" "span 2 / 4")
+        b18.setAttribute("grid-row" "2")
+        b18.setAttribute("height" "10px")
+        g18.addChild(a18)
+        g18.addChild(b18)
+        page18.addChild(g18)
+        this.layoutAt(page18 300.0 600.0)
+        this.ok("grid-column: auto / 3 is in the second column" (this.near((a18.calculatedX - g18.calculatedX) 100.0)))
+        this.ok("grid-column: span 2 / 4 covers columns 2 and 3" ((this.near((b18.calculatedX - g18.calculatedX) 100.0)) && (this.near(b18.calculatedWidth 200.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
