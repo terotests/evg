@@ -2866,9 +2866,18 @@ class EVGLayout {
     ; CSS Align 9.1: `synthBorder` while a flex row that is not a line of
     ; text aligns its items.)
     def synthBorder:boolean false
+    ; (and from its top edge where the CSS layer says the line-under side
+    ; is the top, `synthTop`)
+    def synthTop:boolean false
     fn baselineOffsetOf:double (el:EVGElement) {
         if el.hasBaseline {
             return (el.box.marginTopPx + el.calculatedBaseline)
+        }
+        if synthTop {
+            if synthBorder {
+                return el.box.marginTopPx
+            }
+            return 0.0
         }
         if synthBorder {
             return (el.box.marginTopPx + el.calculatedHeight)
@@ -3092,6 +3101,8 @@ class EVGLayout {
         def maxBelow:double 0.0
         def wasSynth:boolean synthBorder
         synthBorder = (ext.synthBorder(parent))
+        def wasTop:boolean synthTop
+        synthTop = (ext.synthTop(parent))
         ; (last baseline: the items' last baselines in line, the group
         ; packed to the line's end, when the CSS layer does that)
         def useLast:boolean false
@@ -3196,6 +3207,7 @@ class EVGLayout {
             i = i + 1
         }
         synthBorder = wasSynth
+        synthTop = wasTop
         return lineOut
     }
     
@@ -5447,6 +5459,8 @@ class EVGLayout {
         ; align-self: baseline: the items of a row that align so share the
         ; lowest of their baselines (CSS Align 9.3), a box with no text its
         ; bottom margin edge (baselineOffsetOf)
+        def wasGTop:boolean synthTop
+        synthTop = (ext.synthTop(parent))
         def bp:int 0
         while (bp < itemCount) {
             def bel:EVGElement (itemAt items bp)
@@ -5506,6 +5520,7 @@ class EVGLayout {
             }
             bp = (bp + 1)
         }
+        synthTop = wasGTop
 
         ; (align-self: last baseline is the CSS layer's)
         ext.gridLastBaselines(this parent items placedRow rowSpans rowSizes rowGapPx startY rowShift)

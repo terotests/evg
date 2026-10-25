@@ -75,6 +75,19 @@ class EVGLayoutFull {
             element.calculatedLastBaseline = (element.calculatedBaseline + spread)
             element.calculatedDescent = (lineH / 2.0)
         }
+        if ((css.under && element.hasBaseline) && ((childCount == 0) && ((strlen element.textContent) > 0))) {
+            def utop:double (element.box.paddingTopPx + element.box.borderWidthPx)
+            def ucontent:double ((element.calculatedHeight - utop) - (element.box.paddingBottomPx + element.box.borderWidthPx))
+            def uspread:double 0.0
+            if (element.calculatedLastBaseline > element.calculatedBaseline) {
+                uspread = (element.calculatedLastBaseline - element.calculatedBaseline)
+            }
+            def ulineH:double (ucontent - uspread)
+            def uin:double (element.calculatedBaseline - utop)
+            element.calculatedBaseline = (utop + (ulineH - uin))
+            element.calculatedLastBaseline = (element.calculatedBaseline + uspread)
+            element.calculatedDescent = uin
+        }
         if ((element.hasBaseline == false) && (css.baseFromBottom >= 0.0)) {
             element.calculatedBaseline = (element.calculatedHeight - css.baseFromBottom)
             element.calculatedDescent = css.baseFromBottom
@@ -305,6 +318,11 @@ class EVGLayoutFull {
     ; or as the painter draws them
     fn pixelMetrics:boolean () {
         return true
+    }
+
+    fn synthTop:boolean (parent:EVGElement) {
+        def sx:EVGCssExtra (EVGLayoutFull.cx(parent))
+        return sx.synthTop
     }
 
     fn synthBorder:boolean (parent:EVGElement) {
@@ -1155,6 +1173,12 @@ class EVGLayoutFull {
         def lb:double (this.lastBaselineOffsetOf(lay el))
         if (lb >= 0.0) {
             return lb
+        }
+        if lay.synthTop {
+            if lay.synthBorder {
+                return el.box.marginTopPx
+            }
+            return 0.0
         }
         if lay.synthBorder {
             return (el.box.marginTopPx + el.calculatedHeight)

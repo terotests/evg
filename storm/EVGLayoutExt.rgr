@@ -120,6 +120,11 @@ class EVGLayoutExt {
         return -1.0
     }
 
+    ; an item with no baseline has it at its top, not its bottom
+    fn synthTop:boolean (parent:EVGElement) {
+        return false
+    }
+
     ; the column tracks with the implicit ones the items' placements make
     fn implicitColumns:string (parent:EVGElement colSpec:string) {
         return colSpec
