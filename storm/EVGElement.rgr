@@ -253,6 +253,10 @@ class EVGElement {
     def verticalAlign:string "top"
     def isInline:boolean false
     def lineBreak:boolean false
+    ; joined to the item before it with no gap: its margin-left takes the
+    ; row's column-gap back, which at the start of a wrapped line there is
+    ; none to take (line-join: true)
+    def lineJoin:boolean false
     def overflow:string "visible"
 
     ; `cursor`, and it INHERITS, like the CSS property it is: a title bar says
@@ -3393,6 +3397,7 @@ class EVGElement {
         verticalAlign = other.verticalAlign
         isInline = other.isInline
         lineBreak = other.lineBreak
+        lineJoin = other.lineJoin
         overflow = other.overflow
         cursor = other.cursor
         surfaceEffect = other.surfaceEffect
@@ -4434,6 +4439,10 @@ class EVGElement {
         }
         if ((name == "line-break") || (name == "lineBreak")) {
             lineBreak = (value == "true")
+            return
+        }
+        if ((name == "line-join") || (name == "lineJoin")) {
+            lineJoin = (value == "true")
             return
         }
         if ((name == "letter-spacing") || (name == "letterSpacing")) {

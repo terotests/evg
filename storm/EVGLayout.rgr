@@ -710,6 +710,55 @@ class EVGLayout {
                 width = element.minWidth.pixels
             }
         }
+        ; min-width / max-width: min-content | max-content | fit-content,
+        ; from what the box holds (CSS Sizing 3, 3.2)
+        def kxT:int element.maxWidth.unitType
+        def knT:int element.minWidth.unitType
+        def kMax:boolean ((element.maxWidth.isSet == false) && ((kxT >= 6) && (kxT <= 8)))
+        def kMin:boolean ((element.minWidth.isSet == false) && ((knT >= 6) && (knT <= 8)))
+        if (kMax || kMin) {
+            ; (its content's sizes, not its own width's)
+            def kOut:double (element.box.marginLeftPx + element.box.marginRightPx)
+            def ownW:EVGUnit element.width
+            element.width = (EVGUnit.unset())
+            def kMn:double ((this.intrinsicWidthNow(element true)) - kOut)
+            def kMx:double ((this.intrinsicWidthNow(element false)) - kOut)
+            element.width = ownW
+            if (kMx < kMn) {
+                kMx = kMn
+            }
+            def kFit:double parentWidth
+            if (kFit > kMx) {
+                kFit = kMx
+            }
+            if (kFit < kMn) {
+                kFit = kMn
+            }
+            if kMax {
+                def capW:double kFit
+                if (kxT == 7) {
+                    capW = kMn
+                }
+                if (kxT == 8) {
+                    capW = kMx
+                }
+                if (width > capW) {
+                    width = capW
+                }
+            }
+            if kMin {
+                def floorW:double kFit
+                if (knT == 7) {
+                    floorW = kMn
+                }
+                if (knT == 8) {
+                    floorW = kMx
+                }
+                if (width < floorW) {
+                    width = floorW
+                }
+            }
+        }
         
         ; A BOX HAS NO NEGATIVE SIDE. `width: -40%` is not a width — CSS throws
         ; the declaration away — and a box that keeps the number draws MIRRORED
@@ -903,6 +952,20 @@ class EVGLayout {
         if element.minHeight.isSet {
             if (height < element.minHeight.pixels) {
                 height = element.minHeight.pixels
+            }
+        }
+        ; min-height / max-height of a content keyword: the content's height
+        def kyT:int element.maxHeight.unitType
+        def kmT:int element.minHeight.unitType
+        def contentBoxH:double (((contentHeight + element.box.paddingTopPx) + element.box.paddingBottomPx) + (element.box.borderWidthPx * 2.0))
+        if ((element.maxHeight.isSet == false) && ((kyT >= 6) && (kyT <= 8))) {
+            if (height > contentBoxH) {
+                height = contentBoxH
+            }
+        }
+        if ((element.minHeight.isSet == false) && ((kmT >= 6) && (kmT <= 8))) {
+            if (height < contentBoxH) {
+                height = contentBoxH
             }
         }
         
@@ -1243,6 +1306,14 @@ class EVGLayout {
         return (c.flexBasis.isSet || c.width.isSet)
     }
 
+    ; Where a growing item with a height starts down a column.
+    fn colBasis:double (c:EVGElement) {
+        if c.flexBasis.isSet {
+            return c.flexBasis.pixels
+        }
+        return c.height.pixels
+    }
+
     fn baseMain:double (c:EVGElement) {
         if c.flexBasis.isSet {
             return c.flexBasis.pixels
@@ -1443,7 +1514,7 @@ class EVGLayout {
                     def outH:double ((child.calculatedHeight + child.box.marginTopPx) + child.box.marginBottomPx)
                     def mainFree:double (innerWidth - outW)
                     def crossFree:double (innerHeight - outH)
-                    if (parent.flexDirection == "column") {
+                    if ((parent.flexDirection == "column") || (parent.flexDirection == "column-reverse")) {
                         mainFree = (innerHeight - outH)
                         crossFree = (innerWidth - outW)
                     }
@@ -1455,6 +1526,13 @@ class EVGLayout {
                     if (safeJ && (mainFree < 0.0)) {
                         jc = "flex-start"
                     }
+                    def isColS:boolean ((parent.flexDirection == "column") || (parent.flexDirection == "column-reverse"))
+                    def revS:boolean ((parent.flexDirection == "row-reverse") || (parent.flexDirection == "column-reverse"))
+                    ; (left and right place along a row only; down a column
+                    ; they are the start)
+                    if (isColS && ((jc == "left") || (jc == "right"))) {
+                        jc = "start"
+                    }
                     def mainOff:double 0.0
                     if ((jc == "center") || ((jc == "space-around") || (jc == "space-evenly"))) {
                         mainOff = (mainFree / 2.0)
@@ -1462,7 +1540,19 @@ class EVGLayout {
                     if ((jc == "flex-end") || ((jc == "end") || (jc == "right"))) {
                         mainOff = mainFree
                     }
-                    def ca:string (this.crossAlignIn((parent.flexDirection == "column") child parent.alignItems))
+                    ; a reversed direction starts at the other end for the
+                    ; flex- values (and normal and the distributions); start
+                    ; and end follow the writing direction, left and right
+                    ; nothing
+                    def flexKw:boolean ((jc != "start") && ((jc != "end") && ((jc != "left") && (jc != "right"))))
+                    def flipMain:boolean (revS && flexKw)
+                    if ((isColS == false) && (parent.resolvedRtl && ((jc != "left") && (jc != "right")))) {
+                        flipMain = (flipMain == false)
+                    }
+                    if flipMain {
+                        mainOff = (mainFree - mainOff)
+                    }
+                    def ca:string (this.crossAlignIn(((parent.flexDirection == "column") || (parent.flexDirection == "column-reverse")) child parent.alignItems))
                     ; `safe` falls back to the start when the box does not fit
                     def safeA:boolean ((indexOf ca "safe ") == 0)
                     if (((indexOf ca "safe ") == 0) || ((indexOf ca "unsafe ") == 0)) {
@@ -1489,7 +1579,18 @@ class EVGLayout {
                     if (safeA && (crossFree < 0.0)) {
                         crossOff = 0.0
                     }
-                    if (parent.flexDirection == "column") {
+                    ; right to left the inline axis starts on the right: a
+                    ; column's cross axis, a row's main axis (left and right
+                    ; are where they say)
+                    ; (self-start and self-end by the item's own direction)
+                    def crossRtl:boolean parent.resolvedRtl
+                    if ((ca == "self-start") || (ca == "self-end")) {
+                        crossRtl = child.resolvedRtl
+                    }
+                    if (crossRtl && isColS) {
+                        crossOff = (crossFree - crossOff)
+                    }
+                    if isColS {
                         fixX = (fixX + crossOff)
                         fixY = (fixY + mainOff)
                     } {
@@ -1782,7 +1883,14 @@ class EVGLayout {
                     flowCountC = (flowCountC + 1)
                     def mAxis:double (c.box.marginTopPx + c.box.marginBottomPx)
                     if c.height.isSet {
-                        fixedHeight = (fixedHeight + c.height.pixels + mAxis)
+                        ; (a growing item with a height starts from its basis:
+                        ; a stated flex-basis, or else the height)
+                        if (c.flex > 0.0) {
+                            totalFlexC = (totalFlexC + c.flex)
+                            fixedHeight = (fixedHeight + (this.colBasis(c)) + mAxis)
+                        } {
+                            fixedHeight = (fixedHeight + c.height.pixels + mAxis)
+                        }
                     } {
                         if (c.flex > 0.0) {
                             totalFlexC = (totalFlexC + c.flex)
@@ -1849,6 +1957,10 @@ class EVGLayout {
                     if (c.isAbsolute == false) {
                         if ((c.height.isSet == false) && (c.flex > 0.0)) {
                             c.calculatedFlexHeight = ((availC * c.flex) / totalFlexC)
+                        }
+                        if (c.height.isSet && (c.flex > 0.0)) {
+                            c.calculatedFlexHeight = ((this.colBasis(c)) + ((availC * c.flex) / totalFlexC))
+                            c.hasFlexHeight = true
                         }
                     }
                     jg = (jg + 1)
@@ -2225,6 +2337,11 @@ class EVGLayout {
                 }
             }
             
+            ; (an item joined to the one before starts a line where any
+            ; other would: there was no gap to take back)
+            if ((((isColumn == false) && child.lineJoin) && ((array_length rowElements) == 0)) && (gapPx > 0.0)) {
+                currentX = (currentX + gapPx)
+            }
             ; Position child
             child.calculatedX = currentX + child.box.marginLeftPx
             child.calculatedY = currentY + child.box.marginTopPx
@@ -3153,6 +3270,11 @@ class EVGLayout {
         }
         if (elementCount > 1) {
             rowWidth = (rowWidth + ((to_double (elementCount - 1)) * rowGapPx))
+        }
+        ; (a line's first item joined to the one before took no gap back)
+        def firstEl:EVGElement (itemAt rowElements 0)
+        if firstEl.lineJoin {
+            rowWidth = (rowWidth + rowGapPx)
         }
         
         ; Determine alignment based on flexDirection
@@ -4465,7 +4587,11 @@ class EVGLayout {
     ; wrapping row does not wrap.
     fn intrinsicOfChildren:double (el:EVGElement wantMin:boolean) {
         def n:int (el.getChildCount())
+        ; (an empty box is as wide as its padding and border)
         if (n == 0) {
+            if (((strlen el.svgSource) == 0) && ((strlen el.src) == 0)) {
+                return (el.box.getHorizontalChrome())
+            }
             return 0.0
         }
         def isColumn:boolean ((el.flexDirection == "column") || (el.flexDirection == "column-reverse"))
@@ -4552,7 +4678,7 @@ class EVGLayout {
             inner = widest
         }
         if (inner <= 0.0) {
-            return 0.0
+            inner = 0.0
         }
         return (inner + (el.box.getHorizontalChrome()))
     }
