@@ -50,6 +50,15 @@ class EVGCssExtra {
     ; border sides of unequal widths that the front end gave EVG as padding
     ; (EVG's border is one width): the padding edge is this far inside
     ; (folded-border: top right bottom left)
+    ; text set in a vertical line: its baselines are the lines' middles,
+    ; the central baseline (baseline-central: true)
+    def central:boolean false
+    ; a box turned over across its block axis after the layout (a vertical
+    ; box in the other vertical mode than its parent's): its first and last
+    ; baselines are each other's, from the other side (baseline-flip: true)
+    def flipBase:boolean false
+    def flipDone:boolean false
+    def flipLast:double 0.0
     def foldT:double 0.0
     def foldR:double 0.0
     def foldB:double 0.0
@@ -57,7 +66,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || (name == "folded-border"))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "folded-border") || ((name == "baseline-central") || (name == "baseline-flip"))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -96,6 +105,14 @@ class EVGCssExtra {
         }
         if (name == "flex-box") {
             flexBox = (value == "true")
+            return
+        }
+        if (name == "baseline-flip") {
+            flipBase = (value == "true")
+            return
+        }
+        if (name == "baseline-central") {
+            central = (value == "true")
             return
         }
         if (name == "folded-border") {
@@ -139,6 +156,8 @@ class EVGCssExtra {
         c.cbOuterY = cbOuterY
         c.flexBox = flexBox
         c.baseFromBottom = baseFromBottom
+        c.central = central
+        c.flipBase = flipBase
         c.foldT = foldT
         c.foldR = foldR
         c.foldB = foldB

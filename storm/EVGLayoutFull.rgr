@@ -49,6 +49,20 @@ class EVGLayoutFull {
     ; whose parents are not
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        ; (its lines are equally tall: one is the content's height less
+        ; the distance between the first and the last baseline)
+        if ((css.central && element.hasBaseline) && ((childCount == 0) && ((strlen element.textContent) > 0))) {
+            def top:double (element.box.paddingTopPx + element.box.borderWidthPx)
+            def contentH:double ((element.calculatedHeight - top) - (element.box.paddingBottomPx + element.box.borderWidthPx))
+            def spread:double 0.0
+            if (element.calculatedLastBaseline > element.calculatedBaseline) {
+                spread = (element.calculatedLastBaseline - element.calculatedBaseline)
+            }
+            def lineH:double (contentH - spread)
+            element.calculatedBaseline = (top + (lineH / 2.0))
+            element.calculatedLastBaseline = (element.calculatedBaseline + spread)
+            element.calculatedDescent = (lineH / 2.0)
+        }
         if ((element.hasBaseline == false) && (css.baseFromBottom >= 0.0)) {
             element.calculatedBaseline = (element.calculatedHeight - css.baseFromBottom)
             element.calculatedDescent = css.baseFromBottom
@@ -77,6 +91,24 @@ class EVGLayoutFull {
         }
         if (css.isCb && (childCount > 0)) {
             this.placeOuterAbs(lay element element)
+        }
+        if css.flipBase {
+            css.flipDone = false
+            if ((element.hasBaseline == false) && (childCount > 0)) {
+                lay.inheritBaselineFromFirstChild(element)
+            }
+            if element.hasBaseline {
+                def h:double element.calculatedHeight
+                def b1:double element.calculatedBaseline
+                def b2:double ((this.lastBaselineOffsetOf(lay element)) - element.box.marginTopPx)
+                if (b2 < 0.0) {
+                    b2 = b1
+                }
+                element.calculatedBaseline = (h - b2)
+                css.flipLast = (h - b1)
+                element.calculatedLastBaseline = css.flipLast
+                css.flipDone = true
+            }
         }
     }
 
@@ -915,6 +947,12 @@ class EVGLayoutFull {
     ; last line's of a text node, else the lowest in-flow child's that has
     ; one; with none, -1 (synthesized from the bottom margin edge)
     fn lastBaselineOffsetOf:double (lay:EVGLayout el:EVGElement) {
+        if (!null? el.css) {
+            def fx:EVGCssExtra (EVGLayoutFull.cx(el))
+            if (fx.flipBase && fx.flipDone) {
+                return (el.box.marginTopPx + fx.flipLast)
+            }
+        }
         def n:int (el.getChildCount())
         def best:double -1.0
         def bestBottom:double -1.0
@@ -955,6 +993,10 @@ class EVGLayoutFull {
         }
         if (el.hasBaseline && (n == 0)) {
             return (el.box.marginTopPx + el.calculatedLastBaseline)
+        }
+        ; (a line of boxes with no text: its one baseline is its last)
+        if el.hasBaseline {
+            return (el.box.marginTopPx + el.calculatedBaseline)
         }
         return -1.0
     }
