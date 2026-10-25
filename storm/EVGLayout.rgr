@@ -5370,6 +5370,8 @@ class EVGLayout {
                     if (((itemAt rowSpans rm) == 1) && ((rri < (rows.count())) && (rit.gridTemplateRows != "subgrid"))) {
                         def rcw:double (cols.extentOf((itemAt placedCol rm) (itemAt colSpans rm) colGapPx))
                         rit.calculatedFlexHeight = 0.0
+                        rit.unitsResolved = false
+                        rit.resolveUnits(rcw innerHeight)
                         this.layoutElement(rit 0.0 0.0 ((rcw - rit.box.marginLeftPx) - rit.box.marginRightPx) 0.0)
                         def rh:double ((rit.calculatedHeight + rit.box.marginTopPx) + rit.box.marginBottomPx)
                         if (rh > (itemAt rowContent rri)) {
@@ -5423,6 +5425,9 @@ class EVGLayout {
                 def isRowSubgrid:boolean (it.gridTemplateRows == "subgrid")
                 if ((rspanM == 1) || isRowSubgrid) {
                     def cw:double (cols.extentOf((itemAt placedCol m) (itemAt colSpans m) colGapPx))
+                    ; (its percentages are of its area, not the grid)
+                    it.unitsResolved = false
+                    it.resolveUnits(cw innerHeight)
                     def avail:double (cw - it.box.marginLeftPx - it.box.marginRightPx)
                     ; Measure with auto height: clear any inherited flex height.
                     it.calculatedFlexHeight = 0.0
@@ -5568,6 +5573,12 @@ class EVGLayout {
             def offX:double (colShift + (cols.offsetOf(cIdx colGapPx)))
             def offY:double (rowShift + (this.gridRowOffset(rowSizes rIdx rowGapPx)))
 
+            ; A grid item's containing block is its AREA, not the grid's
+            ; content box: its percentages (sizes, margins, padding) are of the
+            ; area, so they are resolved again now that it is known; before,
+            ; `width: 100%` on a cell came out as the whole grid's width
+            el.unitsResolved = false
+            el.resolveUnits(cellW cellH)
             el.calculatedX = (startX + offX + el.box.marginLeftPx)
             el.calculatedY = (startY + offY + el.box.marginTopPx)
 
@@ -5679,14 +5690,6 @@ class EVGLayout {
                 }
             }
 
-            ; A grid item's containing block is its CELL, not the grid's
-            ; content box. Its units were resolved against the container before
-            ; the tracks were sized, so `width: 100%` on a cell came out as the
-            ; whole grid's width — every item in the album spread was laid out
-            ; at full size and simply overlapped. Resolve them again now that
-            ; the cell is known.
-            el.unitsResolved = false
-            el.resolveUnits(boxW boxH)
 
             ; a grid item is as wide as its cell (justify-self: normal is
             ; the stretch), not its content as it would be along a row
