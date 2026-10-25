@@ -926,6 +926,19 @@ class CssBoxCheck {
         this.layoutAt(page43 300.0 600.0)
         this.ok("auto row of a 50% min-height item with 10px content: the 1fr row starts at 10" (this.near((b43.calculatedY - g43.calculatedY) 10.0)))
 
+        ; --- 40. children of a box whose min-height is over its height lay out in the min-height ---
+        def page44 (EVGElement.createDiv())
+        page44.setAttribute("width" "300px")
+        def b44 (EVGElement.createDiv())
+        b44.setAttribute("height" "100px")
+        b44.setAttribute("min-height" "200px")
+        def k44 (EVGElement.createDiv())
+        k44.setAttribute("height" "200px")
+        b44.addChild(k44)
+        page44.addChild(b44)
+        this.layoutAt(page44 300.0 600.0)
+        this.ok("height 100px, min-height 200px, a 200px child: both 200" ((this.near(b44.calculatedHeight 200.0)) && (this.near(k44.calculatedHeight 200.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

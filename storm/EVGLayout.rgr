@@ -839,6 +839,14 @@ class EVGLayout {
         ; This allows children with height="100%" to resolve correctly
         element.hasDefiniteHeight = (autoHeight == false)
         if (autoHeight == false) {
+            ; (within its min and max: children lay out in the height the box
+            ; will have, not in the one it states, CSS 2.1 10.7)
+            if (element.maxHeight.isSet && (height > element.maxHeight.pixels)) {
+                height = element.maxHeight.pixels
+            }
+            if (element.minHeight.isSet && (height < element.minHeight.pixels)) {
+                height = element.minHeight.pixels
+            }
             element.calculatedHeight = height
             element.calculatedInnerHeight = (element.box.getInnerHeight(height))
         } {
