@@ -18,11 +18,15 @@
 ;      not the whole line, when the row decides where to wrap
 ;   7. an absolutely positioned child of a flex container with no inset
 ;      (static-flex) is where justify-content and align-items put it
+;
+; Some of the rules are the CSS layer's (EVGLayoutFull), which the test
+; installs first, as a CSS front end does.
 ; ==============================================================================
 
 Import "EVGElement.rgr"
 Import "EVGUnit.rgr"
 Import "EVGLayout.rgr"
+Import "EVGLayoutFull.rgr"
 
 class CssBoxCheck {
     def passed:int 0
@@ -493,6 +497,7 @@ class CssBoxCheck {
     }
 
     sfn m@(main):void () {
+        EVGLayoutFull.install()
         def c (new CssBoxCheck())
         c.run()
     }
