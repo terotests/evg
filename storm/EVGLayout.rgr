@@ -617,7 +617,19 @@ class EVGLayout {
         if ((element.height.isSet == false) && (element.aspectRatio > 0.0)) {
             def edgeX:double ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
             def edgeY:double ((element.box.paddingTopPx + element.box.paddingBottomPx) + (element.box.borderWidthPx * 2.0))
-            def innerW:double (width - edgeX)
+            ; (the width min-width / max-width leave, CSS Sizing 4 5.1)
+            def rw:double width
+            if element.maxWidth.isSet {
+                if (rw > element.maxWidth.pixels) {
+                    rw = element.maxWidth.pixels
+                }
+            }
+            if element.minWidth.isSet {
+                if (rw < element.minWidth.pixels) {
+                    rw = element.minWidth.pixels
+                }
+            }
+            def innerW:double (rw - edgeX)
             if (innerW < 0.0) {
                 innerW = 0.0
             }
@@ -637,6 +649,31 @@ class EVGLayout {
         if element.hasFlexHeight {
             height = element.calculatedFlexHeight
             autoHeight = false
+        }
+        ; aspect-ratio down a column that does not stretch: the width
+        ; follows the flexed height (CSS Flexbox 9.4 step 7, the ratio)
+        if (((element.aspectRatio > 0.0) && (element.calculatedFlexHeight > 0.0)) && (((element.width.isSet == false) && (element.hasFlexWidth == false)) && (keywordW == false))) {
+            if (((this.parentIsRow(element)) == false) && columnCrossShrinks) {
+                def edgeXf:double ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
+                def edgeYf:double ((element.box.paddingTopPx + element.box.paddingBottomPx) + (element.box.borderWidthPx * 2.0))
+                ; (the height its min-height / max-height leave)
+                def rh:double height
+                if element.maxHeight.isSet {
+                    if (rh > element.maxHeight.pixels) {
+                        rh = element.maxHeight.pixels
+                    }
+                }
+                if element.minHeight.isSet {
+                    if (rh < element.minHeight.pixels) {
+                        rh = element.minHeight.pixels
+                    }
+                }
+                def innerHf:double (rh - edgeYf)
+                if (innerHf < 0.0) {
+                    innerHf = 0.0
+                }
+                width = ((innerHf * element.aspectRatio) + edgeXf)
+            }
         }
 
         ; For image elements, calculate dimensions based on aspect ratio
@@ -4215,8 +4252,23 @@ class EVGLayout {
         if el.columnGap.isSet {
             gapPx = el.columnGap.pixels
         }
-        ; with no room given, auto-fill repeats once
-        spec = (EVGGridTemplate.resolveAutoRepeat(spec 0.0 gapPx 1 el.inheritedFontSize))
+        ; auto-fill repeats as often as max-width holds (or min-width),
+        ; with no room given once (CSS Grid 7.2.3.2)
+        def fillRoom:double 0.0
+        def fillMin:boolean false
+        def hch:double (el.box.getHorizontalChrome())
+        if (el.maxWidth.isSet && (el.maxWidth.pixels > 0.0)) {
+            fillRoom = (el.maxWidth.pixels - hch)
+        }
+        if (el.minWidth.isSet && ((el.minWidth.pixels - hch) > fillRoom)) {
+            fillRoom = (el.minWidth.pixels - hch)
+            fillMin = ((el.maxWidth.isSet && (el.maxWidth.pixels > 0.0)) == false)
+        }
+        if fillMin {
+            spec = (EVGGridTemplate.resolveAutoRepeatAtLeast(spec fillRoom gapPx 1 el.inheritedFontSize))
+        } {
+            spec = (EVGGridTemplate.resolveAutoRepeat(spec fillRoom gapPx 1 el.inheritedFontSize))
+        }
         spec = (ext.implicitColumns(el spec))
         def tpl:EVGGridTemplate (EVGGridTemplate.parse(spec))
         def nc:int (tpl.count())
@@ -4695,19 +4747,32 @@ class EVGLayout {
         ; holds, a definite one, else max-height, else min-height
         if (((indexOf rowTemplateSpec "auto-fill") >= 0) || ((indexOf rowTemplateSpec "auto-fit") >= 0)) {
             def room:double innerHeight
+            def roomMin:boolean false
             if (parent.hasDefiniteHeight == false) {
                 room = 0.0
                 def vch:double (parent.box.getVerticalChrome())
-                if (parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) {
+                ; (a percentage of a definite height is resolved, else 0)
+                if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
                     room = (parent.maxHeight.pixels - vch)
                 }
-                if (parent.minHeight.isSet && ((parent.minHeight.isPercent()) == false)) {
+                if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
                     if ((parent.minHeight.pixels - vch) > room) {
                         room = (parent.minHeight.pixels - vch)
+                        ; (a min alone: as many as reach it; over a max, the
+                        ; max raised to it: as many as fit)
+                        roomMin = ((parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) == false)
                     }
                 }
             }
-            rowTemplateSpec = (EVGGridTemplate.resolveAutoRepeat(rowTemplateSpec room rowGapPx 0 parent.inheritedFontSize))
+            ; (a min-height over the height is the height)
+            if (parent.hasDefiniteHeight && (parent.minHeight.isSet && ((parent.minHeight.pixels - (parent.box.getVerticalChrome())) > room))) {
+                room = (parent.minHeight.pixels - (parent.box.getVerticalChrome()))
+            }
+            if roomMin {
+                rowTemplateSpec = (EVGGridTemplate.resolveAutoRepeatAtLeast(rowTemplateSpec room rowGapPx 0 parent.inheritedFontSize))
+            } {
+                rowTemplateSpec = (EVGGridTemplate.resolveAutoRepeat(rowTemplateSpec room rowGapPx 0 parent.inheritedFontSize))
+            }
         }
         def rowTemplate:EVGGridTemplate (EVGGridTemplate.parse(rowTemplateSpec))
 
@@ -5234,6 +5299,7 @@ class EVGLayout {
                 }
             }
             ext.gridRowSpanContent(this parent items placedRow rowSpans placedCol colSpans cols measureGap rowSpec rowGapPx innerHeight rowSizes)
+            ext.gridFlexRows(parent rowSpec rowGapTotal rowSizes)
         }
 
         ; grid-auto-rows with a fixed size sets every implicit row.

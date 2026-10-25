@@ -553,6 +553,39 @@ class CssBoxCheck {
         this.layoutAt(page24 300.0 600.0)
         this.ok("span 2 over auto columns is as wide as its content" (this.near(a24.calculatedWidth 80.0)))
 
+        ; --- 22. fr rows of an auto-height grid, its max-height the space -----------
+        def page25 (EVGElement.createDiv())
+        page25.setAttribute("width" "300px")
+        def g25 (EVGElement.createDiv())
+        g25.setAttribute("display" "grid")
+        g25.setAttribute("width" "100px")
+        g25.setAttribute("grid-template-columns" "100px")
+        g25.setAttribute("grid-template-rows" "repeat(4, minmax(0, 1fr))")
+        g25.setAttribute("max-height" "200px")
+        def a25 (EVGElement.createDiv())
+        a25.setAttribute("grid-row" "4")
+        a25.setAttribute("height" "100px")
+        g25.addChild(a25)
+        page25.addChild(g25)
+        this.layoutAt(page25 300.0 600.0)
+        this.ok("fr rows: content would make 400, max-height makes rows of 50" ((this.near(g25.calculatedHeight 200.0)) && (this.near((a25.calculatedY - g25.calculatedY) 150.0))))
+
+        ; --- 23. auto-fill rows from a min-height: as many as reach it ---------------
+        def page26 (EVGElement.createDiv())
+        page26.setAttribute("width" "300px")
+        def g26 (EVGElement.createDiv())
+        g26.setAttribute("display" "grid")
+        g26.setAttribute("width" "100px")
+        g26.setAttribute("grid-template-columns" "100px")
+        g26.setAttribute("grid-template-rows" "repeat(auto-fill, 50px)")
+        g26.setAttribute("min-height" "125px")
+        def a26 (EVGElement.createDiv())
+        a26.setAttribute("grid-row" "-2")
+        g26.addChild(a26)
+        page26.addChild(g26)
+        this.layoutAt(page26 300.0 600.0)
+        this.ok("auto-fill: min-height 125 takes three rows of 50" (this.near((a26.calculatedY - g26.calculatedY) 100.0)))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

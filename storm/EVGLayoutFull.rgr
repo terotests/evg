@@ -959,6 +959,89 @@ class EVGLayoutFull {
     ; items spanning several content-sized rows, the narrower spans first:
     ; the height they need beyond the rows is shared by the rows that size
     ; to content (CSS Grid 12.5.3)
+    ; fr rows of a grid with no definite height (CSS Grid 12.7.1): the
+    ; flex fraction is the largest its rows' content needs per fr; a
+    ; min-height or max-height the rows break is the free space instead
+    ; (12.7, "if using this flex fraction would cause the grid to be
+    ; smaller than its min-height or larger than its max-height")
+    fn gridFlexRows:void (parent:EVGElement rowSpec:string rowGapTotal:double rowSizes:[double]) {
+        if (parent.hasDefiniteHeight || ((strlen rowSpec) == 0)) {
+            return
+        }
+        def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        if declared.hadError {
+            return
+        }
+        def n:int (array_length rowSizes)
+        def unit:double 0.0
+        def flexSum:double 0.0
+        def fixedSum:double rowGapTotal
+        def i:int 0
+        while (i < n) {
+            def isFr:boolean false
+            if (i < (declared.count())) {
+                def t:EVGGridTrack (declared.trackAt(i))
+                if ((t.kind == 2) && (t.value > 0.0)) {
+                    isFr = true
+                    flexSum = (flexSum + t.value)
+                    def need:double ((itemAt rowSizes i) / t.value)
+                    if (need > unit) {
+                        unit = need
+                    }
+                }
+            }
+            if (isFr == false) {
+                fixedSum = (fixedSum + (itemAt rowSizes i))
+            }
+            i = (i + 1)
+        }
+        def chrome:double ((parent.box.paddingTopPx + parent.box.paddingBottomPx) + (parent.box.borderWidthPx * 2.0))
+        ; (percentage rows are of the height min-height gives the grid)
+        if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
+            def minP:double (parent.minHeight.pixels - chrome)
+            def pk:int 0
+            while ((pk < n) && (pk < (declared.count()))) {
+                def tp:EVGGridTrack (declared.trackAt(pk))
+                if (tp.kind == 1) {
+                    def was:double (itemAt rowSizes pk)
+                    def pz:double ((minP * tp.value) / 100.0)
+                    if (pz > was) {
+                        set rowSizes pk pz
+                        fixedSum = (fixedSum + (pz - was))
+                    }
+                }
+                pk = (pk + 1)
+            }
+        }
+        if (flexSum <= 0.0) {
+            return
+        }
+        def total:double (fixedSum + (unit * flexSum))
+        if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
+            def maxIn:double (parent.maxHeight.pixels - chrome)
+            if (total > maxIn) {
+                unit = ((maxIn - fixedSum) / flexSum)
+            }
+        }
+        if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
+            def minIn:double (parent.minHeight.pixels - chrome)
+            if (total < minIn) {
+                unit = ((minIn - fixedSum) / flexSum)
+            }
+        }
+        if (unit < 0.0) {
+            unit = 0.0
+        }
+        def j:int 0
+        while ((j < n) && (j < (declared.count()))) {
+            def t2:EVGGridTrack (declared.trackAt(j))
+            if ((t2.kind == 2) && (t2.value > 0.0)) {
+                set rowSizes j (unit * t2.value)
+            }
+            j = (j + 1)
+        }
+    }
+
     fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
         def nr:int (array_length rowSizes)
         def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))

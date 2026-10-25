@@ -135,6 +135,11 @@ class EVGLayoutExt {
     fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
     }
 
+    ; fr rows of a grid with no definite height: each fr the largest its
+    ; rows' content needs, clamped by the grid's min/max-height
+    fn gridFlexRows:void (parent:EVGElement rowSpec:string rowGapTotal:double rowSizes:[double]) {
+    }
+
     ; content-sized grid rows grown by their items' baseline shifts
     fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
     }

@@ -319,6 +319,16 @@ class EVGGridTemplate {
     ; tiles written `repeat(auto-fill, minmax(100px, 1fr))` were one parse
     ; error, so the grid had no tracks and every tile was 0 x 0 at its corner.
     sfn resolveAutoRepeat:string (spec:string available:double gap:double items:int fontSize:double) {
+        return (EVGGridTemplate.repeatFor(spec available gap items fontSize false))
+    }
+
+    ; the same with the room a min-width or min-height gives: as few
+    ; repetitions as reach it (CSS Grid 7.2.3.2)
+    sfn resolveAutoRepeatAtLeast:string (spec:string available:double gap:double items:int fontSize:double) {
+        return (EVGGridTemplate.repeatFor(spec available gap items fontSize true))
+    }
+
+    sfn repeatFor:string (spec:string available:double gap:double items:int fontSize:double atLeast:boolean) {
         def tokens:[string] (EVGGridTemplate.tokenize(spec))
         def at:int 0 - 1
         def fixed:double 0.0
@@ -354,6 +364,9 @@ class EVGGridTemplate {
             def room:double ((available - fixed) - ((to_double others) * gap))
             def step:double (per + ((to_double perCount) * gap))
             n = (floor ((room + gap) / step))
+            if (atLeast && (((to_double n) * step) < ((room + gap) - 0.01))) {
+                n = (n + 1)
+            }
             if (n < 1) {
                 n = 1
             }
