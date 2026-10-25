@@ -1422,6 +1422,11 @@ class EVGLayoutFull {
                     } {
                         pp.resolveNames((EVGGridTemplate.parse(parent.gridTemplateColumns)))
                     }
+                } {
+                    ; (a plain line moves on past the leading tracks)
+                    if ((pp.start > 0) && (minL < 1)) {
+                        pp.start = (pp.start + (1 - minL))
+                    }
                 }
                 if (pp.start > 0) {
                     def endL:int ((pp.start - 1) + pp.span)
@@ -1517,11 +1522,20 @@ class EVGLayoutFull {
             } {
                 colSpec = ""
             }
+            ; (grid-auto-columns cycles forwards from the explicit grid)
+            def explicitN:int have
+            def at:EVGGridTemplate (EVGGridTemplate.parse(autoCol))
+            def am:int (at.count())
+            def aparts:[string] (strsplit (trim autoCol) " ")
             while (have < lastLine) {
                 if ((strlen colSpec) > 0) {
                     colSpec = (colSpec + " ")
                 }
-                colSpec = (colSpec + autoCol)
+                def tok:string autoCol
+                if ((am > 1) && ((array_length aparts) == am)) {
+                    tok = (itemAt aparts ((have - explicitN) % am))
+                }
+                colSpec = (colSpec + tok)
                 have = (have + 1)
             }
         }
