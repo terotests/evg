@@ -536,10 +536,64 @@ class EVGLayoutFull {
         return fb
     }
 
+    ; a block beside the floats of the float rows before it: its lines
+    ; start past the left ones and end before the right ones at its top
+    ; (CSS 2.1 9.5), taken as padding for all of its content
+    sfn shiftBesideFloats:void (parent:EVGElement child:EVGElement index:int top:double) {
+        def cs:double ((parent.calculatedX + parent.box.borderWidthPx) + parent.box.paddingLeftPx)
+        def ce:double (cs + parent.calculatedInnerWidth)
+        def le:double -1.0
+        def re:double -1.0
+        def pi:int 0
+        while (pi < index) {
+            def pc:EVGElement (parent.getChild(pi))
+            if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
+                def k:int 0
+                while (k < (pc.getChildCount())) {
+                    def f:EVGElement (pc.getChild(k))
+                    def side:string ((EVGLayoutFull.cx(f)).floatSide)
+                    def ft:double (f.calculatedY - f.box.marginTopPx)
+                    def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                    if ((ft <= (top + 0.01)) && (fb > (top + 0.01))) {
+                        if (side == "left") {
+                            def edge:double ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
+                            if (edge > le) {
+                                le = edge
+                            }
+                        }
+                        if (side == "right") {
+                            def edge2:double (f.calculatedX - f.box.marginLeftPx)
+                            if ((re < 0.0) || (edge2 < re)) {
+                                re = edge2
+                            }
+                        }
+                    }
+                    k = (k + 1)
+                }
+            }
+            pi = (pi + 1)
+        }
+        if (le >= 0.0) {
+            def inL:double ((((cs + child.box.marginLeftPx) + child.box.borderWidthPx) + child.box.paddingLeftPx))
+            if (le > inL) {
+                child.box.paddingLeftPx = (child.box.paddingLeftPx + (le - inL))
+            }
+        }
+        if (re >= 0.0) {
+            def inR:double ((((ce - child.box.marginRightPx) - child.box.borderWidthPx) - child.box.paddingRightPx))
+            if (re < inR) {
+                child.box.paddingRightPx = (child.box.paddingRightPx + (inR - re))
+            }
+        }
+    }
+
     ; a box that clears (clear-floats) has its border top under the floats
     ; of the float rows before it (CSS 2.1 9.5.2)
     fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
         def child:EVGElement (parent.getChild(index))
+        if ((EVGLayoutFull.cx(child)).besideFloats == true) {
+            EVGLayoutFull.shiftBesideFloats(parent child index (currentY + child.box.marginTopPx))
+        }
         if ((EVGLayoutFull.cx(child)).clearFloats == false) {
             return 0.0
         }

@@ -510,6 +510,9 @@ class EVGLayout {
             }
             if (wt == 6) {
                 width = parentWidth
+                if (element.fitRoom >= 0.0) {
+                    width = element.fitRoom
+                }
                 if (width > mxW) {
                     width = mxW
                 }
@@ -1566,6 +1569,19 @@ class EVGLayout {
                     innerWidth = fr.w
                     innerHeight = fr.h
                 }
+                ; (fit-content fits the containing block less the insets
+                ; and margins)
+                def absRoom:double ((innerWidth - child.box.marginLeftPx) - child.box.marginRightPx)
+                if child.left.isSet {
+                    absRoom = (absRoom - child.left.pixels)
+                }
+                if child.right.isSet {
+                    absRoom = (absRoom - child.right.pixels)
+                }
+                if (absRoom < 0.0) {
+                    absRoom = 0.0
+                }
+                child.fitRoom = absRoom
                 def wasRow0:boolean layingOutAlongRow
                 def wasShrink0:boolean columnCrossShrinks
                 layingOutAlongRow = (alongRow || ((child.left.isSet && child.right.isSet) == false))
@@ -3380,7 +3396,11 @@ class EVGLayout {
         ; containing block between them. Without this the box kept its
         ; content's width and `right` was simply dropped — a bar written
         ; `left: 16; right: 16` came out as wide as its five icons.
-        if ((element.left.isSet && element.right.isSet) && (element.width.isSet == false)) {
+        ; (a min-content, max-content or fit-content width is not auto: the
+        ; box keeps it, CSS 2.1 10.3.7 with CSS Sizing 3)
+        def kwSpanW:boolean ((element.width.unitType >= 6) && (element.width.unitType <= 8))
+        def kwSpanH:boolean ((element.height.unitType >= 6) && (element.height.unitType <= 8))
+        if (((element.left.isSet && element.right.isSet) && (element.width.isSet == false)) && (kwSpanW == false)) {
             def spanW:double ((((parentWidth - element.left.pixels) - element.right.pixels) - element.box.marginLeftPx) - element.box.marginRightPx)
             ; (min-width wins over the insets, CSS 2.1 10.4)
             if ((element.minWidth.isSet && ((element.minWidth.isPercent()) == false)) && (element.minWidth.pixels > spanW)) {
@@ -3391,7 +3411,7 @@ class EVGLayout {
                 element.calculatedInnerWidth = (element.box.getInnerWidth(spanW))
             }
         }
-        if ((element.top.isSet && element.bottom.isSet) && (element.height.isSet == false)) {
+        if (((element.top.isSet && element.bottom.isSet) && (element.height.isSet == false)) && (kwSpanH == false)) {
             def spanH:double ((((parentHeight - element.top.pixels) - element.bottom.pixels) - element.box.marginTopPx) - element.box.marginBottomPx)
             if ((element.minHeight.isSet && ((element.minHeight.isPercent()) == false)) && (element.minHeight.pixels > spanH)) {
                 spanH = element.minHeight.pixels
