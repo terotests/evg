@@ -768,55 +768,8 @@ class EVGLayout {
                 width = element.minWidth.pixels
             }
         }
-        ; min-width / max-width: min-content | max-content | fit-content,
-        ; from what the box holds (CSS Sizing 3, 3.2)
-        def kxT:int element.maxWidth.unitType
-        def knT:int element.minWidth.unitType
-        def kMax:boolean ((element.maxWidth.isSet == false) && ((kxT >= 6) && (kxT <= 8)))
-        def kMin:boolean ((element.minWidth.isSet == false) && ((knT >= 6) && (knT <= 8)))
-        if (kMax || kMin) {
-            ; (its content's sizes, not its own width's)
-            def kOut:double (element.box.marginLeftPx + element.box.marginRightPx)
-            def ownW:EVGUnit element.width
-            element.width = (EVGUnit.unset())
-            def kMn:double ((this.intrinsicWidthNow(element true)) - kOut)
-            def kMx:double ((this.intrinsicWidthNow(element false)) - kOut)
-            element.width = ownW
-            if (kMx < kMn) {
-                kMx = kMn
-            }
-            def kFit:double parentWidth
-            if (kFit > kMx) {
-                kFit = kMx
-            }
-            if (kFit < kMn) {
-                kFit = kMn
-            }
-            if kMax {
-                def capW:double kFit
-                if (kxT == 7) {
-                    capW = kMn
-                }
-                if (kxT == 8) {
-                    capW = kMx
-                }
-                if (width > capW) {
-                    width = capW
-                }
-            }
-            if kMin {
-                def floorW:double kFit
-                if (knT == 7) {
-                    floorW = kMn
-                }
-                if (knT == 8) {
-                    floorW = kMx
-                }
-                if (width < floorW) {
-                    width = floorW
-                }
-            }
-        }
+        ; min-width / max-width: min-content | max-content | fit-content
+        width = (this.keywordWidth(element width parentWidth))
         
         ; A BOX HAS NO NEGATIVE SIDE. `width: -40%` is not a width — CSS throws
         ; the declaration away — and a box that keeps the number draws MIRRORED
@@ -829,6 +782,11 @@ class EVGLayout {
         }
         if (height < 0.0) {
             height = 0.0
+        }
+        ; (nor is it narrower than its padding and border, whatever its
+        ; max-width says: CSS Sizing 3, 5.1)
+        if (width < (element.box.getHorizontalChrome())) {
+            width = (element.box.getHorizontalChrome())
         }
 
         ; Store calculated dimensions (before content layout for children to reference)
@@ -2304,6 +2262,7 @@ class EVGLayout {
             
             ; Calculate child dimensions
             def availableForChild:double (innerWidth - child.box.marginLeftPx - child.box.marginRightPx)
+            child.fitRoom = availableForChild
             def childWidth:double (this.estimateChildWidth(child availableForChild ((isColumn == false) || (this.crossShrinksUnder(parent)))))
             
             ; The flex pass gets the FIRST say, because when it has run it has
@@ -2325,6 +2284,10 @@ class EVGLayout {
                         childWidth = child.width.pixels
                     }
                 }
+            }
+            ; (a min- or max-width keyword sizes the box the line takes)
+            if ((isColumn == false) && ((child.minWidth.unitType >= 6) || (child.maxWidth.unitType >= 6))) {
+                childWidth = (this.keywordWidth(child childWidth availableForChild))
             }
             ; row alignItems:stretch — a child with no explicit height fills the
             ; parent's cross (height) extent.
@@ -3153,6 +3116,21 @@ class EVGLayout {
         ; when an item is taller: CSS Flexbox 9.4 step 15)
         if ((crossBox > 0.0) && parent.height.isSet) {
             effectiveRowHeight = crossBox
+        }
+        ; (a single line in a box of no definite height is clamped by the
+        ; box's min and max height, CSS Flexbox 9.4 step 8)
+        if (((parent.flexWrap == "nowrap") && (isColumn == false)) && (parent.hasDefiniteHeight == false)) {
+            def lvch:double (parent.box.getVerticalChrome())
+            if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
+                if (effectiveRowHeight > (parent.maxHeight.pixels - lvch)) {
+                    effectiveRowHeight = (parent.maxHeight.pixels - lvch)
+                }
+            }
+            if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
+                if (effectiveRowHeight < (parent.minHeight.pixels - lvch)) {
+                    effectiveRowHeight = (parent.minHeight.pixels - lvch)
+                }
+            }
         }
 
         ; ALIGN-ITEMS: STRETCH IN A ROW WHOSE HEIGHT IS NOT KNOWN YET. The flow
@@ -6178,6 +6156,64 @@ class EVGLayout {
     ; Getting it wrong is not subtle. Shrink-wrapping unconditionally shrank
     ; the profile card's header — a column child that should fill — to the
     ; width of the two things inside it.
+    ; a width clamped by min-width / max-width of min-content, max-content
+    ; or fit-content, from what the box holds (CSS Sizing 3, 3.2); room is
+    ; what fit-content fits into when the box is not in a flex flow
+    fn keywordWidth:double (element:EVGElement w:double room:double) {
+        def width:double w
+        def kxT:int element.maxWidth.unitType
+        def knT:int element.minWidth.unitType
+        def kMax:boolean ((element.maxWidth.isSet == false) && ((kxT >= 6) && (kxT <= 8)))
+        def kMin:boolean ((element.minWidth.isSet == false) && ((knT >= 6) && (knT <= 8)))
+        if (kMax || kMin) {
+            ; (its content's sizes, not its own width's)
+            def kOut:double (element.box.marginLeftPx + element.box.marginRightPx)
+            def ownW:EVGUnit element.width
+            element.width = (EVGUnit.unset())
+            def kMn:double ((this.intrinsicWidthNow(element true)) - kOut)
+            def kMx:double ((this.intrinsicWidthNow(element false)) - kOut)
+            element.width = ownW
+            if (kMx < kMn) {
+                kMx = kMn
+            }
+            def kFit:double room
+            if (element.fitRoom >= 0.0) {
+                kFit = element.fitRoom
+            }
+            if (kFit > kMx) {
+                kFit = kMx
+            }
+            if (kFit < kMn) {
+                kFit = kMn
+            }
+            if kMax {
+                def capW:double kFit
+                if (kxT == 7) {
+                    capW = kMn
+                }
+                if (kxT == 8) {
+                    capW = kMx
+                }
+                if (width > capW) {
+                    width = capW
+                }
+            }
+            if kMin {
+                def floorW:double kFit
+                if (knT == 7) {
+                    floorW = kMn
+                }
+                if (knT == 8) {
+                    floorW = kMx
+                }
+                if (width < floorW) {
+                    width = floorW
+                }
+            }
+        }
+        return width
+    }
+
     fn estimateChildWidth:double (child:EVGElement maxInnerWidth:double alongRow:boolean) {
         ; Width used for row flow / flex pre-calc — matches layoutElement shrink-wrap
         if child.width.isSet {

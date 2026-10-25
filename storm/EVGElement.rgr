@@ -518,6 +518,9 @@ class EVGElement {
     def hasOverlayBelow:boolean false
     def overlayScanned:boolean false
     def lastParentW:double 0.0
+    ; the room a flex item has in its line, less its margins: what a
+    ; min-/max- fit-content size fits into (-1 outside a flex flow)
+    def fitRoom:double -1.0
     def lastParentH:double 0.0
     def lastFlex:boolean false
     def lastFlexW:double 0.0
@@ -3566,6 +3569,7 @@ class EVGElement {
         kidOffY = other.kidOffY
         boundsFresh = other.boundsFresh
         lastParentW = other.lastParentW
+        fitRoom = other.fitRoom
         lastParentH = other.lastParentH
         lastFlex = other.lastFlex
         lastFlexW = other.lastFlexW
