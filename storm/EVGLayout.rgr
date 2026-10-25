@@ -5707,6 +5707,20 @@ class EVGLayout {
                         }
                         ra = (ra + 1)
                     }
+                } {
+                    ; (a content-sized implicit row is no shorter than its
+                    ; minmax() min)
+                    def rb:int tplRows
+                    while (rb < rowsUsed) {
+                        def btk:EVGGridTrack (ar.trackAt((rb % (ar.count()))))
+                        if ((btk.kind != 0) && btk.hasMin) {
+                            btk.minUnit.resolveForHeight(innerHeight innerHeight parent.inheritedFontSize)
+                            if (btk.minUnit.pixels > (itemAt rowSizes rb)) {
+                                set rowSizes rb btk.minUnit.pixels
+                            }
+                        }
+                        rb = (rb + 1)
+                    }
                 }
             }
         }

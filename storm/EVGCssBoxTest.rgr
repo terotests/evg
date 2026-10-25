@@ -1106,6 +1106,28 @@ class CssBoxCheck {
         this.layoutAt(page52 300.0 600.0)
         this.ok("rows of 250px in a max-height 100px grid, unsafe end: the first at -150" (this.near((a52.calculatedY - g52.calculatedY) (0.0 - 150.0))))
 
+        ; --- 49. implicit minmax(40px, auto) rows start at 40 before they stretch ---
+        def page53 (EVGElement.createDiv())
+        page53.setAttribute("width" "300px")
+        def g53 (EVGElement.createDiv())
+        g53.setAttribute("display" "grid")
+        g53.setAttribute("width" "300px")
+        g53.setAttribute("height" "200px")
+        g53.setAttribute("align-content" "stretch")
+        g53.setAttribute("align-items" "stretch")
+        g53.setAttribute("grid-auto-rows" "minmax(40px, auto)")
+        g53.setAttribute("grid-template-areas" "\"a b\" \"c b\"")
+        def a53 (EVGElement.createDiv())
+        a53.setAttribute("grid-area" "a")
+        a53.setAttribute("height" "40px")
+        g53.addChild(a53)
+        def c53 (EVGElement.createDiv())
+        c53.setAttribute("grid-area" "c")
+        g53.addChild(c53)
+        page53.addChild(g53)
+        this.layoutAt(page53 300.0 600.0)
+        this.ok("minmax(40px, auto) rows, one with a 40px item, in 200px: 100 and 100" ((this.near((c53.calculatedY - g53.calculatedY) 100.0)) && (this.near(c53.calculatedHeight 100.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
