@@ -47,10 +47,110 @@ class EVGLayoutFull {
     ; item's, synthesized from that item's border box when it has none; a
     ; positioned box is the containing block of the absolute boxes inside
     ; whose parents are not
+    ; sticky boxes were laid out in this pass (finishElement saw one)
+    def sawSticky:boolean false
+
+    ; a sticky box keeps its insets from its scrollport's edges, the
+    ; nearest scroll container's padding box (the root's when none), at
+    ; scroll position 0, as far as its containing block lets it (CSS
+    ; Positioned Layout 3.4)
+    fn afterLayout:void (lay:EVGLayout root:EVGElement) {
+        if (sawSticky == false) {
+            return
+        }
+        sawSticky = false
+        this.stickyIn(lay root root)
+    }
+
+    fn stickyIn:void (lay:EVGLayout port:EVGElement el:EVGElement) {
+        def n:int (el.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if (!null? c.css) {
+                def sx:EVGCssExtra (EVGLayoutFull.cx(c))
+                def dx:double 0.0
+                def dy:double 0.0
+                if (sx.stickyLeft >= 0.0) {
+                    def wantX:double ((port.calculatedX + port.box.borderWidthPx) + sx.stickyLeft)
+                    if (c.calculatedX < wantX) {
+                        dx = (wantX - c.calculatedX)
+                        def roomX:double ((((el.calculatedX + el.calculatedWidth) - el.box.borderWidthPx) - el.box.paddingRightPx) - ((c.calculatedX + c.calculatedWidth) + c.box.marginRightPx))
+                        if (dx > roomX) {
+                            dx = roomX
+                        }
+                        if (dx < 0.0) {
+                            dx = 0.0
+                        }
+                    }
+                }
+                if (sx.stickyTop >= 0.0) {
+                    def wantY:double ((port.calculatedY + port.box.borderWidthPx) + sx.stickyTop)
+                    if (c.calculatedY < wantY) {
+                        dy = (wantY - c.calculatedY)
+                        def roomY:double ((((el.calculatedY + el.calculatedHeight) - el.box.borderWidthPx) - el.box.paddingBottomPx) - ((c.calculatedY + c.calculatedHeight) + c.box.marginBottomPx))
+                        if (dy > roomY) {
+                            dy = roomY
+                        }
+                        if (dy < 0.0) {
+                            dy = 0.0
+                        }
+                    }
+                }
+                if ((dx != 0.0) || (dy != 0.0)) {
+                    c.calculatedX = (c.calculatedX + dx)
+                    c.calculatedY = (c.calculatedY + dy)
+                    lay.propagateOffsetToChildren(c dx dy)
+                }
+            }
+            if ((c.clipsContent()) && (c.overflow != "clip")) {
+                this.stickyIn(lay c c)
+            } {
+                this.stickyIn(lay port c)
+            }
+            i = (i + 1)
+        }
+    }
+
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        if ((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) {
+            sawSticky = true
+        }
         if (css.floatRow && (childCount > 0)) {
             EVGLayoutFull.placeFloats(element childCount)
+        }
+        ; (a block formatting context is as tall as its floats, CSS 2.1
+        ; 10.6.7; their rows take no room in its flow)
+        if ((css.floatHolder && (childCount > 0)) && ((element.height.isSet == false) && (element.hasFlexHeight == false))) {
+            def fb:double 0.0
+            def fi:int 0
+            while (fi < childCount) {
+                def fr:EVGElement (element.getChild(fi))
+                def frx:EVGCssExtra (EVGLayoutFull.cx(fr))
+                if frx.floatRow {
+                    def fj:int 0
+                    while (fj < (fr.getChildCount())) {
+                        def fc:EVGElement (fr.getChild(fj))
+                        def fcb:double (((fc.calculatedY + fc.calculatedHeight) + fc.box.marginBottomPx) - element.calculatedY)
+                        if (fcb > fb) {
+                            fb = fcb
+                        }
+                        fj = (fj + 1)
+                    }
+                }
+                fi = (fi + 1)
+            }
+            def fh:double ((fb + element.box.paddingBottomPx) + element.box.borderWidthPx)
+            if element.maxHeight.isSet {
+                if (fh > element.maxHeight.pixels) {
+                    fh = element.maxHeight.pixels
+                }
+            }
+            if (fh > element.calculatedHeight) {
+                element.calculatedInnerHeight = (element.calculatedInnerHeight + (fh - element.calculatedHeight))
+                element.calculatedHeight = fh
+            }
         }
         ; (the rows overflow it rather than make it taller)
         if ((css.pctRowsHeight >= 0.0) && (element.hasDefiniteHeight == false)) {
@@ -564,6 +664,12 @@ class EVGLayoutFull {
     ; the lowest margin edge of the floats in a box, those of the boxes in
     ; it included (the floats of a block flow on past its end); -1 for none
     sfn floatBottom:double (el:EVGElement) {
+        return (EVGLayoutFull.floatBottomOf(el "true"))
+    }
+
+    ; the bottom of the floats under a box on a side (left, right; else
+    ; both)
+    sfn floatBottomOf:double (el:EVGElement side:string) {
         def fb:double -1.0
         def n:int (el.getChildCount())
         def isRow:boolean ((!null? el.css) && ((EVGLayoutFull.cx(el)).floatRow))
@@ -572,13 +678,19 @@ class EVGLayoutFull {
             def f:EVGElement (el.getChild(k))
             if (f.isAbsolute == false) {
                 if isRow {
+                    def fs:string ""
+                    if (!null? f.css) {
+                        def fx:EVGCssExtra (EVGLayoutFull.cx(f))
+                        fs = fx.floatSide
+                    }
+                    def onSide:boolean ((((side != "left") && (side != "right")) || ((strlen fs) == 0)) || (fs == side))
                     def b:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
-                    if (b > fb) {
+                    if ((b > fb) && onSide) {
                         fb = b
                     }
                 } {
                     if ((f.getChildCount()) > 0) {
-                        def b2:double (EVGLayoutFull.floatBottom(f))
+                        def b2:double (EVGLayoutFull.floatBottomOf(f side))
                         if (b2 > fb) {
                             fb = b2
                         }
@@ -651,12 +763,14 @@ class EVGLayoutFull {
         if ((EVGLayoutFull.cx(child)).clearFloats == false) {
             return 0.0
         }
+        def cxc:EVGCssExtra (EVGLayoutFull.cx(child))
+        def side:string cxc.clearSide
         def fb:double -1.0
         def pi:int 0
         while (pi < index) {
             def pc:EVGElement (parent.getChild(pi))
             if (pc.isAbsolute == false) {
-                def b:double (EVGLayoutFull.floatBottom(pc))
+                def b:double (EVGLayoutFull.floatBottomOf(pc side))
                 if (b > fb) {
                     fb = b
                 }

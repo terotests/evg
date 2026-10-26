@@ -243,6 +243,7 @@ class EVGLayout {
         
         ; Layout root at (0, 0)
         this.layoutElement(root 0.0 0.0 pageWidth pageHeight)
+        ext.afterLayout(this root)
 
         ; The names first: a surface may be positioned against any box in the
         ; tree, not only a sibling, and so may a connector.

@@ -88,9 +88,18 @@ class EVGCssExtra {
     ; a box that clears the floats before it (clear-floats: true): its top
     ; goes under their bottom
     def clearFloats:boolean false
+    ; (left or right: only those floats; true: both)
+    def clearSide:string ""
     ; a block in the flow right after floats (beside-floats: true): its
     ; content is moved past the floats beside its top
     def besideFloats:boolean false
+    ; a block formatting context whose float rows take no room in its flow
+    ; (float-holder: true): it is as tall as its floats reach
+    def floatHolder:boolean false
+    ; a sticky box's top / left inset (sticky-top, sticky-left: px), kept
+    ; from its scrollport's edge at scroll position 0; -1: none
+    def stickyTop:double -1.0
+    def stickyLeft:double -1.0
     def foldT:double 0.0
     def foldR:double 0.0
     def foldB:double 0.0
@@ -98,7 +107,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || (name == "beside-floats"))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || (name == "sticky-left")))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -149,11 +158,24 @@ class EVGCssExtra {
             return
         }
         if (name == "clear-floats") {
-            clearFloats = (value == "true")
+            clearFloats = ((value == "true") || ((value == "left") || (value == "right")))
+            clearSide = value
             return
         }
         if (name == "beside-floats") {
             besideFloats = (value == "true")
+            return
+        }
+        if (name == "float-holder") {
+            floatHolder = (value == "true")
+            return
+        }
+        if (name == "sticky-top") {
+            stickyTop = (?? (to_double value) -1.0)
+            return
+        }
+        if (name == "sticky-left") {
+            stickyLeft = (?? (to_double value) -1.0)
             return
         }
         if (name == "float-side") {
@@ -239,7 +261,11 @@ class EVGCssExtra {
         c.floatRow = floatRow
         c.floatSide = floatSide
         c.clearFloats = clearFloats
+        c.clearSide = clearSide
         c.besideFloats = besideFloats
+        c.floatHolder = floatHolder
+        c.stickyTop = stickyTop
+        c.stickyLeft = stickyLeft
         c.foldT = foldT
         c.foldR = foldR
         c.foldB = foldB

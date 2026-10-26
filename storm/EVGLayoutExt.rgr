@@ -113,6 +113,10 @@ class EVGLayoutExt {
         return false
     }
 
+    ; once the whole tree is laid out
+    fn afterLayout:void (lay:EVGLayout root:EVGElement) {
+    }
+
     ; a clipping box's baseline once it has one (the core leaves it)
     fn clampBaseline:void (lay:EVGLayout element:EVGElement) {
     }
