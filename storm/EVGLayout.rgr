@@ -3210,7 +3210,14 @@ class EVGLayout {
                 availableHeight = minIn
             }
         }
-        
+        ; An auto height is its content's, but it is not known yet here: the
+        ; inner height is still 0 (or a previous pass's). Centring against it
+        ; put a button's label (MfdDomView centres a button's content) half a
+        ; line ABOVE the button's top.
+        if ((parent.hasDefiniteHeight == false) && (availableHeight < contentHeight)) {
+            availableHeight = contentHeight
+        }
+
         def offsetY:double 0.0
         if (verticalAlign == "center") {
             offsetY = ((availableHeight - contentHeight) / 2.0)

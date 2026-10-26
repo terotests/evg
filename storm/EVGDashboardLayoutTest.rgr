@@ -16,6 +16,9 @@
 ;      was counted for the whole row, so the tiles stayed 100px
 ;   4. `position: absolute; inset: 0` (top and bottom) took its content's
 ;      height, also inside a `flex: 1` stage
+;   5. justify-content: center in a column of auto height (a button, its
+;      label centred) put the content half its height above the box: it was
+;      centred against the inner height before the height was known
 ; ==============================================================================
 
 Import "EVGElement.rgr"
@@ -167,6 +170,30 @@ class DashboardLayoutCheck {
         this.layoutAt(body 300.0 600.0)
         this.ok("inset: 0 fills a flex: 1 stage (530px)" ((this.near(stage.calculatedHeight 530.0)) && (this.near(slide.calculatedHeight 530.0))))
         this.ok("inset: 0 is as wide as the stage" (this.near(slide.calculatedWidth 300.0)))
+
+        ; --- 5. justify-content: center, auto height --------------------------
+        ; a 13px/1.4 label (18.2px) in a button with 3px padding and a 1px
+        ; border, in a row centring it: the label at 1 + 3 = 4px from the top
+        def hdr (EVGElement.createDiv())
+        hdr.setAttribute("width" "300px")
+        hdr.setAttribute("display" "flex")
+        hdr.setAttribute("flex-direction" "row")
+        hdr.setAttribute("flex-wrap" "nowrap")
+        hdr.setAttribute("align-items" "center")
+        hdr.addChild((this.box("40px")))
+        def btn (EVGElement.createDiv())
+        btn.setAttribute("justify-content" "center")
+        btn.setAttribute("padding" "3px 10px")
+        btn.setAttribute("border-width" "1px")
+        btn.setAttribute("border-color" "#d0d7de")
+        def lbl (EVGElement.createDiv())
+        lbl.setAttribute("width" "40px")
+        lbl.setAttribute("height" "18.2px")
+        btn.addChild(lbl)
+        hdr.addChild(btn)
+        this.layoutAt(hdr 300.0 600.0)
+        this.ok("justify-content: center, auto height: the box hugs its content (26.2px)" (this.near(btn.calculatedHeight 26.2)))
+        this.ok("justify-content: center, auto height: content 4px under the box's top" (this.near((lbl.calculatedY - btn.calculatedY) 4.0)))
 
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
