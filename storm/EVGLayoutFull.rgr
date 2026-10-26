@@ -2455,7 +2455,19 @@ class EVGLayoutFull {
             set rowSizes ri (itemAt base ri)
             if (EVGLayoutFull.pctRow(ri declared0)) {
                 def pt:EVGGridTrack (declared0.trackAt(ri))
-                set rowSizes ri ((H * pt.value) / 100.0)
+                def pv:double ((H * pt.value) / 100.0)
+                ; (a minmax() min still holds: an intrinsic one at the
+                ; row's content, a length at itself)
+                if ((pt.minIntrinsic > 0) && ((itemAt base ri) > pv)) {
+                    pv = (itemAt base ri)
+                }
+                if (pt.hasMin && ((pt.minUnit.isPercent()) == false)) {
+                    pt.minUnit.resolve(0.0 parent.inheritedFontSize)
+                    if (pt.minUnit.pixels > pv) {
+                        pv = pt.minUnit.pixels
+                    }
+                }
+                set rowSizes ri pv
             }
             ri = (ri + 1)
         }

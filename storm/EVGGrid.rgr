@@ -591,6 +591,29 @@ class EVGGridTemplate {
         }
     }
 
+    ; Percentages of an indefinite size (the grid's own intrinsic width):
+    ; a percentage min is min-content and a percentage max is max-content
+    ; (CSS Grid 7.2.1, percentage tracks of an indefinite size behave as auto)
+    fn percentsAsIntrinsic:void () {
+        def i:int 0
+        while (i < (array_length tracks)) {
+            def t:EVGGridTrack (itemAt tracks i)
+            if (t.hasMin && (t.minUnit.isPercent())) {
+                t.hasMin = false
+                t.minIntrinsic = 2
+            }
+            if (t.kind == 1) {
+                t.kind = 3
+                if (t.hasMin || (t.minIntrinsic > 0)) {
+                    t.hasMax = false
+                } {
+                    t.autoTrack = true
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
     ; Whether a track's size under a min-content (wantMin) or max-content
     ; constraint is measured from its items' min-content contributions:
     ; its base or growth limit is (CSS Grid 12.3, 12.5)
@@ -853,8 +876,9 @@ class EVGGridTemplate {
                     }
                 }
                 ; (minmax(<length>, max-content): the length is the base,
-                ; the content how far it grows)
-                if (t.hasMin && ((t.minUnit.isPercent()) == false)) {
+                ; the content how far it grows; a percentage the same once
+                ; the container's size is known)
+                if (t.hasMin && (((t.minUnit.isPercent()) == false) || (pctOf > 0.0))) {
                     base = t.minUnit.pixels
                     if (c < base) {
                         c = base

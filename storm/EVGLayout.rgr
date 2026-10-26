@@ -412,17 +412,13 @@ class EVGLayout {
                     def mOn:boolean element.maxHeight.isSet
                     element.height.isSet = (hOn && (element.height.unitType != 1))
                     element.maxHeight.isSet = (mOn && (element.maxHeight.unitType != 1))
-                    this.layoutElementNow(element parentX parentY parentWidth parentHeight)
+                    this.layoutElement(element parentX parentY parentWidth parentHeight)
                     element.height.isSet = hOn
                     element.maxHeight.isSet = mOn
                     return
                 }
             }
         }
-        this.layoutElementNow(element parentX parentY parentWidth parentHeight)
-    }
-
-    fn layoutElementNow:void (element:EVGElement parentX:double parentY:double parentWidth:double parentHeight:double) {
         ; A subtree the app keeps — see `EVGElement.keepLayout` — with the
         ; same inputs as last time is the same layout, moved: the flow
         ; reads its size and baseline off it as if it had been laid out.
@@ -591,7 +587,7 @@ class EVGLayout {
                         ; (an empty box fits to nothing but its edges)
                         ; (and so does one with only empty boxes in it)
                         def emptyBox:boolean (EVGLayout.emptyTree(element))
-                        if ((emptyBox && (element.display == "flex")) && (element.minWidth.isSet == false)) {
+                        if ((emptyBox && (element.display == "flex")) && ((element.minWidth.isSet == false) || (((element.minWidth.pixels <= 0.0) && ((element.minWidth.isPercent()) == false)) && ((element.getChildCount()) > 0)))) {
                             width = ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
                         }
                         if (intrinsic > 0.0) {
@@ -3016,6 +3012,9 @@ class EVGLayout {
                         el.calculatedInnerHeight = (el.box.getInnerHeight(target))
                         el.hasDefiniteHeight = true
                         if ((el.getChildCount()) > 0) {
+                            ; (its children's percentage heights are of the
+                            ; grown height now)
+                            EVGLayout.unresolvePct(el true false)
                             this.layoutChildren(el)
                         }
                     }
@@ -4493,7 +4492,8 @@ class EVGLayout {
                 ; of its own, CSS Sizing 3, 5.2.1)
                 def cw:boolean (c.width.isSet && ((c.width.isPercent()) == false))
                 def cmw:boolean (c.minWidth.isSet && ((c.minWidth.isPercent()) == false))
-                if ((cw || cmw) || (c.display != "flex")) {
+                ; (nor is a box an aspect-ratio gives a width to)
+                if (((cw || cmw) || (c.display != "flex")) || ((c.aspectRatio > 0.0) && (c.height.isSet && ((c.height.isPercent()) == false)))) {
                     return false
                 }
                 if ((EVGLayout.emptyTree(c)) == false) {
@@ -4736,6 +4736,9 @@ class EVGLayout {
         def nc:int (tpl.count())
         if (nc < 1) {
             return (this.intrinsicOfChildren(el wantMin))
+        }
+        if ((indexOf spec "%") >= 0) {
+            tpl.percentsAsIntrinsic()
         }
         def widths:[double]
         def defWidths:[double]
