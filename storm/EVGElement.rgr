@@ -518,6 +518,9 @@ class EVGElement {
     def hasOverlayBelow:boolean false
     def overlayScanned:boolean false
     def lastParentW:double 0.0
+    ; the room a flex item has in its line, less its margins: what a
+    ; min-/max- fit-content size fits into (-1 outside a flex flow)
+    def fitRoom:double -1.0
     def lastParentH:double 0.0
     def lastFlex:boolean false
     def lastFlexW:double 0.0
@@ -700,6 +703,9 @@ class EVGElement {
     ; rest of the row compresses.
     def flexShrink:double 1.0
     def flexBasis:EVGUnit
+    ; flex-basis: auto said in so many words: a growing item's basis is
+    ; then its content (CSS Flexbox 9.2), not 0
+    def flexBasisAuto:boolean false
     def flexDirection:string "column"
     def justifyContent:string "flex-start"
     def alignItems:string "flex-start"
@@ -3261,12 +3267,15 @@ class EVGElement {
                     flexShrink = (unwrap shrinkVal)
                 }
             }
+            flexBasisAuto = false
             if (n >= 3) {
                 flexBasis = (EVGUnit.parse((itemAt parts 2)))
+                flexBasisAuto = ((trim (itemAt parts 2)) == "auto")
             }
         } {
             ; `flex: auto` / `flex: 120px` — a basis with default grow/shrink.
             flexBasis = (EVGUnit.parse(first))
+            flexBasisAuto = (first == "auto")
             flex = 1.0
         }
     }
@@ -3478,6 +3487,7 @@ class EVGElement {
         flex = other.flex
         flexShrink = other.flexShrink
         flexBasis = other.flexBasis
+        flexBasisAuto = other.flexBasisAuto
         flexDirection = other.flexDirection
         justifyContent = other.justifyContent
         alignItems = other.alignItems
@@ -3559,6 +3569,7 @@ class EVGElement {
         kidOffY = other.kidOffY
         boundsFresh = other.boundsFresh
         lastParentW = other.lastParentW
+        fitRoom = other.fitRoom
         lastParentH = other.lastParentH
         lastFlex = other.lastFlex
         lastFlexW = other.lastFlexW
@@ -4707,6 +4718,7 @@ class EVGElement {
         }
         if ((name == "flex-basis") || (name == "flexBasis")) {
             flexBasis = (this.unitOf(name value))
+            flexBasisAuto = ((trim value) == "auto")
             return
         }
         if (name == "flex") {

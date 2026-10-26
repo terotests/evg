@@ -73,6 +73,19 @@ class EVGLayoutExt {
     }
 
     ; the room an item (css set) that starts a line takes before it
+    ; the column each child of a grid lands in, for the grid's own
+    ; intrinsic width (-1 for one out of flow); empty: the caller counts
+    ; the items along the columns itself
+    fn gridItemColumns:[int] (lay:EVGLayout el:EVGElement tpl:EVGGridTemplate) {
+        def none:[int]
+        return none
+    }
+
+    ; how far a box that clears floats goes down from currentY
+    fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
+        return 0.0
+    }
+
     fn lineStartGap:double (child:EVGElement gap:double) {
         return 0.0
     }
@@ -92,6 +105,32 @@ class EVGLayoutExt {
 
     fn synthBorder:boolean (parent:EVGElement) {
         return false
+    }
+
+    ; a column with no growing item that overflows its height: true when
+    ; its items were shrunk here, and the core leaves them
+    fn columnShrink:boolean (lay:EVGLayout parent:EVGElement innerWidth:double innerHeight:double gapTotal:double) {
+        return false
+    }
+
+    ; whether a percentage height of a height still unknown is auto (the
+    ; core has it as 0)
+    fn pctHeightAuto:boolean (lay:EVGLayout el:EVGElement) {
+        return false
+    }
+
+    ; once the whole tree is laid out
+    fn afterLayout:void (lay:EVGLayout root:EVGElement) {
+    }
+
+    ; a clipping box's baseline once it has one (the core leaves it)
+    fn clampBaseline:void (lay:EVGLayout element:EVGElement) {
+    }
+
+    ; the width a row's item with a flex basis of its own shrinks no further
+    ; than when it has no min-width (-1: nothing, as the core has it)
+    fn shrinkFloorWidth:double (lay:EVGLayout parent:EVGElement c:EVGElement) {
+        return -1.0
     }
 
     ; the last-baseline group of a row's items (align-self: last
@@ -136,6 +175,11 @@ class EVGLayoutExt {
     fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
     }
 
+    ; the content floors of plain fr rows against a definite height
+    ; (rows.frMin, frAutoMin)
+    fn gridFrRowMin:void (lay:EVGLayout rows:EVGGridTemplate items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double innerHeight:double) {
+    }
+
     ; content-sized rows grown by the items that span several
     fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
     }
@@ -147,6 +191,12 @@ class EVGLayoutExt {
 
     ; content-sized grid rows grown by their items' baseline shifts
     fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
+    }
+
+    ; each item's baseline shift in its row (none: an empty list)
+    fn gridBaselineShims:[double] (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowCount:int) {
+        def none:[double]
+        return none
     }
 
     ; an item with no baseline has it at its top, not its bottom
