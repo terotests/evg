@@ -6104,6 +6104,9 @@ class EVGLayout {
         ; bottom margin edge (baselineOffsetOf)
         def wasGTop:boolean synthTop
         synthTop = (ext.synthTop(parent))
+        ; (an item with no baseline has its border box's, CSS Align 9.1)
+        def wasGBorder:boolean synthBorder
+        synthBorder = true
         def bp:int 0
         while (bp < itemCount) {
             def bel:EVGElement (itemAt items bp)
@@ -6122,7 +6125,7 @@ class EVGLayout {
                     if (((strlen qga) == 0) || (qga == "auto")) {
                         qga = parent.alignItems
                     }
-                    if (((qga == "baseline") || (qga == "first baseline")) && ((itemAt placedRow bq) == brow)) {
+                    if ((((qga == "baseline") || (qga == "first baseline")) && ((itemAt placedRow bq) == brow)) && ((qel.marginAutoTop || qel.marginAutoBottom) == false)) {
                         done = true
                     }
                     bq = (bq + 1)
@@ -6136,7 +6139,7 @@ class EVGLayout {
                         if (((strlen kga) == 0) || (kga == "auto")) {
                             kga = parent.alignItems
                         }
-                        if (((kga == "baseline") || (kga == "first baseline")) && ((itemAt placedRow bk) == brow)) {
+                        if ((((kga == "baseline") || (kga == "first baseline")) && ((itemAt placedRow bk) == brow)) && ((kel.marginAutoTop || kel.marginAutoBottom) == false)) {
                             def kb:double (this.baselineOffsetOf(kel))
                             if (kb > maxB) {
                                 maxB = kb
@@ -6151,7 +6154,7 @@ class EVGLayout {
                         if (((strlen mga) == 0) || (mga == "auto")) {
                             mga = parent.alignItems
                         }
-                        if (((mga == "baseline") || (mga == "first baseline")) && ((itemAt placedRow bm) == brow)) {
+                        if ((((mga == "baseline") || (mga == "first baseline")) && ((itemAt placedRow bm) == brow)) && ((mel.marginAutoTop || mel.marginAutoBottom) == false)) {
                             def shiftB:double (maxB - (this.baselineOffsetOf(mel)))
                             if (shiftB != 0.0) {
                                 this.translateSubtree(mel 0.0 shiftB)
@@ -6164,6 +6167,7 @@ class EVGLayout {
             bp = (bp + 1)
         }
         synthTop = wasGTop
+        synthBorder = wasGBorder
 
         ; (align-self: last baseline is the CSS layer's)
         ext.gridLastBaselines(this parent items placedRow rowSpans rowSizes rowGapPx startY rowShift)

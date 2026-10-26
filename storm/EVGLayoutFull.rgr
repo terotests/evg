@@ -644,6 +644,8 @@ class EVGLayoutFull {
     fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
         def wasTop:boolean lay.synthTop
         lay.synthTop = (this.synthTop(parent))
+        def wasBorder:boolean lay.synthBorder
+        lay.synthBorder = true
         def above:[double]
         def below:[double]
         def r:int 0
@@ -685,11 +687,14 @@ class EVGLayoutFull {
             }
         }
         lay.synthTop = wasTop
+        lay.synthBorder = wasBorder
     }
 
     fn gridBaselineShims:[double] (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowCount:int) {
         def wasTop:boolean lay.synthTop
         lay.synthTop = (this.synthTop(parent))
+        def wasBorder:boolean lay.synthBorder
+        lay.synthBorder = true
         def above:[double]
         def r:int 0
         while (r < rowCount) {
@@ -716,6 +721,7 @@ class EVGLayoutFull {
             i = (i + 1)
         }
         lay.synthTop = wasTop
+        lay.synthBorder = wasBorder
         def shims:[double]
         def k:int 0
         while (k < (array_length items)) {
@@ -931,8 +937,9 @@ class EVGLayoutFull {
                     if ((kga2 == "last baseline") && ((((itemAt placedRow lk) + (itemAt rowSpans lk)) - 1) == lrow)) {
                         def kOuter:double ((kel2.calculatedHeight + kel2.box.marginTopPx) + kel2.box.marginBottomPx)
                         def kLb:double (this.lastBaselineOffsetOf(lay kel2))
+                        ; (none: its border box's bottom, CSS Align 9.1)
                         if (kLb < 0.0) {
-                            kLb = kOuter
+                            kLb = (kel2.box.marginTopPx + kel2.calculatedHeight)
                         }
                         if ((kOuter - kLb) > maxD) {
                             maxD = (kOuter - kLb)
@@ -951,8 +958,9 @@ class EVGLayoutFull {
                     if ((mga2 == "last baseline") && ((((itemAt placedRow lm) + (itemAt rowSpans lm)) - 1) == lrow)) {
                         def mOuter:double ((mel2.calculatedHeight + mel2.box.marginTopPx) + mel2.box.marginBottomPx)
                         def mLb:double (this.lastBaselineOffsetOf(lay mel2))
+                        ; (none: its border box's bottom, CSS Align 9.1)
                         if (mLb < 0.0) {
-                            mLb = mOuter
+                            mLb = (mel2.box.marginTopPx + mel2.calculatedHeight)
                         }
                         ; (its margin bottom edge that far above the row's end)
                         def wantBottom:double (rowEnd - (maxD - (mOuter - mLb)))

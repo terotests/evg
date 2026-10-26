@@ -1170,6 +1170,25 @@ class CssBoxCheck {
         this.layoutAt(page56 300.0 600.0)
         this.ok("baseline-from-top 4 on a 25px box: baseline 4, descent 21" ((a56.hasBaseline && (this.near(a56.calculatedBaseline 4.0))) && (this.near(a56.calculatedDescent 21.0))))
 
+        ; --- 53. grid baseline of an empty item: its border box's bottom ---
+        def page57 (EVGElement.createDiv())
+        page57.setAttribute("width" "300px")
+        def g57 (EVGElement.createDiv())
+        g57.setAttribute("display" "grid")
+        g57.setAttribute("width" "200px")
+        g57.setAttribute("grid-template-columns" "100px 100px")
+        g57.setAttribute("align-items" "baseline")
+        def a57 (EVGElement.createDiv())
+        a57.setAttribute("height" "20px")
+        g57.addChild(a57)
+        def b57 (EVGElement.createDiv())
+        b57.setAttribute("height" "10px")
+        b57.setAttribute("margin-bottom" "10px")
+        g57.addChild(b57)
+        page57.addChild(g57)
+        this.layoutAt(page57 300.0 600.0)
+        this.ok("grid baseline items of 20px and 10px + 10px margin, no text: the second 10 lower" (this.near((b57.calculatedY - g57.calculatedY) 10.0)))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
