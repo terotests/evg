@@ -977,7 +977,9 @@ class EVGLayoutFull {
             def b:double 0.0
             def mn:double 0.0
             def can:boolean false
-            if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && (c.flex <= 0.0)) {
+            ; (into a max-height, a growing item with flex-basis: auto has
+            ; its content as its basis, and shrinks like the others)
+            if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && ((c.flex <= 0.0) || (c.flexBasisAuto && lay.shrinkIntoMax))) {
                 used = ((used + c.box.marginTopPx) + c.box.marginBottomPx)
                 if c.height.isSet {
                     b = c.height.pixels

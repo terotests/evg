@@ -401,6 +401,8 @@ class EVGLayout {
     ; EXPLICIT centre or end shrinks: a container that never mentioned
     ; `align-items` keeps exactly the behaviour it has today.
     def columnCrossShrinks:boolean false
+    ; (set while a column of no height shrinks its items into its max-height)
+    def shrinkIntoMax:boolean false
 
     fn layoutElement:void (element:EVGElement parentX:double parentY:double parentWidth:double parentHeight:double) {
         ; (the CSS layer may lay out a percentage height of a height still
@@ -2074,7 +2076,7 @@ class EVGLayout {
         ; fixed-size panels this was originally written for.
         ; (a column of no height of its own shrinks its items into its
         ; max-height, where the extension does so)
-        if ((isColumn && (parent.hasDefiniteHeight == false)) && ((parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) && (parent.flexWrap == "nowrap"))) {
+        if ((isColumn && (parent.hasDefiniteHeight == false)) && ((parent.maxHeight.isSet && (((parent.maxHeight.isPercent()) == false) || (parent.maxHeight.pixels > 0.0))) && (parent.flexWrap == "nowrap"))) {
             def mxIn:double (parent.maxHeight.pixels - (parent.box.getVerticalChrome()))
             if (mxIn < 0.0) {
                 mxIn = 0.0
@@ -2094,7 +2096,9 @@ class EVGLayout {
             if (flowM > 1) {
                 gapM = ((to_double (flowM - 1)) * gapPx)
             }
+            shrinkIntoMax = true
             ext.columnShrink(this parent innerWidth mxIn gapM)
+            shrinkIntoMax = false
         }
         if (isColumn && parent.hasDefiniteHeight) {
             def fixedHeight:double 0.0
@@ -2659,6 +2663,13 @@ class EVGLayout {
             def wasShrink:boolean columnCrossShrinks
             layingOutAlongRow = (isColumn == false)
             columnCrossShrinks = (this.crossShrinksFor(parent child))
+            ; (a flexed column item's children resolve their percentage
+            ; heights against its flexed height, CSS Flexbox 9.8)
+            if (isColumn && (child.calculatedFlexHeight > 0.0)) {
+                if (EVGLayout.pctHeightKid(child)) {
+                    EVGLayout.unresolvePct(child true false)
+                }
+            }
             this.layoutElement(child child.calculatedX child.calculatedY childWidth innerHeight)
             layingOutAlongRow = wasRow
             columnCrossShrinks = wasShrink
@@ -3109,6 +3120,52 @@ class EVGLayout {
         }
     }
     
+    ; extra height shared by a column's growing items: each laid out again
+    ; at its grown height, the items after it moved down; what it took
+    fn growColumnToMin:double (parent:EVGElement extra:double) {
+        def growSum:double 0.0
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if ((c.isAbsolute == false) && (c.flex > 0.0)) {
+                growSum = (growSum + c.flex)
+            }
+            i = (i + 1)
+        }
+        if (growSum <= 0.0) {
+            return 0.0
+        }
+        def div:double (EVGLayout.flexDivisor(growSum))
+        def shiftY:double 0.0
+        i = 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if (c.isAbsolute == false) {
+                if (shiftY != 0.0) {
+                    c.calculatedY = (c.calculatedY + shiftY)
+                    this.propagateOffsetToChildren(c 0.0 shiftY)
+                }
+                if ((c.flex > 0.0) && (c.height.isSet == false)) {
+                    def oldH:double c.calculatedHeight
+                    ; (its height is not definite: its children's
+                    ; percentages stay as they were, Chromium has it so)
+                    c.calculatedFlexHeight = (EVGLayout.limitH(c (oldH + ((extra * c.flex) / div))))
+                    def wasRowG:boolean layingOutAlongRow
+                    def wasShrinkG:boolean columnCrossShrinks
+                    layingOutAlongRow = false
+                    columnCrossShrinks = (this.crossShrinksFor(parent c))
+                    this.layoutElement(c c.calculatedX c.calculatedY c.lastParentW c.lastParentH)
+                    layingOutAlongRow = wasRowG
+                    columnCrossShrinks = wasShrinkG
+                    shiftY = (shiftY + (c.calculatedHeight - oldH))
+                }
+            }
+            i = (i + 1)
+        }
+        return shiftY
+    }
+
     fn alignColumn:void (parent:EVGElement contentHeight:double startX:double startY:double innerWidth:double innerHeight:double) {
         ; Apply justifyContent (vertical) and alignItems (horizontal) alignment for column layout
         def childCount:int (parent.getChildCount())
@@ -3142,6 +3199,15 @@ class EVGLayout {
             availableHeight = contentHeight
             if (minInner > availableHeight) {
                 availableHeight = minInner
+            }
+        }
+        ; (its growing items grow into the min-height: the column's main
+        ; size is its content's clamped by it, CSS Flexbox 9.2 4)
+        if (((parent.height.isSet == false) && (parent.hasDefiniteHeight == false)) && ((parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) && (parent.flexWrap != "wrap-reverse"))) {
+            def minIn:double (parent.minHeight.pixels - (parent.box.getVerticalChrome()))
+            if (minIn > (contentHeight + 0.01)) {
+                contentHeight = (contentHeight + (this.growColumnToMin(parent (minIn - contentHeight))))
+                availableHeight = minIn
             }
         }
         
