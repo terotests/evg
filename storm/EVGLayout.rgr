@@ -6971,9 +6971,10 @@ class EVGLayout {
             return fw
         }
         if (((child.display == "flex") || (child.display == "grid")) && alongRow) {
-            ; (an empty box is as wide as its padding and border; an empty
-            ; grid is as wide as its tracks)
-            if (((child.display == "flex") && ((child.getChildCount()) == 0)) && (((strlen child.textContent) == 0) && (((strlen child.svgSource) == 0) && ((strlen child.src) == 0)))) {
+            ; (an empty box, or one with only empty boxes in it, is as wide
+            ; as its padding and border; an empty grid is as wide as its
+            ; tracks)
+            if ((child.display == "flex") && (EVGLayout.emptyTree(child))) {
                 return ((child.box.paddingLeftPx + child.box.paddingRightPx) + (child.box.borderWidthPx * 2.0))
             }
             ; (the intrinsic width is the margin box's, the width the
