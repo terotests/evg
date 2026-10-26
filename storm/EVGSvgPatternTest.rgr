@@ -1,0 +1,155 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGSvgPatternTest — <pattern> fills in imported SVG
+; ==============================================================================
+;
+; SvgParser resolves a `url(#id)` fill naming a <pattern> to an SvgPattern on
+; the item: the tile's rectangle, the matrix from pattern space to user space
+; (CTM, then patternTransform) and the tile's shapes. The display list draws
+; it as the tile's shapes once per tile over the shape's box, or, with
+; keepPatterns, as one PATH with the tile ("pt" in the JSON), which is how a
+; React Flow background of ~2000 dots stays one command. What is asserted:
+;
+;   * userSpaceOnUse and objectBoundingBox tile rectangles, patternTransform;
+;   * the colour stays unset, the tile's shapes are parsed;
+;   * the tiles over a box, and every nth when there are too many;
+;   * one command with keepPatterns, and its JSON.
+; ==============================================================================
+
+Import "SvgParser.rgr"
+Import "EVGDisplayList.rgr"
+
+class PatCheck {
+    def passed:int 0
+    def failed:int 0
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:void (name:string got:double want:double) {
+        def d:double (got - want)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        if (d > 0.001) {
+            print ("       got " + (to_string got) + " want " + (to_string want))
+        }
+        this.ok(name (d <= 0.001))
+    }
+}
+
+class EVGSvgPatternTest {
+    sfn item:SvgVectorItem (src:string) {
+        def p (new SvgParser())
+        def doc:SvgDocument (p.parse(src))
+        if ((doc.itemCount()) == 0) {
+            return (new SvgVectorItem())
+        }
+        return (itemAt doc.items 0)
+    }
+
+    ; React Flow's dotted background, as web/dom writes it
+    sfn dots:string () {
+        return "<svg viewBox=\"0 0 200 100\"><pattern id=\"p\" x=\"3\" y=\"2\" width=\"20\" height=\"20\" patternUnits=\"userSpaceOnUse\" patternTransform=\"translate(-0.5,-0.5)\"><circle cx=\"0.5\" cy=\"0.5\" r=\"0.5\" fill=\"#91919a\"/></pattern><rect x=\"0\" y=\"0\" width=\"200\" height=\"100\" fill=\"url(#p)\"/></svg>"
+    }
+
+    sfn testUserSpace:void (c:PatCheck) {
+        print ""
+        print "--- userSpaceOnUse, patternTransform ---"
+        def it:SvgVectorItem (EVGSvgPatternTest.item((EVGSvgPatternTest.dots())))
+        c.ok("a url(#id) naming a pattern is a pattern fill" (it.hasPatternFill()))
+        c.ok("…and leaves the colour unset" (it.hasFill() == false))
+        c.ok("…and is no gradient" (it.hasGradientFill() == false))
+        if (it.hasPatternFill()) {
+            def p:SvgPattern (unwrap it.fillPattern)
+            c.near("x as written" p.x 3.0)
+            c.near("y as written" p.y 2.0)
+            c.near("width" p.w 20.0)
+            c.near("height" p.h 20.0)
+            c.near("patternTransform in the matrix" p.matrix.e -0.5)
+            c.ok("the tile's shape" ((p.tile.itemCount()) == 1))
+            if ((p.tile.itemCount()) == 1) {
+                def dot:SvgVectorItem (itemAt p.tile.items 0)
+                c.ok("…with its own fill" (dot.hasFill()))
+            }
+        }
+    }
+
+    sfn testBox:void (c:PatCheck) {
+        print ""
+        print "--- objectBoundingBox ---"
+        def it:SvgVectorItem (EVGSvgPatternTest.item("<svg viewBox=\"0 0 100 100\"><defs><pattern id=\"b\" width=\"0.25\" height=\"0.5\"><rect width=\"2\" height=\"2\" fill=\"red\"/></pattern></defs><rect x=\"10\" y=\"20\" width=\"40\" height=\"60\" fill=\"url(#b)\"/></svg>"))
+        if (it.hasPatternFill()) {
+            def p:SvgPattern (unwrap it.fillPattern)
+            c.near("x at the box's left" p.x 10.0)
+            c.near("y at its top" p.y 20.0)
+            c.near("width a fraction of the box's" p.w 10.0)
+            c.near("height a fraction of the box's" p.h 30.0)
+        } {
+            c.ok("an objectBoundingBox pattern resolves" false)
+        }
+        def none:SvgVectorItem (EVGSvgPatternTest.item("<svg viewBox=\"0 0 10 10\"><pattern id=\"z\" width=\"0\" height=\"4\"><rect width=\"2\" height=\"2\"/></pattern><rect width=\"10\" height=\"10\" fill=\"url(#z)\"/></svg>"))
+        c.ok("a tile without area paints nothing" ((none.hasPatternFill() == false) && (none.hasFill() == false)))
+        def gone:SvgVectorItem (EVGSvgPatternTest.item("<svg viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" fill=\"url(#missing) green\"/></svg>"))
+        c.ok("a missing paint still falls back to its colour" (gone.hasFill()))
+    }
+
+    sfn testTiles:void (c:PatCheck) {
+        print ""
+        print "--- the display list ---"
+        def it:SvgVectorItem (EVGSvgPatternTest.item((EVGSvgPatternTest.dots())))
+        def dl (new EVGDisplayList())
+        dl.walkSvgItem(it (Matrix2D.identity()) 16 1.0 0.0 0.0 200.0 100.0)
+        ; the box 0..200 x 0..100 is 0.5..200.5 x 0.5..100.5 in pattern
+        ; space: tiles -1..10 by -1..5
+        c.ok("one dot per tile over the box" ((array_length dl.cmds) == 66))
+        if ((array_length dl.cmds) != 66) {
+            print ("       " + (to_string (array_length dl.cmds)) + " commands")
+        }
+        def few (new EVGDisplayList())
+        few.maxPatternTiles = 10
+        few.walkSvgItem(it (Matrix2D.identity()) 16 1.0 0.0 0.0 200.0 100.0)
+        c.ok("every nth tile when there are too many" (((array_length few.cmds) > 0) && ((array_length few.cmds) <= 24)))
+        def kept (new EVGDisplayList())
+        kept.keepPatterns = true
+        kept.walkSvgItem(it (Matrix2D.identity()) 16 1.0 0.0 0.0 200.0 100.0)
+        c.ok("keepPatterns: one command" ((array_length kept.cmds) == 1))
+        if ((array_length kept.cmds) == 1) {
+            def cmd:EVGDrawCmd (itemAt kept.cmds 0)
+            c.ok("…a PATH" (cmd.kind == 6))
+            c.near("…clear for a painter without patterns" cmd.a 0.0)
+            def pp:EVGPatPaint (unwrap cmd.svgPat)
+            c.ok("…with the tile's shape" ((array_length pp.cmds) == 1))
+            def json:string (EVGDisplayList.svgPatJson(cmd))
+            c.ok("JSON: the tile" ((indexOf json "\"x\":3.0000,\"y\":2.0000,\"w\":20.0000,\"h\":20.0000") == 1))
+            c.ok("JSON: the matrix" ((indexOf json "\"m\":[1.0000,0.0000,0.0000,1.0000,-0.50,-0.50]") > 0))
+            c.ok("JSON: the dot's fill" ((indexOf json "\"cmds\":[{\"k\":6,\"c\":[145,145,154,1") > 0))
+            if ((indexOf json "\"cmds\":[{\"k\":6") < 0) {
+                print ("       " + json)
+            }
+        }
+    }
+
+    sfn main:void () {
+        def c (new PatCheck())
+        print "=== EVG SVG patterns ==="
+        EVGSvgPatternTest.testUserSpace(c)
+        EVGSvgPatternTest.testBox(c)
+        EVGSvgPatternTest.testTiles(c)
+        print ""
+        print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))
+        if (c.failed > 0) {
+            print "FAILURES"
+        } {
+            print "ALL PASS"
+        }
+    }
+}

@@ -56,6 +56,14 @@ Import "SvgParser.rgr"
 ;   4 PUSH_CLIP / 5 POP_CLIP  scissor rectangle
 ;   6 PATH   filled vector outline, as flattened rings
 ;   7 STROKE stroked vector outline, as flattened rings
+; A PATH's pattern fill: the tile's rectangle, `matrix` from pattern space to
+; the page, and the tile's shapes as PATH / STROKE commands in the tile's space.
+class EVGPatPaint {
+    def pat:SvgPattern (new SvgPattern())
+    def matrix:Matrix2D (Matrix2D.identity())
+    def cmds:[EVGDrawCmd]
+}
+
 class EVGDrawCmd {
     def kind:int 0
     def x:double 0.0
@@ -114,6 +122,11 @@ class EVGDrawCmd {
     ; gradients draws. In the JSON as "gr".
     def svgGrad@(optional):SvgGradient
     def gradMatrix:Matrix2D (Matrix2D.identity())
+    ; An SVG <pattern> fill on a PATH (kind 6), when the list keeps patterns
+    ; (keepPatterns), see EVGPatPaint. The colour is clear: a painter without
+    ; patterns draws nothing there. In the JSON as "pt". One optional field,
+    ; so commands without a pattern allocate nothing for it.
+    def svgPat@(optional):EVGPatPaint
     ; `backdrop-filter: blur(Npx)` on a RECT: soften what is already painted
     ; behind this rectangle before drawing it, clipped to the rectangle and its
     ; radius. 0 is no filter.
@@ -287,6 +300,12 @@ class EVGSceneBinary {
 
 class EVGDisplayList {
     def cmds:[EVGDrawCmd]
+    ; An SVG <pattern> fill as one command with its tile (a painter that
+    ; repeats it, as evg-html.js does), not as the tiles' shapes, one set per
+    ; tile (a React Flow background: ~2000 dots). Off: every painter draws
+    ; the tiles.
+    def keepPatterns:boolean false
+    def maxPatternTiles:int 4000
     ; Attribution, off by default. On, every command records the element that
     ; emitted it — see `addCmd` and `walk`.
     def attribute:boolean false
@@ -1077,81 +1096,192 @@ class EVGDisplayList {
         def page:Matrix2D (Matrix2D.create(m.a m.b m.c m.d (m.e + x) (m.f + y)))
         def k:int 0
         while (k < (doc.itemCount())) {
-            def item:SvgVectorItem (itemAt doc.items k)
-            def parser:SVGPathParser (SVGPathParser.fromCommands(item.commands))
-            def rings:[PathRing] (parser.flattenRings(steps m.a m.b m.c m.d (m.e + x) (m.f + y)))
-            if ((array_length rings) > 0) {
-                if (item.hasGradientFill()) {
-                    def gf:SvgGradient (unwrap item.fillGradient)
-                    def avg:EVGColor (gf.averageColor())
-                    def cg (new EVGDrawCmd())
-                    cg.kind = 6
-                    cg.x = x
-                    cg.y = y
-                    cg.w = w
-                    cg.h = h
-                    cg.evenOdd = (item.fillRule == "evenodd")
-                    cg.r = (avg.red())
-                    cg.g = (avg.green())
-                    cg.b = (avg.blue())
-                    cg.a = (avg.alpha())
-                    cg.svgGrad = gf
-                    cg.gradMatrix = (page.multiply(gf.matrix))
-                    this.copyRings(cg rings)
-                    this.addCmd(cg)
-                }
-                if (item.hasGradientStroke()) {
-                    def gs:SvgGradient (unwrap item.strokeGradient)
-                    def avs:EVGColor (gs.averageColor())
-                    def cgs (new EVGDrawCmd())
-                    cgs.kind = 7
-                    cgs.x = x
-                    cgs.y = y
-                    cgs.w = w
-                    cgs.h = h
-                    cgs.thickness = (item.strokeWidth * scale)
-                    cgs.r = (avs.red())
-                    cgs.g = (avs.green())
-                    cgs.b = (avs.blue())
-                    cgs.a = (avs.alpha())
-                    cgs.svgGrad = gs
-                    cgs.gradMatrix = (page.multiply(gs.matrix))
-                    this.copyRings(cgs rings)
-                    this.addCmd(cgs)
-                }
-                if (item.hasFill()) {
-                    def cf (new EVGDrawCmd())
-                    cf.kind = 6
-                    cf.x = x
-                    cf.y = y
-                    cf.w = w
-                    cf.h = h
-                    cf.evenOdd = (item.fillRule == "evenodd")
-                    cf.r = (item.fillColor.red())
-                    cf.g = (item.fillColor.green())
-                    cf.b = (item.fillColor.blue())
-                    cf.a = (item.fillColor.alpha())
-                    this.copyRings(cf rings)
-                    this.addCmd(cf)
-                }
-                if (item.hasStroke()) {
-                    def cs (new EVGDrawCmd())
-                    cs.kind = 7
-                    cs.x = x
-                    cs.y = y
-                    cs.w = w
-                    cs.h = h
-                    cs.thickness = (item.strokeWidth * scale)
-                    cs.r = (item.strokeColor.red())
-                    cs.g = (item.strokeColor.green())
-                    cs.b = (item.strokeColor.blue())
-                    cs.a = (item.strokeColor.alpha())
-                    this.copyRings(cs rings)
-                    this.addCmd(cs)
-                }
-            }
+            this.walkSvgItem((itemAt doc.items k) page steps scale x y w h)
             k = (k + 1)
         }
+    }
+
+    ; One shape of an SVG document, `page` from its user space to the page.
+    fn walkSvgItem:void (item:SvgVectorItem page:Matrix2D steps:int scale:double x:double y:double w:double h:double) {
+        def parser:SVGPathParser (SVGPathParser.fromCommands(item.commands))
+        def rings:[PathRing] (parser.flattenRings(steps page.a page.b page.c page.d page.e page.f))
+        if ((array_length rings) == 0) {
+            return
+        }
+        if (item.hasPatternFill()) {
+            this.walkSvgPattern(item rings page steps scale x y w h)
+        }
+        if (item.hasGradientFill()) {
+            def gf:SvgGradient (unwrap item.fillGradient)
+            def avg:EVGColor (gf.averageColor())
+            def cg (new EVGDrawCmd())
+            cg.kind = 6
+            cg.x = x
+            cg.y = y
+            cg.w = w
+            cg.h = h
+            cg.evenOdd = (item.fillRule == "evenodd")
+            cg.r = (avg.red())
+            cg.g = (avg.green())
+            cg.b = (avg.blue())
+            cg.a = (avg.alpha())
+            cg.svgGrad = gf
+            cg.gradMatrix = (page.multiply(gf.matrix))
+            this.copyRings(cg rings)
+            this.addCmd(cg)
+        }
+        if (item.hasGradientStroke()) {
+            def gs:SvgGradient (unwrap item.strokeGradient)
+            def avs:EVGColor (gs.averageColor())
+            def cgs (new EVGDrawCmd())
+            cgs.kind = 7
+            cgs.x = x
+            cgs.y = y
+            cgs.w = w
+            cgs.h = h
+            cgs.thickness = (item.strokeWidth * scale)
+            cgs.r = (avs.red())
+            cgs.g = (avs.green())
+            cgs.b = (avs.blue())
+            cgs.a = (avs.alpha())
+            cgs.svgGrad = gs
+            cgs.gradMatrix = (page.multiply(gs.matrix))
+            this.copyRings(cgs rings)
+            this.addCmd(cgs)
+        }
+        if (item.hasFill()) {
+            def cf (new EVGDrawCmd())
+            cf.kind = 6
+            cf.x = x
+            cf.y = y
+            cf.w = w
+            cf.h = h
+            cf.evenOdd = (item.fillRule == "evenodd")
+            cf.r = (item.fillColor.red())
+            cf.g = (item.fillColor.green())
+            cf.b = (item.fillColor.blue())
+            cf.a = (item.fillColor.alpha())
+            this.copyRings(cf rings)
+            this.addCmd(cf)
+        }
+        if (item.hasStroke()) {
+            def cs (new EVGDrawCmd())
+            cs.kind = 7
+            cs.x = x
+            cs.y = y
+            cs.w = w
+            cs.h = h
+            cs.thickness = (item.strokeWidth * scale)
+            cs.r = (item.strokeColor.red())
+            cs.g = (item.strokeColor.green())
+            cs.b = (item.strokeColor.blue())
+            cs.a = (item.strokeColor.alpha())
+            this.copyRings(cs rings)
+            this.addCmd(cs)
+        }
+    }
+
+    ; A shape filled with a <pattern>: one command with the tile
+    ; (keepPatterns), or the tile's shapes once per tile over the shape's
+    ; box, at most about maxPatternTiles of them (every nth when more).
+    fn walkSvgPattern:void (item:SvgVectorItem rings:[PathRing] page:Matrix2D steps:int scale:double x:double y:double w:double h:double) {
+        def pat:SvgPattern (unwrap item.fillPattern)
+        def pm:Matrix2D (page.multiply(pat.matrix))
+        def det:double ((pm.a * pm.d) - (pm.b * pm.c))
+        def tscale:double (scale * (sqrt (EVGDisplayList.absOf(((pat.matrix.a * pat.matrix.d) - (pat.matrix.b * pat.matrix.c))))))
+        if (keepPatterns) {
+            def cp (new EVGDrawCmd())
+            cp.kind = 6
+            cp.x = x
+            cp.y = y
+            cp.w = w
+            cp.h = h
+            cp.evenOdd = (item.fillRule == "evenodd")
+            cp.a = 0.0
+            def pp (new EVGPatPaint())
+            pp.pat = pat
+            pp.matrix = pm
+            def tile (new EVGDisplayList())
+            def ident:Matrix2D (Matrix2D.identity())
+            def ti:int 0
+            while (ti < (pat.tile.itemCount())) {
+                tile.walkSvgItem((itemAt pat.tile.items ti) ident steps (EVGDisplayList.maxOf(tscale 1.0)) 0.0 0.0 pat.w pat.h)
+                ti = (ti + 1)
+            }
+            pp.cmds = tile.cmds
+            cp.svgPat = pp
+            this.copyRings(cp rings)
+            this.addCmd(cp)
+            return
+        }
+        if ((EVGDisplayList.absOf(det)) < 0.000000001) {
+            return
+        }
+        ; the shape's box on the page, in pattern space
+        def minX:double 0.0
+        def minY:double 0.0
+        def maxX:double 0.0
+        def maxY:double 0.0
+        def any:boolean false
+        def ri:int 0
+        while (ri < (array_length rings)) {
+            def ring:PathRing (itemAt rings ri)
+            def pi:int 0
+            while ((pi + 1) < (array_length ring.pts)) {
+                def px:double (itemAt ring.pts pi)
+                def py:double (itemAt ring.pts (pi + 1))
+                ; inverse of pm
+                def u:double ((((pm.d * (px - pm.e)) - (pm.c * (py - pm.f)))) / det)
+                def v:double ((((pm.a * (py - pm.f)) - (pm.b * (px - pm.e)))) / det)
+                if ((any == false) || (u < minX)) { minX = u }
+                if ((any == false) || (v < minY)) { minY = v }
+                if ((any == false) || (u > maxX)) { maxX = u }
+                if ((any == false) || (v > maxY)) { maxY = v }
+                any = true
+                pi = (pi + 2)
+            }
+            ri = (ri + 1)
+        }
+        if (any == false) {
+            return
+        }
+        def i0:int (floor ((minX - pat.x) / pat.w))
+        def i1:int (ceil ((maxX - pat.x) / pat.w))
+        def j0:int (floor ((minY - pat.y) / pat.h))
+        def j1:int (ceil ((maxY - pat.y) / pat.h))
+        def cells:double (to_double ((i1 - i0) * (j1 - j0)))
+        def step:int 1
+        if (cells > (to_double maxPatternTiles)) {
+            step = (ceil (sqrt (cells / (to_double maxPatternTiles))))
+        }
+        def j:int j0
+        while (j < j1) {
+            def i:int i0
+            while (i < i1) {
+                def tm:Matrix2D (pm.multiply((Matrix2D.translate((pat.x + ((to_double i) * pat.w)) (pat.y + ((to_double j) * pat.h))))))
+                def ti2:int 0
+                while (ti2 < (pat.tile.itemCount())) {
+                    this.walkSvgItem((itemAt pat.tile.items ti2) tm steps tscale x y w h)
+                    ti2 = (ti2 + 1)
+                }
+                i = (i + step)
+            }
+            j = (j + step)
+        }
+    }
+
+    sfn absOf:double (v:double) {
+        if (v < 0.0) {
+            return (0.0 - v)
+        }
+        return v
+    }
+
+    sfn maxOf:double (a:double b:double) {
+        if (a > b) {
+            return a
+        }
+        return b
     }
 
     ; Subdivision chosen from the size it is drawn at, as every other target
@@ -2562,6 +2692,57 @@ class EVGDisplayList {
         return (out + "]}")
     }
 
+    ; An SVG pattern as JSON: the tile's rectangle "x" "y" "w" "h" in
+    ; pattern space, "m" the matrix from it to the page (as svgGradJson) and
+    ; "cmds" the tile's shapes, in the tile's own space: "k" 6 (fill) or 7
+    ; (stroke, "t" its width), "c" the colour, "pts" / "ends" / "eo" as a
+    ; PATH's.
+    sfn svgPatJson:string (c:EVGDrawCmd) {
+        def pp:EVGPatPaint (unwrap c.svgPat)
+        def p:SvgPattern pp.pat
+        def m:Matrix2D pp.matrix
+        def parts:[string]
+        push parts ("{\"x\":" + (EVGDisplayList.num4(p.x)) + ",\"y\":" + (EVGDisplayList.num4(p.y)) + ",\"w\":" + (EVGDisplayList.num4(p.w)) + ",\"h\":" + (EVGDisplayList.num4(p.h)))
+        push parts (",\"m\":[" + (EVGDisplayList.num4(m.a)) + "," + (EVGDisplayList.num4(m.b)) + "," + (EVGDisplayList.num4(m.c)) + "," + (EVGDisplayList.num4(m.d)) + "," + (EVGDisplayList.num(m.e)) + "," + (EVGDisplayList.num(m.f)) + "],\"cmds\":[")
+        def i:int 0
+        while (i < (array_length pp.cmds)) {
+            def t:EVGDrawCmd (itemAt pp.cmds i)
+            if (i > 0) {
+                push parts ","
+            }
+            push parts ("{\"k\":" + (to_string t.kind) + ",\"c\":[" + (to_string t.r) + "," + (to_string t.g) + "," + (to_string t.b) + "," + (EVGDisplayList.num(t.a)) + "]")
+            if (t.kind == 7) {
+                push parts (",\"t\":" + (EVGDisplayList.num4(t.thickness)))
+            }
+            push parts ",\"pts\":["
+            def pi:int 0
+            while (pi < (array_length t.pts)) {
+                if (pi > 0) {
+                    push parts ","
+                }
+                push parts (EVGDisplayList.num4((itemAt t.pts pi)))
+                pi = (pi + 1)
+            }
+            push parts "],\"ends\":["
+            def ei:int 0
+            while (ei < (array_length t.ringEnds)) {
+                if (ei > 0) {
+                    push parts ","
+                }
+                push parts (to_string (itemAt t.ringEnds ei))
+                ei = (ei + 1)
+            }
+            push parts "]"
+            if t.evenOdd {
+                push parts ",\"eo\":1"
+            }
+            push parts "}"
+            i = (i + 1)
+        }
+        push parts "]}"
+        return (join parts "")
+    }
+
     sfn hasLinearGradient:boolean (el:EVGElement) {
         ; The RGU1 pair — `gradient-from` / `gradient-to` / `gradient-dir` — is
         ; already this list's own vocabulary: a direction and two colours, with
@@ -3882,6 +4063,9 @@ class EVGDisplayList {
             ; direction (1 = across, otherwise down) and `c2` the far stop.
             if (!null? c.svgGrad) {
                 co = co + ",\"gr\":" + (EVGDisplayList.svgGradJson((unwrap c.svgGrad) c.gradMatrix))
+            }
+            if (!null? c.svgPat) {
+                co = co + ",\"pt\":" + (EVGDisplayList.svgPatJson(c))
             }
             if c.hasGrad {
                 co = co + ",\"gd\":" + (to_string c.gradDir)

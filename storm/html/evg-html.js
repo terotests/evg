@@ -259,6 +259,21 @@ function svgGradient(g, defs, id) {
   return `url(#${id})`;
 }
 
+/**
+ * An SVG pattern from the display list ("pt" on a PATH): the tile's
+ * rectangle in pattern space, the matrix from it to the page and the tile's
+ * shapes in the tile's own space. One <pattern> in `defs` under `id`, the
+ * browser repeats it; the paint to use is returned.
+ */
+function svgPattern(p, defs, id) {
+  const m = (p.m || [1, 0, 0, 1, 0, 0]).map(n4).join(" ");
+  const body = (p.cmds || []).map((t) => t.k === 7
+    ? `<path d="${ringsPath(t, false)}" fill="none" stroke="${rgba(t.c)}" stroke-width="${n4(t.t || 1)}" stroke-linejoin="round" stroke-linecap="round"/>`
+    : `<path d="${ringsPath(t, true)}" fill="${rgba(t.c)}"${t.eo ? ` fill-rule="evenodd"` : ""}/>`).join("");
+  defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" x="${n4(p.x)}" y="${n4(p.y)}" width="${n4(p.w)}" height="${n4(p.h)}" patternTransform="matrix(${m})">${body}</pattern>`);
+  return `url(#${id})`;
+}
+
 function n4(v) {
   return Number.isFinite(v) ? String(Math.round(v * 10000) / 10000) : "0";
 }
@@ -568,7 +583,9 @@ export function renderDisplayList(target, doc, opts = {}) {
         // command's own rectangle, which is what the GL side hands its path
         // shader as a uniform; `userSpaceOnUse` is how SVG says the same.
         let pfill = rgba(c.c);
-        if (c.gr) {
+        if (c.pt) {
+          pfill = svgPattern(c.pt, defs, `evgspat${uid++}`);
+        } else if (c.gr) {
           pfill = svgGradient(c.gr, defs, `evgsgrad${uid++}`);
         } else if (c.c2) {
           const id = `evgpgrad${uid++}`;
