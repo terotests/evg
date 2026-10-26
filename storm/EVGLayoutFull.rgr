@@ -173,8 +173,8 @@ class EVGLayoutFull {
                 lay.inheritBaselineFromFirstChild(element)
             }
             if element.hasBaseline {
-                def llb:double ((this.lastBaselineOffsetOf(lay element)) - element.box.marginTopPx)
-                if (llb > element.calculatedBaseline) {
+                def llb:double (this.lastLineBaseline(element))
+                if (llb >= 0.0) {
                     element.calculatedBaseline = llb
                     element.calculatedDescent = (element.calculatedHeight - llb)
                 }
@@ -3124,6 +3124,40 @@ class EVGLayoutFull {
     ; Distance from an element's top margin edge to its LAST baseline: the
     ; last line's of a text node, else the lowest in-flow child's that has
     ; one; with none, -1 (synthesized from the bottom margin edge)
+    ; the baseline of an inline-block's last line, from its top edge: the
+    ; last in-flow child's that has one, a line's own, a flex container's or
+    ; a grid's first (they sit on a line by it), a text's last; -1 for none
+    fn lastLineBaseline:double (el:EVGElement) {
+        def n:int (el.getChildCount())
+        if (n == 0) {
+            if (el.hasBaseline && ((strlen el.textContent) > 0)) {
+                return el.calculatedLastBaseline
+            }
+            return -1.0
+        }
+        def i:int (n - 1)
+        while (i >= 0) {
+            def c:EVGElement (el.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                def cb:double -1.0
+                def atom:boolean (((EVGLayoutFull.cx(c)).flexBox && (c.display == "flex")) || (c.display == "grid"))
+                def line:boolean ((((EVGLayoutFull.cx(c)).flexBox == false) && (c.flexDirection == "row")) && (c.display != "grid"))
+                if ((atom || line) && c.hasBaseline) {
+                    cb = c.calculatedBaseline
+                } {
+                    if ((atom || line) == false) {
+                        cb = (this.lastLineBaseline(c))
+                    }
+                }
+                if (cb >= 0.0) {
+                    return ((c.calculatedY - el.calculatedY) + cb)
+                }
+            }
+            i = (i - 1)
+        }
+        return -1.0
+    }
+
     fn lastBaselineOffsetOf:double (lay:EVGLayout el:EVGElement) {
         if (!null? el.css) {
             def fx:EVGCssExtra (EVGLayoutFull.cx(el))
