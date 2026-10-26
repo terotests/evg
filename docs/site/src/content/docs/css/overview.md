@@ -89,6 +89,8 @@ sheet.applyTreeIn(root theme w h coarse)
 
 EVG does not run in a browser layout engine. `display: flex` is EVG's flex, measured with EVG's text engine. A property the engine cannot use is not dropped in silence: [`EVGReject`](https://github.com/terotests/evg/blob/master/storm/EVGReject.rgr) records it, and `layout()` drains the list into warnings.
 
-Not implemented: `calc()`, `ch`, `ex`, container queries, element selectors, `!important`, and most of CSS cascade layers.
+Not implemented in the sheet: `ch`, `ex`, container queries, element selectors, `!important`, and most of CSS cascade layers. `calc()` takes `px` and `%` terms only.
+
+A front end that lays out browser CSS (selectors, the full cascade, `display: inline`, floats) resolves the cascade itself and hands EVG computed values. See [CSS conformance](/evg/css/conformance/) for the EVGFull layer and the W3C test results.
 
 The property list is on [Properties](/evg/css/properties/). Length units are on [Units](/evg/css/units/).

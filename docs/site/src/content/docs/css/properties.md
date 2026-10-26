@@ -11,8 +11,10 @@ The source of this list is `storm/README.md` (Property reference) and `storm/SPE
 
 | Property | Notes |
 | --- | --- |
-| `width` `height` | Any [unit](/evg/css/units/). Unset = auto |
-| `min-width` `max-width` `min-height` `max-height` | Clamps, applied after the size is computed |
+| `width` `height` | Any [unit](/evg/css/units/), `min-content`, `max-content`, `fit-content`, `calc()` of `px` and `%`. Unset = auto |
+| `min-width` `max-width` `min-height` `max-height` | Clamps, applied after the size is computed. The same keywords as `width` |
+| `box-sizing` | `border-box` (default), `content-box` |
+| `aspect-ratio` | `16 / 9`, `1.5`, `auto 2 / 1`. Used when one size is auto |
 | `padding` | 1–4 values, CSS order (`all`, `v h`, `t h b`, `t r b l`) |
 | `padding-top` `padding-right` `padding-bottom` `padding-left` | Longhands |
 | `margin` and the four sides | Same shorthand |
@@ -22,35 +24,37 @@ The source of this list is `storm/README.md` (Property reference) and `storm/SPE
 | `box-shadow` | `<dx> <dy> <blur> <color>` |
 | `shadow-offset-x` `shadow-offset-y` `shadow-radius` `shadow-color` | The long form |
 | `opacity` | `0`–`1`, multiplied through the subtree |
-| `overflow` | `visible` is the default. Every other value clips the subtree and makes the box scrollable |
+| `overflow` `overflow-x` `overflow-y` | `visible` is the default. Every other value clips the subtree and makes the box scrollable |
 | `scroll-top` `scroll-left` | Where a scrollable box is scrolled to |
 
-The box model is CSS's: `padding` and `border` sit inside the declared width.
+The default box model is `box-sizing: border-box`: `padding` and `border` sit inside the declared width. `box-sizing: content-box` puts them outside.
 
 ## Layout
 
 | Property | Values |
 | --- | --- |
-| `display` | `flex`, `grid`. Anything else is block flow |
+| `display` | `flex`, `grid`, `none`. Anything else is block flow |
 | `flex-direction` | `row`, `column`. Reversed directions parse and then warn: nothing lays them out |
 | `flex-wrap` | `nowrap`, `wrap`, `wrap-reverse` |
 | `justify-content` | `flex-start`, `center`, `flex-end`, `space-between`, `space-around`, `space-evenly` |
-| `align-items` `align-content` | `flex-start`, `center`, `flex-end`, `stretch`, `baseline` |
-| `align-self` | The same set, on the item |
+| `align-items` `align-content` | `flex-start`, `center`, `flex-end`, `stretch`, `baseline`. `align-content` also takes `space-between`, `space-around`, `space-evenly` |
+| `align-self` | The same set, and `last baseline`, on the item |
+| `justify-items` `justify-self` | Grid items on the inline axis: `start`, `center`, `end`, `stretch`, `left`, `right`, `self-start`, `self-end` |
 | `flex` | The shorthand. `flex-basis` and `flex-shrink` also exist separately |
 | `gap` `row-gap` `column-gap` | Longhands override the shorthand, per axis |
-| `grid-template-columns` `grid-template-rows` | `120px 1fr 40%`, `repeat(3, 1fr)`, `minmax(40px, 1fr)`, `subgrid` |
+| `grid-template-columns` `grid-template-rows` | `120px 1fr 40%`, `repeat(3, 1fr)`, `repeat(auto-fill, …)`, `minmax(40px, 1fr)`, `fit-content(200px)`, named lines, `subgrid` |
+| `grid-auto-columns` `grid-auto-rows` | Size of implicit tracks |
 | `grid-template-areas` | A picture of names. A repeated name is one rectangle |
 | `grid-column` `grid-row` `grid-area` | Placement and spans |
-| `grid-auto-flow` | `row`, `column` |
+| `grid-auto-flow` | `row`, `column`, `dense` |
 | `direction` | `ltr`, `rtl` — set once on the root and the whole tree turns around |
-| `position` | `relative` (default), `absolute`, `fixed` |
+| `position` | `relative` (default), `absolute`, `fixed`. `static` and `sticky` are `relative` in the core; EVGFull implements sticky for CSS front ends |
 | `top` `right` `bottom` `left` | Insets. `left`/`top`/`right`/`bottom` without `position` also take the box out of flow (XML path) |
 | `vertical-align` | `baseline` participation for inline-ish content |
 | `inline` | `true` — inline-block on the XML path |
 | `line-break` | Force a break after the element (XML path) |
 
-See [Layouts](/evg/layout/overview/), [Flex](/evg/layout/flex/), and [Grid](/evg/layout/grid/).
+See [Layouts](/evg/layout/overview/), [Flex](/evg/layout/flex/), and [Grid](/evg/layout/grid/). The attributes the CSS layer reads (floats, sticky, containing blocks, baselines) are on [CSS conformance](/evg/css/conformance/).
 
 ## Paint
 
@@ -90,8 +94,22 @@ On the XML path the same strings sit in `linear-gradient="…"` and `radial-grad
 | `font-weight` | |
 | `line-height` | A number (multiplier) or a length. `normal` is the face's own line box, which is **not** 1.2 |
 | `text-align` | `left`, `center`, `right` |
+| `letter-spacing` | Extra advance after every character |
+| `white-space` | `normal` wraps, `nowrap` keeps one line. Inherited |
+| `text-overflow` | `clip` (default) or `ellipsis`, on a box that clips |
 | `line-break` | How lines may be broken |
 | `emoji-color` | Colour of fallback glyphs. Defaults to `color` |
+
+## SVG paint
+
+An `svg` element is parsed by `SvgParser` into vector items. Paint servers that a `fill` or `stroke` names with `url(#id)`:
+
+| Server | Notes |
+| --- | --- |
+| `<linearGradient>` `<radialGradient>` | Stops with `stop-color` and `stop-opacity`. The display list carries the gradient on the path (`"gr"` in the JSON) |
+| `<pattern>` | `patternUnits` `userSpaceOnUse` and `objectBoundingBox`, `patternTransform`. The display list draws the tile's shapes once per tile over the shape's box. With `keepPatterns` it writes one path that carries the tile (`"pt"` in the JSON), and `storm/html/evg-html.js` draws it as an SVG `<pattern>` |
+
+Above `maxPatternTiles` tiles the list draws only every nth tile. A dotted background of a React Flow page goes from about 2 100 commands to one with `keepPatterns`.
 
 ## Surfaces (popovers)
 
