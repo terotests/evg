@@ -26,3 +26,6 @@ storm/bin/*
 docs/site/node_modules/
 docs/site/dist/
 docs/site/.astro/
+
+# Perf gate builds (scripts/storm-perf-gate.mjs)
+tmp/

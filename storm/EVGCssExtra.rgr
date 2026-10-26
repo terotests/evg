@@ -41,12 +41,23 @@ class EVGCssExtra {
     ; or xy)
     def cbOuterX:boolean false
     def cbOuterY:boolean false
+    ; (cb-outer with s: its percentage sizes are of that block too, its
+    ; place stays where its parent put it)
+    def cbOuterSize:boolean false
+    ; a grid with percentage rows and no definite height: its content
+    ; height from the first pass, the rows sized again in it (-1: none)
+    def pctRowsHeight:double -1.0
     ; a CSS flex container (flex-box: true): its baseline is its first
     ; item's, synthesized from that item's border box when it has none
     def flexBox:boolean false
     ; a line with no text: its baseline this far above its bottom
     ; (baseline-from-bottom; -1 when not said)
     def baseFromBottom:double -1.0
+    ; (or this far under its top: baseline-from-top, a line of boxes at
+    ; its top and the strut there)
+    def baseFromTop:double -1.0
+    ; an inline-block: its baseline is its last line's (baseline-last)
+    def lastBase:boolean false
     ; border sides of unequal widths that the front end gave EVG as padding
     ; (EVG's border is one width): the padding edge is this far inside
     ; (folded-border: top right bottom left)
@@ -69,6 +80,32 @@ class EVGCssExtra {
     def synthTop:boolean false
     def flipDone:boolean false
     def flipLast:double 0.0
+    ; a row of floats (float-row: true) and its floats' sides
+    ; (float-side: left or right): laid out by the float rules of CSS 2.1
+    ; 9.5.1 instead of as wrapped flex lines
+    def floatRow:boolean false
+    def floatSide:string ""
+    ; a box that clears the floats before it (clear-floats: true): its top
+    ; goes under their bottom
+    def clearFloats:boolean false
+    ; (left or right: only those floats; true: both)
+    def clearSide:string ""
+    ; a block in the flow right after floats (beside-floats: true): its
+    ; content is moved past the floats beside its top
+    def besideFloats:boolean false
+    ; a block formatting context whose float rows take no room in its flow
+    ; (float-holder: true): it is as tall as its floats reach
+    def floatHolder:boolean false
+    ; (pct-auto: true): its percentage height is auto while its parent's
+    ; height is not known
+    def pctAuto:boolean false
+    ; (contain-w: px): the width its content counts as, size containment
+    ; (CSS Containment 3.2); -1 when its content counts
+    def containW:double -1.0
+    ; a sticky box's top / left inset (sticky-top, sticky-left: px), kept
+    ; from its scrollport's edge at scroll position 0; -1: none
+    def stickyTop:double -1.0
+    def stickyLeft:double -1.0
     def foldT:double 0.0
     def foldR:double 0.0
     def foldB:double 0.0
@@ -76,7 +113,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || (name == "baseline-synth-top")))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -111,6 +148,7 @@ class EVGCssExtra {
         if (name == "cb-outer") {
             cbOuterX = ((indexOf value "x") >= 0)
             cbOuterY = ((indexOf value "y") >= 0)
+            cbOuterSize = ((indexOf value "s") >= 0)
             return
         }
         if (name == "flex-box") {
@@ -119,6 +157,44 @@ class EVGCssExtra {
         }
         if (name == "baseline-flip") {
             flipBase = (value == "true")
+            return
+        }
+        if (name == "float-row") {
+            floatRow = (value == "true")
+            return
+        }
+        if (name == "clear-floats") {
+            clearFloats = ((value == "true") || ((value == "left") || (value == "right")))
+            clearSide = value
+            return
+        }
+        if (name == "beside-floats") {
+            besideFloats = (value == "true")
+            return
+        }
+        if (name == "pct-auto") {
+            pctAuto = (value == "true")
+        }
+        if (name == "contain-w") {
+            def cwv@(optional):double (to_double value)
+            if cwv {
+                containW = (unwrap cwv)
+            }
+        }
+        if (name == "float-holder") {
+            floatHolder = (value == "true")
+            return
+        }
+        if (name == "sticky-top") {
+            stickyTop = (?? (to_double value) -1.0)
+            return
+        }
+        if (name == "sticky-left") {
+            stickyLeft = (?? (to_double value) -1.0)
+            return
+        }
+        if (name == "float-side") {
+            floatSide = value
             return
         }
         if (name == "skip-first-baseline") {
@@ -154,6 +230,17 @@ class EVGCssExtra {
             }
             return
         }
+        if (name == "baseline-last") {
+            lastBase = (value == "true")
+            return
+        }
+        if (name == "baseline-from-top") {
+            def bft@(optional):double (str2double value)
+            if (!null? bft) {
+                baseFromTop = (unwrap bft)
+            }
+            return
+        }
     }
 
     sfn num:double (v:string) {
@@ -176,13 +263,26 @@ class EVGCssExtra {
         c.isCb = isCb
         c.cbOuterX = cbOuterX
         c.cbOuterY = cbOuterY
+        c.cbOuterSize = cbOuterSize
         c.flexBox = flexBox
         c.baseFromBottom = baseFromBottom
+        c.baseFromTop = baseFromTop
+        c.lastBase = lastBase
         c.central = central
         c.flipBase = flipBase
         c.skipFirst = skipFirst
         c.under = under
         c.synthTop = synthTop
+        c.floatRow = floatRow
+        c.floatSide = floatSide
+        c.clearFloats = clearFloats
+        c.clearSide = clearSide
+        c.besideFloats = besideFloats
+        c.floatHolder = floatHolder
+        c.pctAuto = pctAuto
+        c.containW = containW
+        c.stickyTop = stickyTop
+        c.stickyLeft = stickyLeft
         c.foldT = foldT
         c.foldR = foldR
         c.foldB = foldB

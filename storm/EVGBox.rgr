@@ -177,6 +177,20 @@ class EVGBox {
         if borderRadiusBL.isSet { borderRadiusBLPx = borderRadiusBL.pixels }
     }
 
+    ; no margin, padding, border or radius depends on the containing box
+    fn unitsFixed:boolean () {
+        if (((((marginTop.fixedPx()) && (marginRight.fixedPx())) && (marginBottom.fixedPx())) && (marginLeft.fixedPx())) == false) {
+            return false
+        }
+        if (((((paddingTop.fixedPx()) && (paddingRight.fixedPx())) && (paddingBottom.fixedPx())) && (paddingLeft.fixedPx())) == false) {
+            return false
+        }
+        if (((borderWidth.fixedPx()) && (borderRadius.fixedPx())) == false) {
+            return false
+        }
+        return ((((borderRadiusTL.fixedPx()) && (borderRadiusTR.fixedPx())) && (borderRadiusBR.fixedPx())) && (borderRadiusBL.fixedPx()))
+    }
+
     ; True when the four corners are not all the same, so a caller can keep
     ; emitting one number for the overwhelmingly common case.
     fn hasPerCornerRadius:boolean () {

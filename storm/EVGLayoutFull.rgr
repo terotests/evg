@@ -47,8 +47,120 @@ class EVGLayoutFull {
     ; item's, synthesized from that item's border box when it has none; a
     ; positioned box is the containing block of the absolute boxes inside
     ; whose parents are not
+    ; sticky boxes were laid out in this pass (finishElement saw one)
+    def sawSticky:boolean false
+
+    ; a sticky box keeps its insets from its scrollport's edges, the
+    ; nearest scroll container's padding box (the root's when none), at
+    ; scroll position 0, as far as its containing block lets it (CSS
+    ; Positioned Layout 3.4)
+    fn afterLayout:void (lay:EVGLayout root:EVGElement) {
+        if (sawSticky == false) {
+            return
+        }
+        sawSticky = false
+        this.stickyIn(lay root root)
+    }
+
+    fn stickyIn:void (lay:EVGLayout port:EVGElement el:EVGElement) {
+        def n:int (el.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if (!null? c.css) {
+                def sx:EVGCssExtra (EVGLayoutFull.cx(c))
+                def dx:double 0.0
+                def dy:double 0.0
+                if (sx.stickyLeft >= 0.0) {
+                    def wantX:double ((port.calculatedX + port.box.borderWidthPx) + sx.stickyLeft)
+                    if (c.calculatedX < wantX) {
+                        dx = (wantX - c.calculatedX)
+                        def roomX:double ((((el.calculatedX + el.calculatedWidth) - el.box.borderWidthPx) - el.box.paddingRightPx) - ((c.calculatedX + c.calculatedWidth) + c.box.marginRightPx))
+                        if (dx > roomX) {
+                            dx = roomX
+                        }
+                        if (dx < 0.0) {
+                            dx = 0.0
+                        }
+                    }
+                }
+                if (sx.stickyTop >= 0.0) {
+                    def wantY:double ((port.calculatedY + port.box.borderWidthPx) + sx.stickyTop)
+                    if (c.calculatedY < wantY) {
+                        dy = (wantY - c.calculatedY)
+                        def roomY:double ((((el.calculatedY + el.calculatedHeight) - el.box.borderWidthPx) - el.box.paddingBottomPx) - ((c.calculatedY + c.calculatedHeight) + c.box.marginBottomPx))
+                        if (dy > roomY) {
+                            dy = roomY
+                        }
+                        if (dy < 0.0) {
+                            dy = 0.0
+                        }
+                    }
+                }
+                if ((dx != 0.0) || (dy != 0.0)) {
+                    c.calculatedX = (c.calculatedX + dx)
+                    c.calculatedY = (c.calculatedY + dy)
+                    lay.propagateOffsetToChildren(c dx dy)
+                }
+            }
+            if ((c.clipsContent()) && (c.overflow != "clip")) {
+                this.stickyIn(lay c c)
+            } {
+                this.stickyIn(lay port c)
+            }
+            i = (i + 1)
+        }
+    }
+
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        if ((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) {
+            sawSticky = true
+        }
+        if (css.floatRow && (childCount > 0)) {
+            EVGLayoutFull.placeFloats(element childCount)
+        }
+        ; (a block formatting context is as tall as its floats, CSS 2.1
+        ; 10.6.7; their rows take no room in its flow)
+        if ((css.floatHolder && (childCount > 0)) && ((element.height.isSet == false) && (element.hasFlexHeight == false))) {
+            def fb:double 0.0
+            def fi:int 0
+            while (fi < childCount) {
+                def fr:EVGElement (element.getChild(fi))
+                def frx:EVGCssExtra (EVGLayoutFull.cx(fr))
+                if frx.floatRow {
+                    def fj:int 0
+                    while (fj < (fr.getChildCount())) {
+                        def fc:EVGElement (fr.getChild(fj))
+                        def fcb:double (((fc.calculatedY + fc.calculatedHeight) + fc.box.marginBottomPx) - element.calculatedY)
+                        if (fcb > fb) {
+                            fb = fcb
+                        }
+                        fj = (fj + 1)
+                    }
+                }
+                fi = (fi + 1)
+            }
+            def fh:double ((fb + element.box.paddingBottomPx) + element.box.borderWidthPx)
+            if element.maxHeight.isSet {
+                if (fh > element.maxHeight.pixels) {
+                    fh = element.maxHeight.pixels
+                }
+            }
+            if (fh > element.calculatedHeight) {
+                element.calculatedInnerHeight = (element.calculatedInnerHeight + (fh - element.calculatedHeight))
+                element.calculatedHeight = fh
+            }
+        }
+        ; (the rows overflow it rather than make it taller)
+        if ((css.pctRowsHeight >= 0.0) && (element.hasDefiniteHeight == false)) {
+            def ph:double css.pctRowsHeight
+            if (element.minHeight.isSet && (((element.minHeight.isPercent()) == false) && ((element.minHeight.pixels - (element.box.getVerticalChrome())) > ph))) {
+                ph = (element.minHeight.pixels - (element.box.getVerticalChrome()))
+            }
+            element.calculatedInnerHeight = ph
+            element.calculatedHeight = (ph + (element.box.getVerticalChrome()))
+        }
         if (css.skipFirst && (element.hasBaseline == false)) {
             def si:int 1
             while ((si < childCount) && (element.hasBaseline == false)) {
@@ -93,6 +205,46 @@ class EVGLayoutFull {
             element.calculatedDescent = css.baseFromBottom
             element.hasBaseline = true
         }
+        if ((element.hasBaseline == false) && (css.baseFromTop >= 0.0)) {
+            element.calculatedBaseline = css.baseFromTop
+            element.calculatedDescent = (element.calculatedHeight - css.baseFromTop)
+            element.hasBaseline = true
+        }
+        ; (a flex row's item of the first line in baseline alignment gives
+        ; its baseline, CSS Flexbox 8.5; else the first item, below)
+        if ((css.flexBox && (element.display == "flex")) && ((childCount > 0) && (element.flexDirection != "column"))) {
+            ; (wrap-reverse: the top line is the last, read from its end)
+            def rev:boolean (element.flexWrap == "wrap-reverse")
+            def lastX:double -1000000.0
+            if rev {
+                lastX = 1000000.0
+            }
+            def bj:int 0
+            while (bj < childCount) {
+                def bf:EVGElement (element.getChild(bj))
+                if rev {
+                    bf = (element.getChild(((childCount - 1) - bj)))
+                }
+                if ((bf.isAbsolute == false) && ((bf.isHidden()) == false)) {
+                    if (((rev == false) && (bf.calculatedX <= lastX)) || (rev && (bf.calculatedX >= lastX))) {
+                        bj = childCount
+                    } {
+                        lastX = bf.calculatedX
+                        def bfa:string bf.alignSelf
+                        if (((strlen bfa) == 0) || (bfa == "auto")) {
+                            bfa = element.alignItems
+                        }
+                        if ((((bfa == "baseline") || ((bfa == "first baseline") || (bfa == "last baseline"))) && bf.hasBaseline) && ((bf.marginAutoTop || bf.marginAutoBottom) == false)) {
+                            element.calculatedBaseline = ((bf.calculatedY - element.calculatedY) + bf.calculatedBaseline)
+                            element.calculatedDescent = bf.calculatedDescent
+                            element.hasBaseline = true
+                            bj = childCount
+                        }
+                    }
+                }
+                bj = (bj + 1)
+            }
+        }
         if ((element.hasBaseline == false) && (childCount > 0)) {
             def i:int 0
             def n:int childCount
@@ -111,6 +263,20 @@ class EVGLayoutFull {
                         i = n
                     }
                     i = (i + 1)
+                }
+            }
+        }
+        ; (an inline-block sits on the line by its last line's baseline,
+        ; CSS 2.1 10.8.1)
+        if css.lastBase {
+            if ((element.hasBaseline == false) && (childCount > 0)) {
+                lay.inheritBaselineFromFirstChild(element)
+            }
+            if element.hasBaseline {
+                def llb:double (this.lastLineBaseline(element))
+                if (llb >= 0.0) {
+                    element.calculatedBaseline = llb
+                    element.calculatedDescent = (element.calculatedHeight - llb)
                 }
             }
         }
@@ -275,29 +441,33 @@ class EVGLayoutFull {
             fixY = (fixY + crossOff)
         }
         }
-        ; (between two insets a box narrower than the room left has its
-        ; auto margins share it, CSS 2.1 10.3.7 and 10.6.4)
+        ; (between two insets the room left goes to the auto margins, CSS
+        ; 2.1 10.3.7 and 10.6.4: shared when both are auto, which down the
+        ; block axis holds when the room is negative too; across, a negative
+        ; room leaves the start margin 0)
         if ((child.left.isSet && child.right.isSet) && (child.marginAutoLeft || child.marginAutoRight)) {
             def freeX:double ((((innerWidth - child.left.pixels) - child.right.pixels) - child.calculatedWidth) - (child.box.marginLeftPx + child.box.marginRightPx))
-            if (freeX > 0.0) {
-                if (child.marginAutoLeft && child.marginAutoRight) {
+            if (child.marginAutoLeft && child.marginAutoRight) {
+                if (freeX > 0.0) {
                     fixX = (fixX + (freeX / 2.0))
                 } {
-                    if child.marginAutoLeft {
+                    if parent.resolvedRtl {
                         fixX = (fixX + freeX)
                     }
+                }
+            } {
+                if child.marginAutoLeft {
+                    fixX = (fixX + freeX)
                 }
             }
         }
         if ((child.top.isSet && child.bottom.isSet) && (child.marginAutoTop || child.marginAutoBottom)) {
             def freeY:double ((((innerHeight - child.top.pixels) - child.bottom.pixels) - child.calculatedHeight) - (child.box.marginTopPx + child.box.marginBottomPx))
-            if (freeY > 0.0) {
-                if (child.marginAutoTop && child.marginAutoBottom) {
-                    fixY = (fixY + (freeY / 2.0))
-                } {
-                    if child.marginAutoTop {
-                        fixY = (fixY + freeY)
-                    }
+            if (child.marginAutoTop && child.marginAutoBottom) {
+                fixY = (fixY + (freeY / 2.0))
+            } {
+                if child.marginAutoTop {
+                    fixY = (fixY + freeY)
                 }
             }
         }
@@ -329,6 +499,291 @@ class EVGLayoutFull {
         return staticY
     }
 
+    ; Grid item placement (CSS Grid 8.5, row flow, sparse) for the grid's
+    ; own intrinsic width: the items with both lines first, then those with
+    ; a row, then the rest by the cursor. A placement past the explicit
+    ; columns or a dense or column flow gives up (empty).
+    fn gridItemColumns:[int] (lay:EVGLayout el:EVGElement tpl:EVGGridTemplate) {
+        def none:[int]
+        if (((indexOf el.gridAutoFlow "column") >= 0) || ((indexOf el.gridAutoFlow "dense") >= 0)) {
+            return none
+        }
+        def nc:int (tpl.count())
+        def rowTpl:EVGGridTemplate (EVGGridTemplate.parse(el.gridTemplateRows))
+        def n:int (el.getChildCount())
+        def cols:[int]
+        def colSpan:[int]
+        def rows:[int]
+        def rowSpan:[int]
+        def i:int 0
+        while (i < n) {
+            def kid:EVGElement (el.getChild(i))
+            if (kid.isAbsolute || (kid.isHidden())) {
+                push cols (0 - 2)
+                push colSpan 1
+                push rows -1
+                push rowSpan 1
+            } {
+                def cp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridColumn))
+                cp.resolveNames(tpl)
+                def rp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridRow))
+                rp.resolveNames(rowTpl)
+                if ((strlen kid.gridArea) > 0) {
+                    return none
+                }
+                if ((cp.span > nc) || ((cp.start > 0) && (((cp.start - 1) + cp.span) > nc))) {
+                    return none
+                }
+                push cols (cp.start - 1)
+                push colSpan cp.span
+                push rows (rp.start - 1)
+                push rowSpan rp.span
+            }
+            i = (i + 1)
+        }
+        ; occupied cells, nc per row
+        def occ:[boolean]
+        def nRows:int 0
+        ; 1: both lines
+        i = 0
+        while (i < n) {
+            if (((itemAt cols i) >= 0) && ((itemAt rows i) >= 0)) {
+                nRows = (EVGLayoutFull.markCells(occ nRows nc (itemAt rows i) (itemAt rowSpan i) (itemAt cols i) (itemAt colSpan i)))
+            }
+            i = (i + 1)
+        }
+        ; 2: a row and no column: the first columns free in it
+        i = 0
+        while (i < n) {
+            if (((itemAt cols i) == (0 - 1)) && ((itemAt rows i) >= 0)) {
+                def c:int 0
+                def found:boolean false
+                while ((found == false) && ((c + (itemAt colSpan i)) <= nc)) {
+                    if (EVGLayoutFull.cellsFree(occ nRows nc (itemAt rows i) (itemAt rowSpan i) c (itemAt colSpan i))) {
+                        found = true
+                    } {
+                        c = (c + 1)
+                    }
+                }
+                if (found == false) {
+                    return none
+                }
+                set cols i c
+                nRows = (EVGLayoutFull.markCells(occ nRows nc (itemAt rows i) (itemAt rowSpan i) c (itemAt colSpan i)))
+            }
+            i = (i + 1)
+        }
+        ; 3: the rest by the cursor
+        def curR:int 0
+        def curC:int 0
+        i = 0
+        while (i < n) {
+            if (((itemAt rows i) == (0 - 1)) && ((itemAt cols i) != (0 - 2))) {
+                def sp:int (itemAt colSpan i)
+                def rs:int (itemAt rowSpan i)
+                if ((itemAt cols i) >= 0) {
+                    def fc:int (itemAt cols i)
+                    if (fc < curC) {
+                        curR = (curR + 1)
+                    }
+                    while ((EVGLayoutFull.cellsFree(occ nRows nc curR rs fc sp)) == false) {
+                        curR = (curR + 1)
+                    }
+                    curC = fc
+                } {
+                    def placed:boolean false
+                    while (placed == false) {
+                        if ((curC + sp) > nc) {
+                            curC = 0
+                            curR = (curR + 1)
+                        } {
+                            if (EVGLayoutFull.cellsFree(occ nRows nc curR rs curC sp)) {
+                                placed = true
+                            } {
+                                curC = (curC + 1)
+                            }
+                        }
+                    }
+                    set cols i curC
+                }
+                nRows = (EVGLayoutFull.markCells(occ nRows nc curR rs (itemAt cols i) sp))
+                curC = ((itemAt cols i) + sp)
+            }
+            i = (i + 1)
+        }
+        i = 0
+        while (i < n) {
+            if ((itemAt cols i) == (0 - 2)) {
+                set cols i (0 - 1)
+            }
+            i = (i + 1)
+        }
+        return cols
+    }
+
+    sfn cellsFree:boolean (occ:[boolean] nRows:int nc:int r:int rs:int c:int cs:int) {
+        def rr:int r
+        while (rr < (r + rs)) {
+            if (rr < nRows) {
+                def cc:int c
+                while (cc < (c + cs)) {
+                    if (itemAt occ ((rr * nc) + cc)) {
+                        return false
+                    }
+                    cc = (cc + 1)
+                }
+            }
+            rr = (rr + 1)
+        }
+        return true
+    }
+
+    ; marks the cells, growing the rows; the row count after
+    sfn markCells:int (occ:[boolean] nRows:int nc:int r:int rs:int c:int cs:int) {
+        def rows:int nRows
+        while (rows < (r + rs)) {
+            def k:int 0
+            while (k < nc) {
+                push occ false
+                k = (k + 1)
+            }
+            rows = (rows + 1)
+        }
+        def rr:int r
+        while (rr < (r + rs)) {
+            def cc:int c
+            while (cc < (c + cs)) {
+                set occ ((rr * nc) + cc) true
+                cc = (cc + 1)
+            }
+            rr = (rr + 1)
+        }
+        return rows
+    }
+
+    ; the lowest margin edge of the floats in a box, those of the boxes in
+    ; it included (the floats of a block flow on past its end); -1 for none
+    sfn floatBottom:double (el:EVGElement) {
+        return (EVGLayoutFull.floatBottomOf(el "true"))
+    }
+
+    ; the bottom of the floats under a box on a side (left, right; else
+    ; both)
+    sfn floatBottomOf:double (el:EVGElement side:string) {
+        def fb:double -1.0
+        def n:int (el.getChildCount())
+        def isRow:boolean ((!null? el.css) && ((EVGLayoutFull.cx(el)).floatRow))
+        def k:int 0
+        while (k < n) {
+            def f:EVGElement (el.getChild(k))
+            if (f.isAbsolute == false) {
+                if isRow {
+                    def fs:string ""
+                    if (!null? f.css) {
+                        def fx:EVGCssExtra (EVGLayoutFull.cx(f))
+                        fs = fx.floatSide
+                    }
+                    def onSide:boolean ((((side != "left") && (side != "right")) || ((strlen fs) == 0)) || (fs == side))
+                    def b:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                    if ((b > fb) && onSide) {
+                        fb = b
+                    }
+                } {
+                    if ((f.getChildCount()) > 0) {
+                        def b2:double (EVGLayoutFull.floatBottomOf(f side))
+                        if (b2 > fb) {
+                            fb = b2
+                        }
+                    }
+                }
+            }
+            k = (k + 1)
+        }
+        return fb
+    }
+
+    ; a block beside the floats of the float rows before it: its lines
+    ; start past the left ones and end before the right ones at its top
+    ; (CSS 2.1 9.5), taken as padding for all of its content
+    sfn shiftBesideFloats:void (parent:EVGElement child:EVGElement index:int top:double) {
+        def cs:double ((parent.calculatedX + parent.box.borderWidthPx) + parent.box.paddingLeftPx)
+        def ce:double (cs + parent.calculatedInnerWidth)
+        def le:double -1.0
+        def re:double -1.0
+        def pi:int 0
+        while (pi < index) {
+            def pc:EVGElement (parent.getChild(pi))
+            if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
+                def k:int 0
+                while (k < (pc.getChildCount())) {
+                    def f:EVGElement (pc.getChild(k))
+                    def side:string ((EVGLayoutFull.cx(f)).floatSide)
+                    def ft:double (f.calculatedY - f.box.marginTopPx)
+                    def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                    if ((ft <= (top + 0.01)) && (fb > (top + 0.01))) {
+                        if (side == "left") {
+                            def edge:double ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
+                            if (edge > le) {
+                                le = edge
+                            }
+                        }
+                        if (side == "right") {
+                            def edge2:double (f.calculatedX - f.box.marginLeftPx)
+                            if ((re < 0.0) || (edge2 < re)) {
+                                re = edge2
+                            }
+                        }
+                    }
+                    k = (k + 1)
+                }
+            }
+            pi = (pi + 1)
+        }
+        if (le >= 0.0) {
+            def inL:double ((((cs + child.box.marginLeftPx) + child.box.borderWidthPx) + child.box.paddingLeftPx))
+            if (le > inL) {
+                child.box.paddingLeftPx = (child.box.paddingLeftPx + (le - inL))
+            }
+        }
+        if (re >= 0.0) {
+            def inR:double ((((ce - child.box.marginRightPx) - child.box.borderWidthPx) - child.box.paddingRightPx))
+            if (re < inR) {
+                child.box.paddingRightPx = (child.box.paddingRightPx + (inR - re))
+            }
+        }
+    }
+
+    ; a box that clears (clear-floats) has its border top under the floats
+    ; of the float rows before it (CSS 2.1 9.5.2)
+    fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
+        def child:EVGElement (parent.getChild(index))
+        if ((EVGLayoutFull.cx(child)).besideFloats == true) {
+            EVGLayoutFull.shiftBesideFloats(parent child index (currentY + child.box.marginTopPx))
+        }
+        if ((EVGLayoutFull.cx(child)).clearFloats == false) {
+            return 0.0
+        }
+        def cxc:EVGCssExtra (EVGLayoutFull.cx(child))
+        def side:string cxc.clearSide
+        def fb:double -1.0
+        def pi:int 0
+        while (pi < index) {
+            def pc:EVGElement (parent.getChild(pi))
+            if (pc.isAbsolute == false) {
+                def b:double (EVGLayoutFull.floatBottomOf(pc side))
+                if (b > fb) {
+                    fb = b
+                }
+            }
+            pi = (pi + 1)
+        }
+        def top:double (currentY + child.box.marginTopPx)
+        if (fb > top) {
+            return (fb - top)
+        }
+        return 0.0
+    }
+
     ; an item joined to the one before (line-join) takes the gap back with
     ; its margin, so a line it starts gives that gap to it
     fn lineStartGap:double (child:EVGElement gap:double) {
@@ -352,6 +807,8 @@ class EVGLayoutFull {
     fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
         def wasTop:boolean lay.synthTop
         lay.synthTop = (this.synthTop(parent))
+        def wasBorder:boolean lay.synthBorder
+        lay.synthBorder = true
         def above:[double]
         def below:[double]
         def r:int 0
@@ -359,6 +816,15 @@ class EVGLayoutFull {
             push above 0.0
             push below 0.0
             r = (r + 1)
+        }
+        ; (and the last-baseline group of each row, by its last baselines)
+        def aboveL:[double]
+        def belowL:[double]
+        def rl:int 0
+        while (rl < (array_length rowSizes)) {
+            push aboveL 0.0
+            push belowL 0.0
+            rl = (rl + 1)
         }
         def any:boolean false
         def i:int 0
@@ -369,7 +835,8 @@ class EVGLayoutFull {
                 ga = parent.alignItems
             }
             def ri:int (itemAt placedRow i)
-            if ((((ga == "baseline") || (ga == "first baseline")) && ((itemAt rowSpans i) == 1)) && ((ri < (array_length rowSizes)) && ((it.marginAutoTop || it.marginAutoBottom) == false))) {
+            def inRow:boolean (((itemAt rowSpans i) == 1) && ((ri < (array_length rowSizes)) && ((it.marginAutoTop || it.marginAutoBottom) == false)))
+            if (((ga == "baseline") || (ga == "first baseline")) && inRow) {
                 def b:double (lay.baselineOffsetOf(it))
                 def outer:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
                 if (b > (itemAt above ri)) {
@@ -377,6 +844,17 @@ class EVGLayoutFull {
                 }
                 if ((outer - b) > (itemAt below ri)) {
                     set below ri (outer - b)
+                }
+                any = true
+            }
+            if ((ga == "last baseline") && inRow) {
+                def bl:double (this.lastBaselineOf(lay it))
+                def outerL:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+                if (bl > (itemAt aboveL ri)) {
+                    set aboveL ri bl
+                }
+                if ((outerL - bl) > (itemAt belowL ri)) {
+                    set belowL ri (outerL - bl)
                 }
                 any = true
             }
@@ -389,10 +867,84 @@ class EVGLayoutFull {
                 if (need > (itemAt rowSizes k)) {
                     set rowSizes k need
                 }
+                def needL:double ((itemAt aboveL k) + (itemAt belowL k))
+                if (needL > (itemAt rowSizes k)) {
+                    set rowSizes k needL
+                }
                 k = (k + 1)
             }
         }
         lay.synthTop = wasTop
+        lay.synthBorder = wasBorder
+    }
+
+    fn gridBaselineShims:[double] (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowCount:int) {
+        def wasTop:boolean lay.synthTop
+        lay.synthTop = (this.synthTop(parent))
+        def wasBorder:boolean lay.synthBorder
+        lay.synthBorder = true
+        def above:[double]
+        def r:int 0
+        while (r < rowCount) {
+            push above 0.0
+            r = (r + 1)
+        }
+        def belowL:[double]
+        def rl:int 0
+        while (rl < rowCount) {
+            push belowL 0.0
+            rl = (rl + 1)
+        }
+        def offs:[double]
+        def offsL:[double]
+        def i:int 0
+        while (i < (array_length items)) {
+            def it:EVGElement (itemAt items i)
+            def ga:string it.alignSelf
+            if (((strlen ga) == 0) || (ga == "auto")) {
+                ga = parent.alignItems
+            }
+            def ri:int (itemAt placedRow i)
+            def b:double -1.0
+            def bL:double -1.0
+            def inRow:boolean (((itemAt rowSpans i) == 1) && ((ri < rowCount) && ((it.marginAutoTop || it.marginAutoBottom) == false)))
+            if (((ga == "baseline") || (ga == "first baseline")) && inRow) {
+                b = (lay.baselineOffsetOf(it))
+                if (b > (itemAt above ri)) {
+                    set above ri b
+                }
+            }
+            ; (a last-baseline item's shim is under it: the group's lowest
+            ; reach below the baseline less its own)
+            if ((ga == "last baseline") && inRow) {
+                bL = (((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx) - (this.lastBaselineOf(lay it)))
+                if (bL > (itemAt belowL ri)) {
+                    set belowL ri bL
+                }
+            }
+            push offs b
+            push offsL bL
+            i = (i + 1)
+        }
+        lay.synthTop = wasTop
+        lay.synthBorder = wasBorder
+        def shims:[double]
+        def k:int 0
+        while (k < (array_length items)) {
+            def ob:double (itemAt offs k)
+            def obL:double (itemAt offsL k)
+            if (obL >= 0.0) {
+                push shims ((itemAt belowL (itemAt placedRow k)) - obL)
+            } {
+                if (ob < 0.0) {
+                    push shims 0.0
+                } {
+                    push shims ((itemAt above (itemAt placedRow k)) - ob)
+                }
+            }
+            k = (k + 1)
+        }
+        return shims
     }
 
     fn synthTop:boolean (parent:EVGElement) {
@@ -402,6 +954,171 @@ class EVGLayoutFull {
 
     fn synthBorder:boolean (parent:EVGElement) {
         return ((EVGLayoutFull.cx(parent)).heightThrough == false)
+    }
+
+    ; a CSS flex column's items shrink (CSS Flexbox 9.7), those of a height
+    ; of their own as the core shrinks them, and the ones of their
+    ; content's height too, to their min-height, or else to their content
+    ; (their automatic minimum, 4.5) unless they clip; in a scroll
+    ; container as well
+    fn columnShrink:boolean (lay:EVGLayout parent:EVGElement innerWidth:double innerHeight:double gapTotal:double) {
+        if ((EVGLayoutFull.cx(parent)).flexBox == false) {
+            return false
+        }
+        def n:int (parent.getChildCount())
+        def bases:[double]
+        def mins:[double]
+        def canS:[boolean]
+        def used:double gapTotal
+        def anyAuto:boolean false
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            def b:double 0.0
+            def mn:double 0.0
+            def can:boolean false
+            ; (into a max-height, a growing item with flex-basis: auto has
+            ; its content as its basis, and shrinks like the others)
+            if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && ((c.flex <= 0.0) || (c.flexBasisAuto && lay.shrinkIntoMax))) {
+                used = ((used + c.box.marginTopPx) + c.box.marginBottomPx)
+                if c.height.isSet {
+                    b = c.height.pixels
+                    mn = (c.box.getVerticalChrome())
+                } {
+                    ; (its content's height at the width it is laid out at)
+                    def availM:double ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx)
+                    def cw:double (lay.estimateChildWidth(c availM (lay.crossShrinksUnder(parent))))
+                    if c.hasFlexWidth {
+                        cw = c.calculatedFlexWidth
+                    } {
+                        if c.width.isSet {
+                            cw = c.width.pixels
+                            if (cw >= innerWidth) {
+                                cw = availM
+                            }
+                        }
+                    }
+                    def wasRow:boolean lay.layingOutAlongRow
+                    def wasShrink:boolean lay.columnCrossShrinks
+                    lay.layingOutAlongRow = false
+                    lay.columnCrossShrinks = (lay.crossShrinksUnder(parent))
+                    c.calculatedFlexHeight = 0.0
+                    c.hasFlexHeight = false
+                    lay.layoutElement(c 0.0 0.0 cw innerHeight)
+                    lay.layingOutAlongRow = wasRow
+                    lay.columnCrossShrinks = wasShrink
+                    b = c.calculatedHeight
+                    mn = b
+                    if (c.clipsContent()) {
+                        mn = (c.box.getVerticalChrome())
+                    }
+                    anyAuto = true
+                }
+                if c.minHeight.isSet {
+                    mn = c.minHeight.pixels
+                }
+                if (mn > b) {
+                    mn = b
+                }
+                can = ((c.flexShrink > 0.0) && (b > mn))
+                used = (used + b)
+            }
+            push bases b
+            push mins mn
+            push canS can
+            i = (i + 1)
+        }
+        if (anyAuto == false) {
+            return false
+        }
+        def over:double (used - innerHeight)
+        if (over <= 0.0) {
+            return true
+        }
+        ; (each pass freezes the items that reach their minimum)
+        def fin:[double]
+        def frozen:[boolean]
+        def k:int 0
+        while (k < n) {
+            push fin (itemAt bases k)
+            push frozen ((itemAt canS k) == false)
+            k = (k + 1)
+        }
+        ; (factors that sum to less than 1 cut that share of the overflow,
+        ; CSS Flexbox 9.7 4b)
+        def sSum:double 0.0
+        def ks:int 0
+        while (ks < n) {
+            if ((itemAt frozen ks) == false) {
+                sSum = (sSum + (parent.getChild(ks)).flexShrink)
+            }
+            ks = (ks + 1)
+        }
+        if (sSum < 1.0) {
+            over = (over * sSum)
+        }
+        def pass:int 0
+        while ((over > 0.01) && (pass <= n)) {
+            def w:double 0.0
+            def j:int 0
+            while (j < n) {
+                if ((itemAt frozen j) == false) {
+                    w = (w + ((parent.getChild(j)).flexShrink * (itemAt bases j)))
+                }
+                j = (j + 1)
+            }
+            if (w <= 0.0) {
+                break
+            }
+            def left:double over
+            def j2:int 0
+            while (j2 < n) {
+                if ((itemAt frozen j2) == false) {
+                    def c2:EVGElement (parent.getChild(j2))
+                    def want:double ((itemAt fin j2) - ((over * (c2.flexShrink * (itemAt bases j2))) / w))
+                    if (want <= (itemAt mins j2)) {
+                        want = (itemAt mins j2)
+                        set frozen j2 true
+                    }
+                    left = (left - ((itemAt fin j2) - want))
+                    set fin j2 want
+                }
+                j2 = (j2 + 1)
+            }
+            over = left
+            pass = (pass + 1)
+        }
+        def m:int 0
+        while (m < n) {
+            def c3:EVGElement (parent.getChild(m))
+            if ((itemAt fin m) < (itemAt bases m)) {
+                c3.calculatedFlexHeight = (itemAt fin m)
+                c3.hasFlexHeight = true
+            }
+            m = (m + 1)
+        }
+        return true
+    }
+
+    ; a CSS flex item's automatic minimum width (CSS Flexbox 4.5): its
+    ; content's min-content width, no more than its width when it has one;
+    ; nothing when it clips
+    fn shrinkFloorWidth:double (lay:EVGLayout parent:EVGElement c:EVGElement) {
+        if ((EVGLayoutFull.cx(parent)).flexBox == false) {
+            return -1.0
+        }
+        if (c.clipsContent()) {
+            return -1.0
+        }
+        def had:boolean c.width.isSet
+        c.width.isSet = false
+        ; (the measure is of its margin box)
+        def m:double (((lay.intrinsicWidthNow(c true)) - c.box.marginLeftPx) - c.box.marginRightPx)
+        c.width.isSet = had
+        if (had && (c.width.pixels < m)) {
+            m = c.width.pixels
+        }
+        return m
     }
 
     fn lastBaselineLine:EVGLastLine (lay:EVGLayout row:[EVGElement] align:string) {
@@ -596,8 +1313,9 @@ class EVGLayoutFull {
                     if ((kga2 == "last baseline") && ((((itemAt placedRow lk) + (itemAt rowSpans lk)) - 1) == lrow)) {
                         def kOuter:double ((kel2.calculatedHeight + kel2.box.marginTopPx) + kel2.box.marginBottomPx)
                         def kLb:double (this.lastBaselineOffsetOf(lay kel2))
+                        ; (none: its border box's bottom, CSS Align 9.1)
                         if (kLb < 0.0) {
-                            kLb = kOuter
+                            kLb = (kel2.box.marginTopPx + kel2.calculatedHeight)
                         }
                         if ((kOuter - kLb) > maxD) {
                             maxD = (kOuter - kLb)
@@ -616,8 +1334,9 @@ class EVGLayoutFull {
                     if ((mga2 == "last baseline") && ((((itemAt placedRow lm) + (itemAt rowSpans lm)) - 1) == lrow)) {
                         def mOuter:double ((mel2.calculatedHeight + mel2.box.marginTopPx) + mel2.box.marginBottomPx)
                         def mLb:double (this.lastBaselineOffsetOf(lay mel2))
+                        ; (none: its border box's bottom, CSS Align 9.1)
                         if (mLb < 0.0) {
-                            mLb = mOuter
+                            mLb = (mel2.box.marginTopPx + mel2.calculatedHeight)
                         }
                         ; (its margin bottom edge that far above the row's end)
                         def wantBottom:double (rowEnd - (maxD - (mOuter - mLb)))
@@ -727,6 +1446,12 @@ class EVGLayoutFull {
         def rowSpec:string parent.gridTemplateRows
         if ((rowSpec == "none") || (rowSpec == "subgrid")) {
             rowSpec = ""
+        }
+        ; (auto repeats count as many rows as the core expands them to)
+        if ((indexOf rowSpec "auto-f") >= 0) {
+            def rlay (new EVGLayout())
+            def rgaps:[double] (rlay.gridGaps(parent parent.calculatedInnerWidth parent.calculatedInnerHeight))
+            rowSpec = (rlay.gridRowRepeat(parent rowSpec parent.calculatedInnerHeight (itemAt rgaps 1)))
         }
         def rowTpl:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
         def nRows:int (rowTpl.count())
@@ -857,6 +1582,1352 @@ class EVGLayoutFull {
         }
     }
 
+    ; items spanning several columns, the narrower spans first: what they
+    ; need beyond their tracks' sizes is shared evenly by the intrinsic
+    ; tracks they cross; an item crossing an fr or percent track is left
+    ; to the fr step
+    ; A `1fr` column is minmax(auto, 1fr): no narrower than the min-content
+    ; of the items in it alone, unless they clip (CSS Grid 6.6), and a
+    ; column that floor holds no longer flexes (12.7.1); minmax(min-content
+    ; or max-content, fr) the same with that content
+    fn gridFrMin:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int]) {
+        def nc:int (cols.count())
+        def any:boolean false
+        def t0:int 0
+        while (t0 < nc) {
+            def tk:EVGGridTrack (cols.trackAt(t0))
+            if ((tk.kind == 2) && (tk.hasMin == false)) {
+                any = true
+            }
+            push cols.frMin 0.0
+            t0 = (t0 + 1)
+        }
+        if (any == false) {
+            return
+        }
+        cols.frAutoMin = true
+        for items it:EVGElement k {
+            def c:int (itemAt placedCol k)
+            if (((itemAt colSpans k) == 1) && (c < nc)) {
+                def tk2:EVGGridTrack (cols.trackAt(c))
+                if (((tk2.kind == 2) && (tk2.hasMin == false)) && ((it.overflow == "visible") || (tk2.minIntrinsic > 1))) {
+                    ; (minmax(max-content, fr): its items' max-content)
+                    def m:double 0.0
+                    if (tk2.minIntrinsic == 3) {
+                        m = (lay.intrinsicWidthOf(it))
+                    } {
+                        m = (lay.minIntrinsicWidthOf(it))
+                    }
+                    if (m > (itemAt cols.frMin c)) {
+                        set cols.frMin c m
+                    }
+                }
+            }
+        }
+    }
+
+    ; A `1fr` row is minmax(auto, 1fr) too: no shorter than the items in
+    ; it alone, laid out at their columns' width, unless they clip
+    fn gridFrRowMin:void (lay:EVGLayout rows:EVGGridTemplate items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double innerHeight:double) {
+        def nr:int (rows.count())
+        def any:boolean false
+        def t0:int 0
+        while (t0 < nr) {
+            def tk:EVGGridTrack (rows.trackAt(t0))
+            if ((tk.kind == 2) && (tk.hasMin == false)) {
+                any = true
+            }
+            push rows.frMin 0.0
+            t0 = (t0 + 1)
+        }
+        if (any == false) {
+            return
+        }
+        rows.frAutoMin = true
+        for items it:EVGElement k {
+            def r:int (itemAt placedRow k)
+            if ((((itemAt rowSpans k) == 1) && (r < nr)) && (it.gridTemplateRows != "subgrid")) {
+                def tk2:EVGGridTrack (rows.trackAt(r))
+                if (((tk2.kind == 2) && (tk2.hasMin == false)) && ((it.overflow == "visible") || (tk2.minIntrinsic > 1))) {
+                    def w:double (cols.extentOf((itemAt placedCol k) (itemAt colSpans k) colGap))
+                    it.calculatedFlexHeight = 0.0
+                    it.unitsResolved = false
+                    it.resolveUnits(w innerHeight)
+                    def pct:boolean (it.height.isSet && (it.height.isPercent()))
+                    if pct {
+                        it.height.isSet = false
+                    }
+                    lay.layoutElement(it 0.0 0.0 ((w - it.box.marginLeftPx) - it.box.marginRightPx) 0.0)
+                    if pct {
+                        it.height.isSet = true
+                    }
+                    def h:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+                    if (h > (itemAt rows.frMin r)) {
+                        set rows.frMin r h
+                    }
+                }
+            }
+        }
+    }
+
+    ; Floats by CSS 2.1 9.5.1: each as high as it fits, no higher than the
+    ; one before it, a left one as far left and a right one as far right
+    ; as the floats beside it allow; the row is as tall as its floats
+    ; unless it is given a height. A row holding anything but floats
+    ; keeps its flex lines.
+    sfn placeFloats:void (row:EVGElement childCount:int) {
+        def i:int 0
+        while (i < childCount) {
+            def c:EVGElement (row.getChild(i))
+            if (c.isAbsolute == false) {
+                def fs:string ((EVGLayoutFull.cx(c)).floatSide)
+                if ((fs != "left") && (fs != "right")) {
+                    return
+                }
+            }
+            i = (i + 1)
+        }
+        def sx:double ((row.calculatedX + row.box.borderWidthPx) + row.box.paddingLeftPx)
+        def sy:double ((row.calculatedY + row.box.borderWidthPx) + row.box.paddingTopPx)
+        def W:double row.calculatedInnerWidth
+        def fx:[double]
+        def fy:[double]
+        def fw:[double]
+        def fh:[double]
+        def fr:[boolean]
+        def minTop:double 0.0
+        def bottom:double 0.0
+        i = 0
+        while (i < childCount) {
+            def c2:EVGElement (row.getChild(i))
+            if (c2.isAbsolute == false) {
+                def right:boolean (((EVGLayoutFull.cx(c2)).floatSide) == "right")
+                ; (an auto margin is nothing on a float)
+                def ml:double c2.box.marginLeftPx
+                if c2.marginAutoLeft {
+                    ml = 0.0
+                }
+                def ow:double ((c2.calculatedWidth + ml) + c2.box.marginRightPx)
+                def oh:double ((c2.calculatedHeight + c2.box.marginTopPx) + c2.box.marginBottomPx)
+                def y:double minTop
+                ; (a float that clears goes under the earlier floats of
+                ; that side, CSS 2.1 9.5.2)
+                def cxc:EVGCssExtra (EVGLayoutFull.cx(c2))
+                if cxc.clearFloats {
+                    def cj:int 0
+                    while (cj < (array_length fx)) {
+                        def cside:boolean ((cxc.clearSide == "true") || ((cxc.clearSide == "right") == (itemAt fr cj)))
+                        if (cside && (((itemAt fy cj) + (itemAt fh cj)) > y)) {
+                            y = ((itemAt fy cj) + (itemAt fh cj))
+                        }
+                        cj = (cj + 1)
+                    }
+                }
+                def x:double 0.0
+                def found:boolean false
+                def guard:int 0
+                while ((found == false) && (guard <= (array_length fx))) {
+                    def le:double 0.0
+                    def re:double W
+                    def any:boolean false
+                    def nextY:double -1.0
+                    def band:double oh
+                    if (band < 0.01) {
+                        band = 0.01
+                    }
+                    def j:int 0
+                    while (j < (array_length fx)) {
+                        def top:double (itemAt fy j)
+                        def bot:double (top + (itemAt fh j))
+                        if ((top < (y + band)) && (bot > y)) {
+                            any = true
+                            if (itemAt fr j) {
+                                if ((itemAt fx j) < re) {
+                                    re = (itemAt fx j)
+                                }
+                            } {
+                                def edge:double ((itemAt fx j) + (itemAt fw j))
+                                if (edge > le) {
+                                    le = edge
+                                }
+                            }
+                            if ((nextY < 0.0) || (bot < nextY)) {
+                                nextY = bot
+                            }
+                        }
+                        j = (j + 1)
+                    }
+                    if ((any == false) || ((re - le) >= (ow - 0.01))) {
+                        found = true
+                        if right {
+                            x = (re - ow)
+                        } {
+                            x = le
+                        }
+                    } {
+                        y = nextY
+                    }
+                    guard = (guard + 1)
+                }
+                if (found == false) {
+                    x = 0.0
+                    if right {
+                        x = (W - ow)
+                    }
+                }
+                push fx x
+                push fy y
+                push fw ow
+                push fh oh
+                push fr right
+                minTop = y
+                if ((y + oh) > bottom) {
+                    bottom = (y + oh)
+                }
+                def dx:double (((sx + x) + ml) - c2.calculatedX)
+                def dy:double (((sy + y) + c2.box.marginTopPx) - c2.calculatedY)
+                if ((dx != 0.0) || (dy != 0.0)) {
+                    c2.moveSubtree(dx dy)
+                }
+            }
+            i = (i + 1)
+        }
+        if (row.height.isSet == false) {
+            row.calculatedInnerHeight = bottom
+            row.calculatedHeight = (bottom + (row.box.getVerticalChrome()))
+        }
+    }
+
+    ; minmax(<length>, ...): a track whose base is a length
+    sfn fixedMinTrack:boolean (t:EVGGridTrack) {
+        return (t.hasMin && ((t.minUnit.isPercent()) == false))
+    }
+
+    ; Items spanning several columns, the narrower spans first (CSS Grid
+    ; 12.5.3): each track has a base size and a growth limit, which the
+    ; items' min-content and max-content contributions raise in four
+    ; steps. The results go back into minContent / content in the form
+    ; resolveWithContent reads them for each kind of track.
+    fn gridSpanContent:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] colSpans:[int] content:[double] minContent:[double] gap:double) {
+        def nc:int (cols.count())
+        def maxSpan:int 1
+        for colSpans sp0:int si0 {
+            if (sp0 > maxSpan) {
+                maxSpan = sp0
+            }
+        }
+        if (maxSpan < 2) {
+            return
+        }
+        ; per track: min type (0 fixed, 1 auto, 2 min-content, 3 max-content),
+        ; max type (0 fixed, 1 auto, 2 min-content, 3 max-content,
+        ; 4 fit-content), base B, limit G and whether G is still infinite
+        def minT:[int]
+        def maxT:[int]
+        def B:[double]
+        def G:[double]
+        def inf:[int]
+        def grow:[int]
+        def fitL:[double]
+        def hasOne:[int]
+        def i:int 0
+        while (i < nc) {
+            push hasOne 0
+            i = (i + 1)
+        }
+        def k0:int 0
+        while (k0 < (array_length items)) {
+            if ((itemAt colSpans k0) == 1) {
+                def pc:int (itemAt placedCol k0)
+                if (pc < nc) {
+                    set hasOne pc 1
+                }
+            }
+            k0 = (k0 + 1)
+        }
+        i = 0
+        while (i < nc) {
+            def t:EVGGridTrack (cols.trackAt(i))
+            def mc:double 0.0
+            def xc:double 0.0
+            if (i < (array_length minContent)) {
+                mc = (itemAt minContent i)
+            }
+            if (i < (array_length content)) {
+                xc = (itemAt content i)
+            }
+            def mn:int 0
+            def mx:int 0
+            def b:double 0.0
+            def g:double 0.0
+            def fl:double 0.0
+            if (t.kind == 0) {
+                mn = t.minIntrinsic
+                g = t.value
+                if (mn == 1) {
+                    if (i < (array_length cols.definiteMin)) {
+                        b = (itemAt cols.definiteMin i)
+                    }
+                }
+                if (mn == 2) {
+                    b = mc
+                }
+                if (mn == 3) {
+                    b = xc
+                }
+                if (mn == 0) {
+                    b = g
+                }
+            }
+            if (t.kind == 3) {
+                mx = 3
+                if t.autoTrack {
+                    mx = 1
+                }
+                if t.minContentTrack {
+                    mx = 2
+                }
+                if t.hasFitLimit {
+                    mx = 4
+                    t.fitLimit.resolve(0.0 16.0)
+                    fl = t.fitLimit.pixels
+                }
+                if (EVGLayoutFull.fixedMinTrack(t)) {
+                    mn = 0
+                    t.minUnit.resolve(0.0 16.0)
+                    b = t.minUnit.pixels
+                } {
+                    if (t.minIntrinsic > 0) {
+                        mn = t.minIntrinsic
+                    } {
+                        mn = 3
+                        if ((mx == 1) || (mx == 4)) {
+                            mn = 1
+                        }
+                        if (mx == 2) {
+                            mn = 2
+                        }
+                    }
+                    if (mn == 3) {
+                        b = xc
+                    } {
+                        b = mc
+                    }
+                }
+                g = xc
+                if (mx == 2) {
+                    g = mc
+                }
+                if ((mx == 4) && (g > fl)) {
+                    g = fl
+                    if (g < mc) {
+                        g = mc
+                    }
+                }
+                if (g < b) {
+                    g = b
+                }
+            }
+            push minT mn
+            push maxT mx
+            push B b
+            push G g
+            push fitL fl
+            push grow 0
+            ; (no item of its own: an infinite limit; the grid's own
+            ; intrinsic width passes only the spanning items, so a measured
+            ; track counts as having some)
+            if (((t.kind == 3) && ((itemAt hasOne i) == 0)) && ((xc <= 0.0) && (mc <= 0.0))) {
+                push inf 1
+            } {
+                push inf 0
+            }
+            i = (i + 1)
+        }
+        def span:int 2
+        while (span <= maxSpan) {
+            ; the span's items, those that cross no fr or percentage track
+            def group:[int]
+            def k:int 0
+            while (k < (array_length items)) {
+                def c0:int (itemAt placedCol k)
+                if (((itemAt colSpans k) == span) && ((c0 + span) <= nc)) {
+                    def ok:boolean true
+                    def t1:int c0
+                    while (t1 < (c0 + span)) {
+                        def tk:EVGGridTrack (cols.trackAt(t1))
+                        if ((tk.kind == 2) || (tk.kind == 1)) {
+                            ok = false
+                        }
+                        t1 = (t1 + 1)
+                    }
+                    if ok {
+                        push group k
+                    }
+                }
+                k = (k + 1)
+            }
+            if ((array_length group) > 0) {
+                ; 1: intrinsic minimums, min-content contributions
+                this.spanStep(lay cols items placedCol group span gap 1 minT maxT B G inf grow fitL)
+                ; 3: max-content minimums
+                this.spanStep(lay cols items placedCol group span gap 3 minT maxT B G inf grow fitL)
+                def q:int 0
+                while (q < nc) {
+                    if (((itemAt inf q) == 0) && ((itemAt G q) < (itemAt B q))) {
+                        set G q (itemAt B q)
+                    }
+                    q = (q + 1)
+                }
+                ; 5 and 6: intrinsic and max-content maximums
+                this.spanStep(lay cols items placedCol group span gap 5 minT maxT B G inf grow fitL)
+                this.spanStep(lay cols items placedCol group span gap 6 minT maxT B G inf grow fitL)
+            }
+            span = (span + 1)
+        }
+        ; back into the arrays resolveWithContent reads
+        i = 0
+        while (i < nc) {
+            def t9:EVGGridTrack (cols.trackAt(i))
+            def b9:double (itemAt B i)
+            def g9:double (itemAt G i)
+            if ((itemAt inf i) == 1) {
+                g9 = b9
+            }
+            if (t9.kind == 0) {
+                if (t9.minIntrinsic == 1) {
+                    if (i < (array_length cols.definiteMin)) {
+                        set cols.definiteMin i b9
+                    }
+                }
+                if (t9.minIntrinsic == 2) {
+                    set minContent i b9
+                }
+                if (t9.minIntrinsic == 3) {
+                    set content i b9
+                }
+            }
+            if (t9.kind == 3) {
+                if t9.minContentTrack {
+                    set minContent i g9
+                    set content i g9
+                } {
+                    set content i g9
+                    set minContent i b9
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
+    ; one step of 12.5.3 for a group of items of one span: step 1 the
+    ; bases of intrinsic-min tracks take min-content contributions, 3 the
+    ; bases of max-content-min tracks max-content ones, 5 the limits of
+    ; intrinsic-max tracks min-content ones and 6 the limits of
+    ; max-content-max tracks max-content ones (12.5.1 distributes)
+    fn spanStep:void (lay:EVGLayout cols:EVGGridTemplate items:[EVGElement] placedCol:[int] group:[int] span:int gap:double step:int minT:[int] maxT:[int] B:[double] G:[double] inf:[int] grow:[int] fitL:[double]) {
+        def nc:int (array_length B)
+        def onLimits:boolean (step >= 5)
+        def maxContent:boolean ((step == 3) || (step == 6))
+        def plan:[double]
+        def p0:int 0
+        while (p0 < nc) {
+            push plan 0.0
+            p0 = (p0 + 1)
+        }
+        for group k:int gk {
+            def c0:int (itemAt placedCol k)
+            def it:EVGElement (itemAt items k)
+            def size:double 0.0
+            if maxContent {
+                size = (lay.intrinsicWidthOf(it))
+            } {
+                size = (lay.minIntrinsicWidthOf(it))
+            }
+            ; (an item spanning only fixed-max tracks: its minimum is its
+            ; min-width, else its content clamped by those maxes, CSS Grid
+            ; 6.6, and never under its padding and border)
+            if (step == 1) {
+                def allFixed:boolean true
+                def mxSum:double ((to_double (span - 1)) * gap)
+                def tf:int c0
+                while (tf < (c0 + span)) {
+                    if ((itemAt maxT tf) != 0) {
+                        allFixed = false
+                    }
+                    mxSum = (mxSum + (itemAt G tf))
+                    tf = (tf + 1)
+                }
+                if allFixed {
+                    def sOut:double (it.box.marginLeftPx + it.box.marginRightPx)
+                    if (size > mxSum) {
+                        size = mxSum
+                    }
+                    ; (a set width is its own minimum, unclamped)
+                    if (it.width.isSet && ((it.width.isPercent()) == false)) {
+                        size = (it.width.pixels + sOut)
+                    }
+                    if ((it.minWidth.isSet && ((it.minWidth.isPercent()) == false)) && ((it.minWidth.pixels + sOut) > size)) {
+                        size = (it.minWidth.pixels + sOut)
+                    }
+                    def sCh:double (it.box.getHorizontalChrome())
+                    if ((it.box.paddingLeft.isPercent()) || (it.box.paddingRight.isPercent())) {
+                        sCh = 0.0
+                    }
+                    if (size < (sCh + sOut)) {
+                        size = (sCh + sOut)
+                    }
+                }
+            }
+            size = (size - ((to_double (span - 1)) * gap))
+            ; the affected tracks, and what is left to distribute
+            def aff:[int]
+            def t:int c0
+            while (t < (c0 + span)) {
+                def a:double (itemAt B t)
+                if (onLimits && ((itemAt inf t) == 0)) {
+                    a = (itemAt G t)
+                }
+                size = (size - a)
+                def mn:int (itemAt minT t)
+                def mx:int (itemAt maxT t)
+                def isAff:boolean false
+                if ((step == 1) && (mn > 0)) {
+                    isAff = true
+                }
+                if ((step == 3) && (mn == 3)) {
+                    isAff = true
+                }
+                if ((step == 5) && (mx > 0)) {
+                    isAff = true
+                }
+                if ((step == 6) && (((mx == 1) || (mx == 3)) || (mx == 4))) {
+                    isAff = true
+                }
+                if isAff {
+                    push aff t
+                }
+                t = (t + 1)
+            }
+            def na:int (array_length aff)
+            if ((size > 0.0) && (na > 0)) {
+                ; up to the limits, evenly
+                def inc:[double]
+                def lim:[double]
+                for aff ta:int ai {
+                    push inc 0.0
+                    def cur:double (itemAt B ta)
+                    def l:double 1000000000.0
+                    if onLimits {
+                        if ((itemAt inf ta) == 0) {
+                            cur = (itemAt G ta)
+                            if ((itemAt grow ta) == 0) {
+                                l = cur
+                            }
+                        }
+                        if ((itemAt maxT ta) == 4) {
+                            if (l > (itemAt fitL ta)) {
+                                l = (itemAt fitL ta)
+                            }
+                            if (l < cur) {
+                                l = cur
+                            }
+                        }
+                    } {
+                        if ((itemAt inf ta) == 0) {
+                            l = (itemAt G ta)
+                        }
+                        if (((itemAt maxT ta) == 4) && (l > (itemAt fitL ta))) {
+                            l = (itemAt fitL ta)
+                        }
+                        if (l < cur) {
+                            l = cur
+                        }
+                    }
+                    push lim (l - cur)
+                }
+                def left:double size
+                def pass:int 0
+                while ((left > 0.001) && (pass <= na)) {
+                    def open:int 0
+                    for aff tb:int bi {
+                        if ((itemAt inc bi) < ((itemAt lim bi) - 0.001)) {
+                            open = (open + 1)
+                        }
+                    }
+                    if (open == 0) {
+                        pass = na
+                    } {
+                        def share:double (left / (to_double open))
+                        for aff tc:int ci {
+                            def room:double ((itemAt lim ci) - (itemAt inc ci))
+                            if (room > 0.001) {
+                                def add:double share
+                                if (add > room) {
+                                    add = room
+                                }
+                                set inc ci ((itemAt inc ci) + add)
+                                left = (left - add)
+                            }
+                        }
+                    }
+                    pass = (pass + 1)
+                }
+                ; beyond the limits: to the tracks whose max matches the
+                ; contribution, else to every affected track
+                if (left > 0.001) {
+                    def beyond:[int]
+                    for aff td:int di {
+                        def mx2:int (itemAt maxT td)
+                        def pick:boolean true
+                        if (onLimits == false) {
+                            if maxContent {
+                                pick = (((mx2 == 1) || (mx2 == 3)) || (mx2 == 4))
+                            } {
+                                pick = (mx2 > 0)
+                            }
+                        }
+                        if pick {
+                            push beyond di
+                        }
+                    }
+                    if ((array_length beyond) == 0) {
+                        def bj:int 0
+                        while (bj < na) {
+                            push beyond bj
+                            bj = (bj + 1)
+                        }
+                    }
+                    def per:double (left / (to_double (array_length beyond)))
+                    for beyond bk:int bki {
+                        set inc bk ((itemAt inc bk) + per)
+                    }
+                }
+                for aff te:int ei {
+                    if ((itemAt inc ei) > (itemAt plan te)) {
+                        set plan te (itemAt inc ei)
+                    }
+                }
+            }
+        }
+        ; the planned increases, the largest any item asked for
+        def u:int 0
+        while (u < nc) {
+            def pu:double (itemAt plan u)
+            if onLimits {
+                if ((itemAt inf u) == 1) {
+                    if (pu > 0.0) {
+                        set G u ((itemAt B u) + pu)
+                        set inf u 0
+                        set grow u 1
+                    }
+                } {
+                    set G u ((itemAt G u) + pu)
+                }
+            } {
+                set B u ((itemAt B u) + pu)
+            }
+            u = (u + 1)
+        }
+    }
+
+    ; a row track that keeps its size whatever its items need
+    sfn fixedRow:boolean (r:int declared:EVGGridTemplate autoRows:EVGGridTemplate) {
+        if (r < (declared.count())) {
+            def dt:EVGGridTrack (declared.trackAt(r))
+            return (dt.kind != 3)
+        }
+        if ((autoRows.count()) > 0) {
+            def at:EVGGridTrack (autoRows.trackAt(((r - (declared.count())) % (autoRows.count()))))
+            return (at.kind != 3)
+        }
+        return false
+    }
+
+    ; items spanning several content-sized rows, the narrower spans first:
+    ; the height they need beyond the rows is shared by the rows that size
+    ; to content (CSS Grid 12.5.3)
+    ; fr rows of a grid with no definite height (CSS Grid 12.7.1): the
+    ; flex fraction is the largest its rows' content needs per fr; a
+    ; min-height or max-height the rows break is the free space instead
+    ; (12.7, "if using this flex fraction would cause the grid to be
+    ; smaller than its min-height or larger than its max-height")
+    fn gridFlexRows:void (parent:EVGElement rowSpec:string rowGapTotal:double rowSizes:[double]) {
+        if (parent.hasDefiniteHeight || ((strlen rowSpec) == 0)) {
+            return
+        }
+        def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        if declared.hadError {
+            return
+        }
+        def n:int (array_length rowSizes)
+        def unit:double 0.0
+        def flexSum:double 0.0
+        def fixedSum:double rowGapTotal
+        def i:int 0
+        while (i < n) {
+            def isFr:boolean false
+            if (i < (declared.count())) {
+                def t:EVGGridTrack (declared.trackAt(i))
+                if ((t.kind == 2) && (t.value > 0.0)) {
+                    isFr = true
+                    flexSum = (flexSum + t.value)
+                    ; (its base size counts too, and a factor under 1
+                    ; divides as 1: CSS Grid 12.7.1)
+                    def base:double (itemAt rowSizes i)
+                    if t.hasMin {
+                        t.minUnit.resolve(0.0 parent.inheritedFontSize)
+                        if (t.minUnit.pixels > base) {
+                            base = t.minUnit.pixels
+                        }
+                    }
+                    def per:double t.value
+                    if (per < 1.0) {
+                        per = 1.0
+                    }
+                    def need:double (base / per)
+                    if (need > unit) {
+                        unit = need
+                    }
+                }
+            }
+            if (isFr == false) {
+                fixedSum = (fixedSum + (itemAt rowSizes i))
+            }
+            i = (i + 1)
+        }
+        def chrome:double ((parent.box.paddingTopPx + parent.box.paddingBottomPx) + (parent.box.borderWidthPx * 2.0))
+        ; (percentage rows are of the height min-height gives the grid)
+        if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
+            def minP:double (parent.minHeight.pixels - chrome)
+            def pk:int 0
+            while ((pk < n) && (pk < (declared.count()))) {
+                def tp:EVGGridTrack (declared.trackAt(pk))
+                if (tp.kind == 1) {
+                    def was:double (itemAt rowSizes pk)
+                    def pz:double ((minP * tp.value) / 100.0)
+                    if (pz > was) {
+                        set rowSizes pk pz
+                        fixedSum = (fixedSum + (pz - was))
+                    }
+                }
+                pk = (pk + 1)
+            }
+        }
+        if (flexSum <= 0.0) {
+            return
+        }
+        ; (an fr row's floor: its fixed min, else what is in it)
+        def floors:[double]
+        def fk:int 0
+        while (fk < n) {
+            def fl:double 0.0
+            if (fk < (declared.count())) {
+                def tf:EVGGridTrack (declared.trackAt(fk))
+                if ((tf.kind == 2) && (tf.value > 0.0)) {
+                    fl = (itemAt rowSizes fk)
+                    if tf.hasMin {
+                        tf.minUnit.resolve(0.0 parent.inheritedFontSize)
+                        fl = tf.minUnit.pixels
+                    }
+                }
+            }
+            push floors fl
+            fk = (fk + 1)
+        }
+        ; the room: a max-height is a definite one for the fr rows to
+        ; share (CSS Grid 12.1, 12.7.1), a min-height one the content
+        ; does not fill; else the rows are what their content needs
+        def room:double -1.0
+        if (parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) {
+            room = (parent.maxHeight.pixels - chrome)
+        }
+        def total:double fixedSum
+        def tk:int 0
+        while ((tk < n) && (tk < (declared.count()))) {
+            def tt:EVGGridTrack (declared.trackAt(tk))
+            if ((tt.kind == 2) && (tt.value > 0.0)) {
+                def want:double (unit * tt.value)
+                if ((itemAt floors tk) > want) {
+                    want = (itemAt floors tk)
+                }
+                total = (total + want)
+            }
+            tk = (tk + 1)
+        }
+        if (parent.minHeight.isSet && (parent.minHeight.pixels > 0.0)) {
+            def minIn:double (parent.minHeight.pixels - chrome)
+            if ((room >= 0.0) && (minIn > room)) {
+                room = minIn
+            }
+            if ((room < 0.0) && (total < minIn)) {
+                room = minIn
+            }
+        }
+        if (room < 0.0) {
+            ; (the content's need, each row at least its floor)
+            def j0:int 0
+            while ((j0 < n) && (j0 < (declared.count()))) {
+                def t0:EVGGridTrack (declared.trackAt(j0))
+                if ((t0.kind == 2) && (t0.value > 0.0)) {
+                    def sz0:double (unit * t0.value)
+                    if ((itemAt floors j0) > sz0) {
+                        sz0 = (itemAt floors j0)
+                    }
+                    set rowSizes j0 sz0
+                }
+                j0 = (j0 + 1)
+            }
+            return
+        }
+        ; share the room left by the other rows, a row its floor holds
+        ; out of the share (12.7.1: such a row is inflexible)
+        def frozen:[boolean]
+        def zk:int 0
+        while (zk < n) {
+            push frozen false
+            zk = (zk + 1)
+        }
+        def pass:int 0
+        def settled:boolean false
+        while ((settled == false) && (pass <= n)) {
+            settled = true
+            def left:double (room - fixedSum)
+            def sum:double 0.0
+            def q:int 0
+            while ((q < n) && (q < (declared.count()))) {
+                def tq:EVGGridTrack (declared.trackAt(q))
+                if ((tq.kind == 2) && (tq.value > 0.0)) {
+                    if (itemAt frozen q) {
+                        left = (left - (itemAt floors q))
+                    } {
+                        sum = (sum + tq.value)
+                    }
+                }
+                q = (q + 1)
+            }
+            if (sum < 1.0) {
+                sum = 1.0
+            }
+            def u:double (left / sum)
+            if (u < 0.0) {
+                u = 0.0
+            }
+            def r:int 0
+            while ((r < n) && (r < (declared.count()))) {
+                def tr:EVGGridTrack (declared.trackAt(r))
+                if (((tr.kind == 2) && (tr.value > 0.0)) && ((itemAt frozen r) == false)) {
+                    if ((u * tr.value) < (itemAt floors r)) {
+                        set frozen r true
+                        settled = false
+                    }
+                    set rowSizes r (u * tr.value)
+                }
+                if (((tr.kind == 2) && (tr.value > 0.0)) && (itemAt frozen r)) {
+                    set rowSizes r (itemAt floors r)
+                }
+                r = (r + 1)
+            }
+            pass = (pass + 1)
+        }
+    }
+
+    fn gridRowSpanContent:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double]) {
+        ; percentage rows of a grid with no definite height: sized as auto
+        ; first, then as their share of the height that gives, and the
+        ; other rows sized again around them (CSS Grid 12.1)
+        def declared0:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        def nr0:int (array_length rowSizes)
+        def hasPct:boolean false
+        if (parent.hasDefiniteHeight == false) {
+            def pi:int 0
+            while (pi < nr0) {
+                if (EVGLayoutFull.pctRow(pi declared0)) {
+                    hasPct = true
+                }
+                pi = (pi + 1)
+            }
+        }
+        if (hasPct == false) {
+            if (!null? parent.css) {
+                def pcx:EVGCssExtra (EVGLayoutFull.cx(parent))
+                pcx.pctRowsHeight = -1.0
+            }
+            this.spanRowsPass(lay parent items placedRow rowSpans placedCol colSpans cols colGap rowSpec rowGap innerHeight rowSizes false)
+            return
+        }
+        def base:[double]
+        for rowSizes bv:double bi {
+            push base bv
+        }
+        this.spanRowsPass(lay parent items placedRow rowSpans placedCol colSpans cols colGap rowSpec rowGap innerHeight rowSizes true)
+        def H:double ((to_double (nr0 - 1)) * rowGap)
+        for rowSizes hv:double hi {
+            H = (H + hv)
+        }
+        def ri:int 0
+        while (ri < nr0) {
+            set rowSizes ri (itemAt base ri)
+            if (EVGLayoutFull.pctRow(ri declared0)) {
+                def pt:EVGGridTrack (declared0.trackAt(ri))
+                def pv:double ((H * pt.value) / 100.0)
+                ; (a minmax() min still holds: an intrinsic one at the
+                ; row's content, a length at itself)
+                if ((pt.minIntrinsic > 0) && ((itemAt base ri) > pv)) {
+                    pv = (itemAt base ri)
+                }
+                if (pt.hasMin && ((pt.minUnit.isPercent()) == false)) {
+                    pt.minUnit.resolve(0.0 parent.inheritedFontSize)
+                    if (pt.minUnit.pixels > pv) {
+                        pv = pt.minUnit.pixels
+                    }
+                }
+                set rowSizes ri pv
+            }
+            ri = (ri + 1)
+        }
+        def pcx2:EVGCssExtra (parent.cssExtra())
+        pcx2.pctRowsHeight = H
+        this.spanRowsPass(lay parent items placedRow rowSpans placedCol colSpans cols colGap rowSpec rowGap innerHeight rowSizes false)
+    }
+
+    sfn pctRow:boolean (r:int declared:EVGGridTemplate) {
+        if (r < (declared.count())) {
+            return ((declared.trackAt(r)).kind == 1)
+        }
+        return false
+    }
+
+    fn spanRowsPass:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double] pctFree:boolean) {
+        def nr:int (array_length rowSizes)
+        def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+        def autoRows:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
+        def maxSpan:int 1
+        for rowSpans sp0:int si0 {
+            if (sp0 > maxSpan) {
+                maxSpan = sp0
+            }
+        }
+        def span:int 2
+        while (span <= maxSpan) {
+            def k:int 0
+            while (k < (array_length items)) {
+                def it:EVGElement (itemAt items k)
+                def r0:int (itemAt placedRow k)
+                if ((((itemAt rowSpans k) == span) && ((r0 + span) <= nr)) && (it.gridTemplateRows != "subgrid")) {
+                    def cur:double ((to_double (span - 1)) * rowGap)
+                    def nI:int 0
+                    ; (an item crossing fr rows of a grid with no definite
+                    ; height sizes those instead, CSS Grid 12.7.1)
+                    def frSum:double 0.0
+                    def t:int r0
+                    while (t < (r0 + span)) {
+                        cur = (cur + (itemAt rowSizes t))
+                        if ((EVGLayoutFull.fixedRow(t declared autoRows)) == false) {
+                            nI = (nI + 1)
+                        } {
+                            if (pctFree && (EVGLayoutFull.pctRow(t declared))) {
+                                nI = (nI + 1)
+                            }
+                        }
+                        if ((parent.hasDefiniteHeight == false) && (t < (declared.count()))) {
+                            def ft:EVGGridTrack (declared.trackAt(t))
+                            if (ft.kind == 2) {
+                                frSum = (frSum + ft.value)
+                            }
+                        }
+                        t = (t + 1)
+                    }
+                    if (frSum > 0.0) {
+                        nI = 0
+                    }
+                    if ((nI > 0) || (frSum > 0.0)) {
+                        def cw:double (cols.extentOf((itemAt placedCol k) (itemAt colSpans k) colGap))
+                        it.unitsResolved = false
+                        it.resolveUnits(cw innerHeight)
+                        it.calculatedFlexHeight = 0.0
+                        def pctH:boolean (it.height.isSet && (it.height.isPercent()))
+                        if pctH {
+                            it.height.isSet = false
+                        }
+                        ; (and so is a percentage min-height)
+                        def pctHMin:boolean (it.minHeight.isSet && (it.minHeight.isPercent()))
+                        if pctHMin {
+                            it.minHeight.isSet = false
+                        }
+                        lay.layoutElement(it 0.0 0.0 ((cw - it.box.marginLeftPx) - it.box.marginRightPx) 0.0)
+                        if pctH {
+                            it.height.isSet = true
+                        }
+                        if pctHMin {
+                            it.minHeight.isSet = true
+                        }
+                        def need:double (((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx) - cur)
+                        if (need > 0.0) {
+                            def u:int r0
+                            while (u < (r0 + span)) {
+                                if (frSum > 0.0) {
+                                    if (u < (declared.count())) {
+                                        def fu:EVGGridTrack (declared.trackAt(u))
+                                        if (fu.kind == 2) {
+                                            set rowSizes u ((itemAt rowSizes u) + ((need * fu.value) / frSum))
+                                        }
+                                    }
+                                } {
+                                    if (((EVGLayoutFull.fixedRow(u declared autoRows)) == false) || (pctFree && (EVGLayoutFull.pctRow(u declared)))) {
+                                        set rowSizes u ((itemAt rowSizes u) + (need / (to_double nI)))
+                                    }
+                                }
+                                u = (u + 1)
+                            }
+                        }
+                    }
+                }
+                k = (k + 1)
+            }
+            span = (span + 1)
+        }
+    }
+
+    ; a placement's lines with negative lines counted from the end of the
+    ; template and names looked up in it, not clamped: 0 or below is before
+    ; the grid (CSS Grid 8.3). Empty when the placement has no definite
+    ; line, or leaves it to the core: an auto repetition's count and the
+    ; names grid-template-areas implies are known only there.
+    sfn rawLines:[int] (spec:string tplSpec:string areas:string isRow:boolean) {
+        def out:[int]
+        ; (an item placed by auto-flow has no lines)
+        if ((strlen spec) == 0) {
+            return out
+        }
+        if (((indexOf tplSpec "auto-fill") >= 0) || ((indexOf tplSpec "auto-fit") >= 0)) {
+            return out
+        }
+        def s:string (trim spec)
+        if ((strlen s) == 0) {
+            return out
+        }
+        def lhs:string s
+        def rhs:string ""
+        def hasR:boolean false
+        def sl:int (indexOf s "/")
+        if (sl >= 0) {
+            lhs = (trim (substring s 0 sl))
+            rhs = (trim (substring s (sl + 1) (strlen s)))
+            hasR = true
+        }
+        def L:EVGGridSide (EVGGridSide.parse(lhs))
+        def R:EVGGridSide (EVGGridSide.parse(rhs))
+        if (hasR == false) {
+            ; (a lone name names the end line too)
+            if (((L.kind == 1) && (L.n == 0)) && ((strlen L.name) > 0)) {
+                R = (EVGGridSide.parse(lhs))
+            }
+        }
+        if ((L.kind < 0) || (R.kind < 0)) {
+            return out
+        }
+        def tpl:EVGGridTemplate (EVGGridTemplate.parse(tplSpec))
+        def count:int (tpl.count())
+        if (((strlen tplSpec) == 0) || (tplSpec == "none")) {
+            count = 0
+        }
+        ; (an area names its edges name-start and name-end, and the areas
+        ; make the explicit grid at least as large as they are)
+        if ((strlen (trim areas)) > 0) {
+            def ar:EVGGridAreas (EVGGridAreas.parse(areas))
+            if (ar.hadError == false) {
+                def an:int ar.columns
+                if isRow {
+                    an = ar.rows
+                }
+                if (an > count) {
+                    count = an
+                }
+                def ai:int 0
+                while (ai < (ar.count())) {
+                    def a0:int (itemAt ar.colStart ai)
+                    def a1:int (itemAt ar.colSpan ai)
+                    if isRow {
+                        a0 = (itemAt ar.rowStart ai)
+                        a1 = (itemAt ar.rowSpan ai)
+                    }
+                    tpl.addLineName(((itemAt ar.names ai) + "-start") (a0 + 1))
+                    tpl.addLineName(((itemAt ar.names ai) + "-end") ((a0 + a1) + 1))
+                    ai = (ai + 1)
+                }
+            }
+        }
+        tpl.explicitLast = (count + 1)
+        def last:int (count + 1)
+        def s0:int 0
+        def e0:int 0
+        if ((L.kind == 1) && (R.kind == 1)) {
+            s0 = (L.lineIn(tpl last true))
+            e0 = (R.lineIn(tpl last false))
+            if (e0 < s0) {
+                def t:int s0
+                s0 = e0
+                e0 = t
+            }
+            if (s0 == e0) {
+                e0 = (s0 + 1)
+            }
+        } {
+            if (L.kind == 1) {
+                s0 = (L.lineIn(tpl last true))
+                e0 = (s0 + 1)
+                if (R.kind == 2) {
+                    e0 = (R.spanFrom(tpl last s0 1))
+                }
+            } {
+                if (R.kind == 1) {
+                    e0 = (R.lineIn(tpl last false))
+                    s0 = (e0 - 1)
+                    if (L.kind == 2) {
+                        s0 = (L.spanFrom(tpl last e0 (0 - 1)))
+                    }
+                } {
+                    return out
+                }
+            }
+        }
+        push out s0
+        push out e0
+        return out
+    }
+
+    ; a negative line or a name in the placement, which the core resolves
+    ; against the grid with its implicit tracks, not the explicit one
+    sfn countsFromEnd:boolean (spec:string) {
+        if ((strlen spec) == 0) {
+            return false
+        }
+        def s:string (trim spec)
+        def lhs:string s
+        def rhs:string ""
+        def sl:int (indexOf s "/")
+        if (sl >= 0) {
+            lhs = (trim (substring s 0 sl))
+            rhs = (trim (substring s (sl + 1) (strlen s)))
+        }
+        def L:EVGGridSide (EVGGridSide.parse(lhs))
+        def R:EVGGridSide (EVGGridSide.parse(rhs))
+        if ((L.kind == 1) && ((L.n < 0) || ((strlen L.name) > 0))) {
+            return true
+        }
+        if ((R.kind == 1) && ((R.n < 0) || ((strlen R.name) > 0))) {
+            return true
+        }
+        return (((L.kind == 2) && ((strlen L.name) > 0)) || ((R.kind == 2) && ((strlen R.name) > 0)))
+    }
+
+    ; the first line of rawLines, 9999 when there is none
+    sfn rawFirstLine:int (spec:string tplSpec:string areas:string isRow:boolean) {
+        def r:[int] (EVGLayoutFull.rawLines(spec tplSpec areas isRow))
+        if ((array_length r) == 0) {
+            return 9999
+        }
+        return (itemAt r 0)
+    }
+
+    ; the placement moved `lead` tracks on, as two line numbers
+    sfn shiftedPlacement:string (spec:string tplSpec:string areas:string isRow:boolean lead:int) {
+        def r:[int] (EVGLayoutFull.rawLines(spec tplSpec areas isRow))
+        if ((array_length r) == 0) {
+            return spec
+        }
+        return (((to_string ((itemAt r 0) + lead)) + " / ") + (to_string ((itemAt r 1) + lead)))
+    }
+
+    ; `lead` tracks of an auto track list before the explicit ones: the one
+    ; next to them takes the list's last size, going back (CSS Grid 7.6)
+    sfn leadingTracks:string (autoSpec:string lead:int) {
+        def a:string autoSpec
+        if ((strlen a) == 0) {
+            a = "auto"
+        }
+        def at:EVGGridTemplate (EVGGridTemplate.parse(a))
+        def m:int (at.count())
+        def parts:[string] (strsplit (trim a) " ")
+        def out:string ""
+        def i:int 0
+        while (i < lead) {
+            def tok:string a
+            if ((m > 1) && ((array_length parts) == m)) {
+                def idx:int ((m - ((lead - i) % m)) % m)
+                tok = (itemAt parts idx)
+            }
+            if ((strlen out) > 0) {
+                out = (out + " ")
+            }
+            out = (out + tok)
+            i = (i + 1)
+        }
+        return out
+    }
+
+    ; items placed on lines before the explicit grid's first make tracks
+    ; there (CSS Grid 8.3.1): the template gets them in front and the items
+    ; their lines moved on, for the core, and both are put back after
+    ; grid-area: a name no area has is that name on all four sides
+    ; (CSS Grid 8.4), which the line placement below resolves
+    fn gridLeading:double (lay:EVGLayout parent:EVGElement) {
+        def ar:EVGGridAreas (EVGGridAreas.parse(parent.gridTemplateAreas))
+        def n:int (parent.getChildCount())
+        def moved:boolean false
+        def sA:[string]
+        def sC:[string]
+        def sR:[string]
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            push sA c.gridArea
+            push sC c.gridColumn
+            push sR c.gridRow
+            def ga:string (trim c.gridArea)
+            if (((strlen ga) > 0) && ((indexOf ga "/") < 0)) {
+                if ((ar.indexOfName(ga)) < 0) {
+                    c.gridColumn = ga
+                    c.gridRow = ga
+                    c.gridArea = ""
+                    moved = true
+                }
+            }
+            i = (i + 1)
+        }
+        if (moved == false) {
+            return (this.gridLeadingLines(lay parent))
+        }
+        def h:double (this.gridLeadingLines(lay parent))
+        if (h < 0.0) {
+            h = (lay.layoutGridPlaced(parent))
+        }
+        def z:int 0
+        while (z < n) {
+            def c:EVGElement (parent.getChild(z))
+            c.gridArea = (itemAt sA z)
+            c.gridColumn = (itemAt sC z)
+            c.gridRow = (itemAt sR z)
+            z = (z + 1)
+        }
+        return h
+    }
+
+    fn gridLeadingLines:double (lay:EVGLayout parent:EVGElement) {
+        def cTpl:string parent.gridTemplateColumns
+        def rTpl:string parent.gridTemplateRows
+        if ((cTpl == "subgrid") || (rTpl == "subgrid")) {
+            return -1.0
+        }
+        ; (lines are counted on the auto repeats as the core expands them)
+        def cLines:string cTpl
+        def rLines:string rTpl
+        if (((indexOf cTpl "auto-f") >= 0) || ((indexOf rTpl "auto-f") >= 0)) {
+            def gaps:[double] (lay.gridGaps(parent parent.calculatedInnerWidth parent.calculatedInnerHeight))
+            cLines = (EVGGridTemplate.resolveAutoRepeat(cTpl parent.calculatedInnerWidth (itemAt gaps 0) 0 parent.inheritedFontSize))
+            if ((indexOf rTpl "auto-f") >= 0) {
+                rLines = (lay.gridRowRepeat(parent rTpl parent.calculatedInnerHeight (itemAt gaps 1)))
+            }
+        }
+        def nc:int ((EVGGridTemplate.parse(cTpl)).count())
+        if ((strlen cTpl) == 0) {
+            nc = 0
+        }
+        def nr:int ((EVGGridTemplate.parse(rTpl)).count())
+        if (((strlen rTpl) == 0) || (rTpl == "none")) {
+            nr = 0
+        }
+        def minC:int 1
+        def minR:int 1
+        def needC:boolean false
+        def needR:boolean false
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if ((c.hasAbsolutePosition()) == false) {
+                def fc:int (EVGLayoutFull.rawFirstLine(c.gridColumn cLines parent.gridTemplateAreas false))
+                if (fc < minC) {
+                    minC = fc
+                }
+                def fr:int (EVGLayoutFull.rawFirstLine(c.gridRow rLines parent.gridTemplateAreas true))
+                if (fr < minR) {
+                    minR = fr
+                }
+                if (EVGLayoutFull.countsFromEnd(c.gridColumn)) {
+                    needC = true
+                }
+                if (EVGLayoutFull.countsFromEnd(c.gridRow)) {
+                    needR = true
+                }
+            }
+            i = (i + 1)
+        }
+        def leadC:int (1 - minC)
+        def leadR:int (1 - minR)
+        ; (lines counted from the end, or the nth of a name, are of the
+        ; explicit grid, which the core no longer tells from the implicit
+        ; tracks: they are made numbers here too)
+        if (((leadC <= 0) && (leadR <= 0)) && ((needC == false) && (needR == false))) {
+            return -1.0
+        }
+        ; (the areas are not moved with the tracks)
+        if (((leadC > 0) || (leadR > 0)) && ((strlen (trim parent.gridTemplateAreas)) > 0)) {
+            return -1.0
+        }
+        if (leadC < 0) {
+            leadC = 0
+        }
+        if (leadR < 0) {
+            leadR = 0
+        }
+        def savedC:[string]
+        def savedR:[string]
+        def j:int 0
+        while (j < n) {
+            def c:EVGElement (parent.getChild(j))
+            push savedC c.gridColumn
+            push savedR c.gridRow
+            if ((c.hasAbsolutePosition()) == false) {
+                if ((leadC > 0) || needC) {
+                    c.gridColumn = (EVGLayoutFull.shiftedPlacement(c.gridColumn cLines parent.gridTemplateAreas false leadC))
+                }
+                if ((leadR > 0) || needR) {
+                    c.gridRow = (EVGLayoutFull.shiftedPlacement(c.gridRow rLines parent.gridTemplateAreas true leadR))
+                }
+            }
+            j = (j + 1)
+        }
+        if (leadC > 0) {
+            def lc:string (EVGLayoutFull.leadingTracks(parent.gridAutoColumns leadC))
+            if ((strlen cTpl) > 0) {
+                parent.gridTemplateColumns = ((lc + " ") + cTpl)
+            } {
+                parent.gridTemplateColumns = lc
+            }
+        }
+        if (leadR > 0) {
+            def lr:string (EVGLayoutFull.leadingTracks(parent.gridAutoRows leadR))
+            if (nr > 0) {
+                parent.gridTemplateRows = ((lr + " ") + rTpl)
+            } {
+                parent.gridTemplateRows = lr
+            }
+        }
+        def h:double (lay.layoutGridPlaced(parent))
+        parent.gridTemplateColumns = cTpl
+        parent.gridTemplateRows = rTpl
+        def z:int 0
+        while (z < n) {
+            def c:EVGElement (parent.getChild(z))
+            c.gridColumn = (itemAt savedC z)
+            c.gridRow = (itemAt savedR z)
+            z = (z + 1)
+        }
+        return h
+    }
+
     ; grid-auto-flow: column: the items placed down the columns (CSS Grid
     ; 8.5), as many rows as the explicit grid has, a new column when they
     ; are full. The placements are written into the items for the row
@@ -901,6 +2972,25 @@ class EVGLayoutFull {
 
     fn implicitColumns:string (parent:EVGElement colSpec0:string) {
         def colSpec:string colSpec0
+        def minL:int 1
+        ; (and tracks before the explicit ones, gridLeading's, when they
+        ; are not yet there)
+        if (((strlen parent.gridTemplateColumns) > 0) && (parent.gridTemplateColumns != "subgrid")) {
+            def li:int 0
+            while (li < (parent.getChildCount())) {
+                def lc:EVGElement (parent.getChild(li))
+                if ((lc.hasAbsolutePosition()) == false) {
+                    def fl:int (EVGLayoutFull.rawFirstLine(lc.gridColumn parent.gridTemplateColumns parent.gridTemplateAreas false))
+                    if (fl < minL) {
+                        minL = fl
+                    }
+                }
+                li = (li + 1)
+            }
+            if (minL < 1) {
+                colSpec = (((EVGLayoutFull.leadingTracks(parent.gridAutoColumns (1 - minL))) + " ") + colSpec)
+            }
+        }
         ; an item placed past the explicit columns makes implicit ones, as
         ; grid-auto-columns has them (CSS Grid 7.5)
         def lastLine:int 0
@@ -909,6 +2999,24 @@ class EVGLayoutFull {
             def pc:EVGElement (parent.getChild(pi))
             if (((pc.hasAbsolutePosition()) == false) && ((strlen pc.gridColumn) > 0)) {
                 def pp:EVGGridPlacement (EVGGridPlacement.parse(pc.gridColumn))
+                ; (a negative line from the explicit grid's end, a name)
+                if ((EVGLayoutFull.countsFromEnd(pc.gridColumn)) && (parent.gridTemplateColumns != "subgrid")) {
+                    def rl:[int] (EVGLayoutFull.rawLines(pc.gridColumn parent.gridTemplateColumns parent.gridTemplateAreas false))
+                    if ((array_length rl) == 2) {
+                        pp.start = (itemAt rl 0)
+                        pp.span = ((itemAt rl 1) - (itemAt rl 0))
+                        if (minL < 1) {
+                            pp.start = (pp.start + (1 - minL))
+                        }
+                    } {
+                        pp.resolveNames((EVGGridTemplate.parse(parent.gridTemplateColumns)))
+                    }
+                } {
+                    ; (a plain line moves on past the leading tracks)
+                    if ((pp.start > 0) && (minL < 1)) {
+                        pp.start = (pp.start + (1 - minL))
+                    }
+                }
                 if (pp.start > 0) {
                     def endL:int ((pp.start - 1) + pp.span)
                     if (endL > lastLine) {
@@ -923,6 +3031,7 @@ class EVGLayoutFull {
         ; any row holds, CSS Grid 8.5 steps 2 and 3)
         if ((indexOf parent.gridAutoFlow "column") < 0) {
             def perRow:[int]
+            def fixedRow:[int]
             def ri:int 0
             while (ri < (parent.getChildCount())) {
                 def rc:EVGElement (parent.getChild(ri))
@@ -932,21 +3041,115 @@ class EVGLayoutFull {
                         lastLine = cpl.span
                     }
                     def rpl:EVGGridPlacement (EVGGridPlacement.parse(rc.gridRow))
-                    if ((rpl.start > 0) && (cpl.start == 0) && ((strlen cpl.startName) == 0) && (cpl.endLine == 0)) {
+                    ; (and an item placed on both axes holds its columns in
+                    ; its rows)
+                    def both:boolean (((rpl.start > 0) && (cpl.start > 0)) && (((strlen cpl.startName) == 0) && ((strlen rpl.startName) == 0)))
+                    def locked:boolean ((rpl.start > 0) && (cpl.start == 0) && ((strlen cpl.startName) == 0) && (cpl.endLine == 0))
+                    if (locked || both) {
                         def rr:int (rpl.start - 1)
                         while (rr < ((rpl.start - 1) + rpl.span)) {
                             while ((array_length perRow) <= rr) {
                                 push perRow 0
+                                push fixedRow 0
                             }
-                            set perRow rr ((itemAt perRow rr) + cpl.span)
-                            if ((itemAt perRow rr) > lastLine) {
-                                lastLine = (itemAt perRow rr)
+                            if locked {
+                                set perRow rr ((itemAt perRow rr) + cpl.span)
+                            } {
+                                set fixedRow rr ((itemAt fixedRow rr) + cpl.span)
                             }
                             rr = (rr + 1)
                         }
                     }
                 }
                 ri = (ri + 1)
+            }
+            ; (the locked items placed as CSS Grid 8.5 step 2 does, sparse:
+            ; each past the ones before it in its row, past the cells the
+            ; items with both lines hold; dense: from the row's start)
+            if ((array_length perRow) > 0) {
+                def W:int (lastLine + 1)
+                def wi:int 0
+                while (wi < (parent.getChildCount())) {
+                    def wc:EVGElement (parent.getChild(wi))
+                    if ((wc.hasAbsolutePosition()) == false) {
+                        def wp:EVGGridPlacement (EVGGridPlacement.parse(wc.gridColumn))
+                        W = ((W + wp.start) + wp.span)
+                    }
+                    wi = (wi + 1)
+                }
+                def nR:int (array_length perRow)
+                def occ:[boolean]
+                def oi:int 0
+                while (oi < (nR * W)) {
+                    push occ false
+                    oi = (oi + 1)
+                }
+                def lockEnd:[int]
+                def le0:int 0
+                while (le0 < nR) {
+                    push lockEnd 0
+                    le0 = (le0 + 1)
+                }
+                def dense:boolean ((indexOf parent.gridAutoFlow "dense") >= 0)
+                def pass:int 0
+                while (pass < 2) {
+                    def qi:int 0
+                    while (qi < (parent.getChildCount())) {
+                        def qc:EVGElement (parent.getChild(qi))
+                        if ((qc.hasAbsolutePosition()) == false) {
+                            def qcp:EVGGridPlacement (EVGGridPlacement.parse(qc.gridColumn))
+                            def qrp:EVGGridPlacement (EVGGridPlacement.parse(qc.gridRow))
+                            def qboth:boolean (((qrp.start > 0) && (qcp.start > 0)) && (((strlen qcp.startName) == 0) && ((strlen qrp.startName) == 0)))
+                            def qlocked:boolean ((qrp.start > 0) && (qcp.start == 0) && ((strlen qcp.startName) == 0) && (qcp.endLine == 0))
+                            def c0:int -1
+                            if ((pass == 0) && qboth) {
+                                c0 = (qcp.start - 1)
+                            }
+                            if ((pass == 1) && qlocked) {
+                                def r0:int (qrp.start - 1)
+                                c0 = 0
+                                if (dense == false) {
+                                    c0 = (itemAt lockEnd r0)
+                                }
+                                def busy:boolean true
+                                while (busy && ((c0 + qcp.span) < W)) {
+                                    busy = false
+                                    def cr:int r0
+                                    while ((cr < (r0 + qrp.span)) && (cr < nR)) {
+                                        def cc:int c0
+                                        while (cc < (c0 + qcp.span)) {
+                                            if (itemAt occ ((cr * W) + cc)) {
+                                                busy = true
+                                            }
+                                            cc = (cc + 1)
+                                        }
+                                        cr = (cr + 1)
+                                    }
+                                    if busy {
+                                        c0 = (c0 + 1)
+                                    }
+                                }
+                                set lockEnd r0 (c0 + qcp.span)
+                            }
+                            if (c0 >= 0) {
+                                def mr:int (qrp.start - 1)
+                                while ((mr < ((qrp.start - 1) + qrp.span)) && (mr < nR)) {
+                                    def mc:int c0
+                                    while ((mc < (c0 + qcp.span)) && (mc < W)) {
+                                        set occ ((mr * W) + mc) true
+                                        mc = (mc + 1)
+                                    }
+                                    mr = (mr + 1)
+                                }
+                                if ((c0 + qcp.span) > lastLine) {
+                                    lastLine = (c0 + qcp.span)
+                                }
+                            }
+                        }
+                        qi = (qi + 1)
+                    }
+                    pass = (pass + 1)
+                }
             }
         }
         ; (in a column flow, as many as the placement fills)
@@ -984,11 +3187,20 @@ class EVGLayoutFull {
             } {
                 colSpec = ""
             }
+            ; (grid-auto-columns cycles forwards from the explicit grid)
+            def explicitN:int have
+            def at:EVGGridTemplate (EVGGridTemplate.parse(autoCol))
+            def am:int (at.count())
+            def aparts:[string] (strsplit (trim autoCol) " ")
             while (have < lastLine) {
                 if ((strlen colSpec) > 0) {
                     colSpec = (colSpec + " ")
                 }
-                colSpec = (colSpec + autoCol)
+                def tok:string autoCol
+                if ((am > 1) && ((array_length aparts) == am)) {
+                    tok = (itemAt aparts ((have - explicitN) % am))
+                }
+                colSpec = (colSpec + tok)
                 have = (have + 1)
             }
         }
@@ -1004,7 +3216,7 @@ class EVGLayoutFull {
         def i:int 0
         while (i < n) {
             def c:EVGElement (node.getChild(i))
-            if (((EVGLayoutFull.cx(c)).cbOuterX || (EVGLayoutFull.cx(c)).cbOuterY) && c.isAbsolute) {
+            if ((((EVGLayoutFull.cx(c)).cbOuterX || (EVGLayoutFull.cx(c)).cbOuterY) || (EVGLayoutFull.cx(c)).cbOuterSize) && c.isAbsolute) {
                 def oldX:double c.calculatedX
                 def oldY:double c.calculatedY
                 def sx:double ((cb.calculatedX + cb.box.borderWidthPx) + cb.box.paddingLeftPx)
@@ -1264,7 +3476,86 @@ class EVGLayoutFull {
     ; Distance from an element's top margin edge to its LAST baseline: the
     ; last line's of a text node, else the lowest in-flow child's that has
     ; one; with none, -1 (synthesized from the bottom margin edge)
+    ; the baseline of an inline-block's last line, from its top edge: the
+    ; last in-flow child's that has one, a line's own, a flex container's or
+    ; a grid's first (they sit on a line by it), a text's last; -1 for none
+    fn lastLineBaseline:double (el:EVGElement) {
+        def n:int (el.getChildCount())
+        if (n == 0) {
+            if (el.hasBaseline && ((strlen el.textContent) > 0)) {
+                return el.calculatedLastBaseline
+            }
+            return -1.0
+        }
+        def i:int (n - 1)
+        while (i >= 0) {
+            def c:EVGElement (el.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                def cb:double -1.0
+                def atom:boolean (((EVGLayoutFull.cx(c)).flexBox && (c.display == "flex")) || (c.display == "grid"))
+                def line:boolean ((((EVGLayoutFull.cx(c)).flexBox == false) && (c.flexDirection == "row")) && (c.display != "grid"))
+                if ((atom || line) && c.hasBaseline) {
+                    cb = c.calculatedBaseline
+                } {
+                    if ((atom || line) == false) {
+                        cb = (this.lastLineBaseline(c))
+                    }
+                }
+                if (cb >= 0.0) {
+                    return ((c.calculatedY - el.calculatedY) + cb)
+                }
+            }
+            i = (i - 1)
+        }
+        return -1.0
+    }
+
+    ; a scroll container's baseline is within its border box (CSS Align
+    ; 9.1): content scrolled out of it gives the nearer edge
+    ; a percentage height of a height not yet known is auto (CSS 2.1
+    ; 10.5); a stretched flex item lays its children out again once its
+    ; height is definite
+    fn containedWidth:double (el:EVGElement) {
+        def cc:EVGCssExtra (EVGLayoutFull.cx(el))
+        return cc.containW
+    }
+
+    fn pctHeightAuto:boolean (lay:EVGLayout el:EVGElement) {
+        def pc:EVGCssExtra (EVGLayoutFull.cx(el))
+        return pc.pctAuto
+    }
+
+    fn clampBaseline:void (lay:EVGLayout element:EVGElement) {
+        if (!null? element.css) {
+            def css:EVGCssExtra (EVGLayoutFull.cx(element))
+            if ((css.baseFromBottom >= 0.0) || css.lastBase) {
+                return
+            }
+        }
+        if (element.calculatedBaseline < 0.0) {
+            element.calculatedBaseline = 0.0
+        }
+        if (element.calculatedBaseline > element.calculatedHeight) {
+            element.calculatedBaseline = element.calculatedHeight
+        }
+        element.calculatedDescent = (element.calculatedHeight - element.calculatedBaseline)
+    }
+
     fn lastBaselineOffsetOf:double (lay:EVGLayout el:EVGElement) {
+        def lb:double (this.lastBaselineOffsetRaw(lay el))
+        ; (a scroll container's, within its border box)
+        if ((lb >= 0.0) && (el.clipsContent())) {
+            if (lb < el.box.marginTopPx) {
+                lb = el.box.marginTopPx
+            }
+            if (lb > (el.box.marginTopPx + el.calculatedHeight)) {
+                lb = (el.box.marginTopPx + el.calculatedHeight)
+            }
+        }
+        return lb
+    }
+
+    fn lastBaselineOffsetRaw:double (lay:EVGLayout el:EVGElement) {
         if (!null? el.css) {
             def fx:EVGCssExtra (EVGLayoutFull.cx(el))
             if (fx.flipBase && fx.flipDone) {
@@ -1366,7 +3657,9 @@ class EVGLayoutFull {
                 }
                 while (cn < colsN) {
                     push colStarts (colShift + (cols.offsetOf(cn colGap)))
-                    push colEnds ((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap)))
+                    ; (a collapsed auto-fit track at the start ends at the
+                    ; grid's start, not a gap before it)
+                    push colEnds (EVGLayoutFull.atLeast(((colShift + (cols.offsetOf(cn colGap))) + (cols.extentOf(cn 1 colGap))) colShift))
                     cn = (cn + 1)
                 }
                 ; (the padding edge: inside the border sides given as padding)
@@ -1403,7 +3696,7 @@ class EVGLayoutFull {
                         ax = (colShift + (cols.offsetOf(c0 colGap)))
                         aw = 0.0
                         if (cspan > 0) {
-                            aw = (cols.extentOf(c0 cspan colGap))
+                            aw = ((EVGLayoutFull.atLeast((ax + (cols.extentOf(c0 cspan colGap))) colShift)) - ax)
                         }
                         ; (right to left the in-flow items are mirrored
                         ; afterwards; an area is mirrored here)
@@ -1421,7 +3714,7 @@ class EVGLayoutFull {
                 }
                 while (rn < rowsN) {
                     push rowStarts (rowShift + (lay.gridRowOffset(rowSizes rn rowGap)))
-                    push rowEnds ((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn))
+                    push rowEnds (EVGLayoutFull.atLeast(((rowShift + (lay.gridRowOffset(rowSizes rn rowGap))) + (itemAt rowSizes rn)) rowShift))
                     rn = (rn + 1)
                 }
                 def rowAuto:[double] (EVGLayoutFull.absAutoArea(c.gridRow rowTemplate rowStarts rowEnds (parent.box.paddingTopPx - pcx.foldT) (parent.box.paddingBottomPx - pcx.foldB) contentHeight))
@@ -1434,7 +3727,7 @@ class EVGLayoutFull {
                     rp.resolveNames(rowTemplate)
                     if (rp.start > 0) {
                         ay = (rowShift + (lay.gridRowOffset(rowSizes (rp.start - 1) rowGap)))
-                        ah = (lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))
+                        ah = ((EVGLayoutFull.atLeast((ay + (lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))) rowShift)) - ay)
                     }
                 }
                 c.unitsResolved = false
@@ -1498,6 +3791,13 @@ class EVGLayoutFull {
     ; 9.2). [from size] from the content edge, or nothing with no
     ; placement (EVG's content box) or a line name alone (an area's,
     ; resolved by the placement)
+    sfn atLeast:double (v:double floor:double) {
+        if (v < floor) {
+            return floor
+        }
+        return v
+    }
+
     sfn absAutoArea:[double] (spec0:string tpl:EVGGridTemplate starts:[double] ends:[double] padS:double padE:double inner:double) {
         def res:[double]
         def spec:string (trim spec0)
@@ -1633,4 +3933,109 @@ class EVGLayoutFull {
         return false
     }
 
+}
+
+; One side of a grid-column or grid-row placement: auto, a line
+; ("3", "-1", "name", "2 name") or a span ("span 2", "span name",
+; "span 2 name"). kind -1 is a side that is not valid CSS.
+class EVGGridSide {
+    def kind:int 0
+    def n:int 0
+    def name:string ""
+
+    sfn parse:EVGGridSide (text:string) {
+        def p (new EVGGridSide())
+        def t:string (trim text)
+        if (((strlen t) == 0) || (t == "auto")) {
+            return p
+        }
+        p.kind = 1
+        def parts:[string] (strsplit t " ")
+        for parts w:string wi {
+            def tok:string (trim w)
+            if ((strlen tok) > 0) {
+                if (tok == "span") {
+                    p.kind = 2
+                } {
+                    def c:int (charAt tok 0)
+                    def c1:int c
+                    if (((c == 45) || (c == 43)) && ((strlen tok) > 1)) {
+                        c1 = (charAt tok 1)
+                    }
+                    ; ("-start" is a name)
+                    if ((c1 >= 48) && (c1 <= 57)) {
+                        def v@(optional):double (to_double tok)
+                        if v {
+                            p.n = (to_int (unwrap v))
+                        }
+                        if (p.n == 0) {
+                            p.kind = (0 - 1)
+                        }
+                    } {
+                        p.name = tok
+                    }
+                }
+            }
+        }
+        if ((p.kind == 2) && (p.n == 0)) {
+            p.n = 1
+        }
+        if ((p.kind == 2) && (p.n < 0)) {
+            p.kind = (0 - 1)
+        }
+        if ((p.kind == 1) && ((p.n == 0) && ((strlen p.name) == 0))) {
+            p.kind = (0 - 1)
+        }
+        return p
+    }
+
+    ; the line, `last` being the explicit grid's last
+    fn lineIn:int (tpl:EVGGridTemplate last:int isStart:boolean) {
+        if ((strlen name) == 0) {
+            if (n > 0) {
+                return n
+            }
+            return ((last + 1) + n)
+        }
+        ; (a lone name is an area's edge first: name-start or name-end)
+        if (n == 0) {
+            def edge:string (name + "-end")
+            if isStart {
+                edge = (name + "-start")
+            }
+            def el:int (tpl.lineNumberNamed(edge))
+            if (el > 0) {
+                return el
+            }
+        }
+        def k:int n
+        if (k == 0) {
+            k = 1
+        }
+        return (tpl.nthLineNamed(name k))
+    }
+
+    ; the line `n` lines (or lines of the name) on from `from` in `dir`;
+    ; past the explicit grid's edge in that direction every line has the
+    ; name
+    fn spanFrom:int (tpl:EVGGridTemplate last:int from:int dir:int) {
+        if ((strlen name) == 0) {
+            return (from + (dir * n))
+        }
+        def found:int 0
+        def x:int from
+        def guard:int 0
+        while (guard < 100000) {
+            x = (x + dir)
+            def past:boolean (((dir > 0) && (x > last)) || ((dir < 0) && (x < 1)))
+            if (past || (tpl.hasLineNamed(x name))) {
+                found = (found + 1)
+                if (found == n) {
+                    return x
+                }
+            }
+            guard = (guard + 1)
+        }
+        return x
+    }
 }
