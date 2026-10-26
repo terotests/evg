@@ -1189,6 +1189,28 @@ class CssBoxCheck {
         this.layoutAt(page57 300.0 600.0)
         this.ok("grid baseline items of 20px and 10px + 10px margin, no text: the second 10 lower" (this.near((b57.calculatedY - g57.calculatedY) 10.0)))
 
+        ; --- 54. a flex row's baseline: its first line's baseline-aligned item's ---
+        def page58 (EVGElement.createDiv())
+        page58.setAttribute("width" "300px")
+        def c58 (EVGElement.createDiv())
+        c58.setAttribute("display" "flex")
+        c58.setAttribute("flex-box" "true")
+        c58.setAttribute("flex-direction" "row")
+        c58.setAttribute("align-items" "flex-start")
+        def a58 (EVGElement.createSpan())
+        a58.setAttribute("font-size" "10px")
+        a58.textContent = "a"
+        c58.addChild(a58)
+        def b58 (EVGElement.createSpan())
+        b58.setAttribute("font-size" "30px")
+        b58.setAttribute("margin-top" "10px")
+        b58.setAttribute("align-self" "baseline")
+        b58.textContent = "b"
+        c58.addChild(b58)
+        page58.addChild(c58)
+        this.layoutAt(page58 300.0 600.0)
+        this.ok("flex row with a baseline-aligned second item: the row's baseline is that item's" (this.near(c58.calculatedBaseline ((b58.calculatedY - c58.calculatedY) + b58.calculatedBaseline))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

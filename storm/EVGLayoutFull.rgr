@@ -110,6 +110,41 @@ class EVGLayoutFull {
             element.calculatedDescent = (element.calculatedHeight - css.baseFromTop)
             element.hasBaseline = true
         }
+        ; (a flex row's item of the first line in baseline alignment gives
+        ; its baseline, CSS Flexbox 8.5; else the first item, below)
+        if ((css.flexBox && (element.display == "flex")) && ((childCount > 0) && (element.flexDirection != "column"))) {
+            ; (wrap-reverse: the top line is the last, read from its end)
+            def rev:boolean (element.flexWrap == "wrap-reverse")
+            def lastX:double -1000000.0
+            if rev {
+                lastX = 1000000.0
+            }
+            def bj:int 0
+            while (bj < childCount) {
+                def bf:EVGElement (element.getChild(bj))
+                if rev {
+                    bf = (element.getChild(((childCount - 1) - bj)))
+                }
+                if ((bf.isAbsolute == false) && ((bf.isHidden()) == false)) {
+                    if (((rev == false) && (bf.calculatedX <= lastX)) || (rev && (bf.calculatedX >= lastX))) {
+                        bj = childCount
+                    } {
+                        lastX = bf.calculatedX
+                        def bfa:string bf.alignSelf
+                        if (((strlen bfa) == 0) || (bfa == "auto")) {
+                            bfa = element.alignItems
+                        }
+                        if ((((bfa == "baseline") || ((bfa == "first baseline") || (bfa == "last baseline"))) && bf.hasBaseline) && ((bf.marginAutoTop || bf.marginAutoBottom) == false)) {
+                            element.calculatedBaseline = ((bf.calculatedY - element.calculatedY) + bf.calculatedBaseline)
+                            element.calculatedDescent = bf.calculatedDescent
+                            element.hasBaseline = true
+                            bj = childCount
+                        }
+                    }
+                }
+                bj = (bj + 1)
+            }
+        }
         if ((element.hasBaseline == false) && (childCount > 0)) {
             def i:int 0
             def n:int childCount
