@@ -140,6 +140,24 @@ class SvgGradient {
 }
 
 ; ------------------------------------------------------------------------------
+; SvgPattern — a <pattern> fill: one tile, repeated
+; ------------------------------------------------------------------------------
+; The tile's rectangle (x, y, w, h) is in pattern space, and `matrix` takes
+; pattern space to the document's user space (the shape's CTM, then
+; patternTransform; objectBoundingBox units are resolved into x, y, w, h).
+; The tile's shapes are in the tile's own space, its origin at (x, y), as
+; patternContentUnits userSpaceOnUse draws them. The display list repeats
+; the tile, or hands it on as one command (keepPatterns).
+class SvgPattern {
+    def x:double 0.0
+    def y:double 0.0
+    def w:double 0.0
+    def h:double 0.0
+    def matrix:Matrix2D (Matrix2D.identity())
+    def tile:SvgDocument (new SvgDocument())
+}
+
+; ------------------------------------------------------------------------------
 ; SvgVectorItem — one drawable, ready to render.
 ; ------------------------------------------------------------------------------
 ; `commands` are absolute PathCommands in the document's user space. An unset
@@ -159,6 +177,8 @@ class SvgVectorItem {
     ; were read: no fill, no stroke. The display list paints the gradient.
     def fillGradient@(optional):SvgGradient
     def strokeGradient@(optional):SvgGradient
+    ; A <pattern> fill, the colour beside it unset as for a gradient.
+    def fillPattern@(optional):SvgPattern
 
     Constructor () {
         def c:[PathCommand]
@@ -177,6 +197,10 @@ class SvgVectorItem {
 
     fn hasGradientFill:boolean () {
         return (!null? fillGradient)
+    }
+
+    fn hasPatternFill:boolean () {
+        return (!null? fillPattern)
     }
 
     fn hasGradientStroke:boolean () {
@@ -683,7 +707,7 @@ class SvgParser {
         ; ---- <defs> ----------------------------------------------------------
         ; Definitions are drawn only where they are referenced. Pass one already
         ; recorded their markup by id, so nothing is lost by not walking in.
-        if (((name == "defs") || (name == "linearGradient")) || (name == "radialGradient")) {
+        if ((((name == "defs") || (name == "linearGradient")) || (name == "radialGradient")) || (name == "pattern")) {
             if (tag.selfClose == false) {
                 this.skipSubtree(name)
             }
@@ -771,7 +795,6 @@ class SvgParser {
         if (name == "filter") { return true }
         if (name == "mask") { return true }
         if (name == "clipPath") { return true }
-        if (name == "pattern") { return true }
         if (name == "marker") { return true }
         if (name == "symbol") { return true }
         if (name == "style") { return true }
@@ -1319,6 +1342,135 @@ class SvgParser {
         return some
     }
 
+    ; --------------------------------------------------------------------------
+    ; Patterns
+    ; --------------------------------------------------------------------------
+    ; The element `id` names, read as its first tag, or an invalid tag.
+    fn headTag:SvgTag (id:string) {
+        def span@(optional):string (get spans id)
+        def sub (new SvgParser())
+        if (null? span) {
+            return (new SvgTag())
+        }
+        sub.src = (unwrap span)
+        sub.len = (strlen sub.src)
+        sub.pos = 0
+        if ((sub.findTagStart()) < 0) {
+            return (new SvgTag())
+        }
+        return (sub.readTag())
+    }
+
+    fn isPatternId:boolean (id:string) {
+        def t:SvgTag (this.headTag(id))
+        return ((t.valid) && (t.name == "pattern"))
+    }
+
+    ; The <pattern> `id` names, for a shape whose untransformed commands are
+    ; `cmds`, drawn under `ctm`; none when its tile has no area or no shapes
+    ; (the shape is then unpainted, as in a browser). Its own attributes only
+    ; (no href chain); a viewBox on it is not applied.
+    fn resolvePattern@(optional):SvgPattern (id:string cmds:[PathCommand] ctm:Matrix2D) {
+        def none@(optional):SvgPattern
+        def span:string (unwrap (get spans id))
+        def sub (new SvgParser())
+        sub.src = span
+        sub.len = (strlen span)
+        sub.pos = 0
+        if ((sub.findTagStart()) < 0) {
+            return none
+        }
+        def head:SvgTag (sub.readTag())
+        if (head.selfClose) {
+            return none
+        }
+        def bodyFrom:int sub.pos
+        def bodyTo:int (lastIndexOf span "</")
+        if (bodyTo <= bodyFrom) {
+            return none
+        }
+        if (head.has("viewBox")) {
+            this.warn("pattern-viewbox" "a viewBox on a <pattern> is not applied; its tile is drawn in user units")
+        }
+        def p (new SvgPattern())
+        def vb:ViewBoxRect (doc.effectiveViewBox())
+        if ((head.attr("patternUnits")) == "userSpaceOnUse") {
+            p.x = (this.gradLength((head.attr("x")) 0.0 vb.width))
+            p.y = (this.gradLength((head.attr("y")) 0.0 vb.height))
+            p.w = (this.gradLength((head.attr("width")) 0.0 vb.width))
+            p.h = (this.gradLength((head.attr("height")) 0.0 vb.height))
+        } {
+            ; objectBoundingBox: fractions of the shape's own box
+            def box:[double] (this.boxOf(cmds))
+            if ((array_length box) < 4) {
+                return none
+            }
+            def bx:double (itemAt box 0)
+            def by:double (itemAt box 1)
+            def bw:double ((itemAt box 2) - bx)
+            def bh:double ((itemAt box 3) - by)
+            p.x = (bx + (bw * (this.gradLength((head.attr("x")) 0.0 1.0))))
+            p.y = (by + (bh * (this.gradLength((head.attr("y")) 0.0 1.0))))
+            p.w = (bw * (this.gradLength((head.attr("width")) 0.0 1.0)))
+            p.h = (bh * (this.gradLength((head.attr("height")) 0.0 1.0)))
+        }
+        if ((p.w <= 0.0) || (p.h <= 0.0)) {
+            return none
+        }
+        def m:Matrix2D ctm
+        def pt:string (head.attr("patternTransform"))
+        if ((strlen pt) > 0) {
+            m = (m.multiply((this.parseTransform(pt))))
+        }
+        p.matrix = m
+        ; the tile's shapes, parsed as a document of their own
+        def tp (new SvgParser())
+        p.tile = (tp.parse(("<svg>" + (substring span bodyFrom bodyTo) + "</svg>")))
+        if ((p.tile.itemCount()) == 0) {
+            return none
+        }
+        def some@(optional):SvgPattern
+        some = p
+        return some
+    }
+
+    ; The box of untransformed commands: [minX, minY, maxX, maxY], or empty
+    ; when they have no area.
+    fn boxOf:[double] (cmds:[PathCommand]) {
+        def out:[double]
+        def parser:SVGPathParser (SVGPathParser.fromCommands(cmds))
+        def rings:[PathRing] (parser.flattenRingsPlain(16))
+        def minX:double 0.0
+        def minY:double 0.0
+        def maxX:double 0.0
+        def maxY:double 0.0
+        def any:boolean false
+        def ri:int 0
+        while (ri < (array_length rings)) {
+            def ring:PathRing (itemAt rings ri)
+            def pi:int 0
+            while ((pi + 1) < (array_length ring.pts)) {
+                def px:double (itemAt ring.pts pi)
+                def py:double (itemAt ring.pts (pi + 1))
+                if ((any == false) || (px < minX)) { minX = px }
+                if ((any == false) || (py < minY)) { minY = py }
+                if ((any == false) || (px > maxX)) { maxX = px }
+                if ((any == false) || (py > maxY)) { maxY = py }
+                any = true
+                pi = (pi + 2)
+            }
+            ri = (ri + 1)
+        }
+        if (((any == false) || ((maxX - minX) <= 0.0)) || ((maxY - minY) <= 0.0)) {
+            return out
+        }
+        push out minX
+        push out minY
+        push out maxX
+        push out maxY
+        return out
+    }
+
     fn parseOpacity:double (v:string fallback:double) {
         def pct:boolean false
         def s:string v
@@ -1533,12 +1685,19 @@ class SvgParser {
         item.dashOffset = s.dashOffset
 
         if ((strlen s.fillRef) > 0) {
-            def fg@(optional):SvgGradient (this.resolveGradient(s.fillRef cmds (unwrap s.ctm) (s.fillOpacity * s.groupOpacity)))
-            if (!null? fg) {
-                item.fillGradient = fg
+            if (this.isPatternId(s.fillRef)) {
+                def fp@(optional):SvgPattern (this.resolvePattern(s.fillRef cmds (unwrap s.ctm)))
+                if (!null? fp) {
+                    item.fillPattern = fp
+                }
+            } {
+                def fg@(optional):SvgGradient (this.resolveGradient(s.fillRef cmds (unwrap s.ctm) (s.fillOpacity * s.groupOpacity)))
+                if (!null? fg) {
+                    item.fillGradient = fg
+                }
             }
         }
-        if ((s.fill.isSet) && (null? item.fillGradient)) {
+        if (((s.fill.isSet) && (null? item.fillGradient)) && (null? item.fillPattern)) {
             item.fillColor = (this.withAlpha((unwrap s.fill) (s.fillOpacity * s.groupOpacity)))
         }
         if ((strlen s.strokeRef) > 0) {
@@ -1562,7 +1721,9 @@ class SvgParser {
         ; A shape that is neither filled nor stroked draws nothing. Keeping it
         ; would make item counts misleading for no gain.
         if (((item.hasFill() == false) && (item.hasStroke() == false)) && ((item.hasGradientFill() == false) && (item.hasGradientStroke() == false))) {
-            return
+            if (item.hasPatternFill() == false) {
+                return
+            }
         }
         if ((item.hasGradientFill()) || (item.hasGradientStroke())) {
             this.warn("gradient" "gradient paint is drawn by the display list's painters; the PDF and PNG targets do not draw it yet (PLAN_VECTOR_IR.md §6)")
