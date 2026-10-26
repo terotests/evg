@@ -1077,6 +1077,9 @@ class EVGLayout {
         if ((element.hasBaseline == false) && (childCount > 0)) {
             this.inheritBaselineFromFirstChild(element)
         }
+        if ((element.clipsContent()) && element.hasBaseline) {
+            ext.clampBaseline(this element)
+        }
 
         ; --- SCROLLING --------------------------------------------------------
         ;
@@ -5449,6 +5452,20 @@ class EVGLayout {
                             set colContent col2 w2
                         }
                         def m2:double (this.minIntrinsicWidthOf(it))
+                        ; (in an auto track an item of a min-width of its
+                        ; own counts that, not its content: its minimum
+                        ; contribution, CSS Grid 6.6 and 12.5)
+                        if (it.minWidth.isSet && (cols.trackAt(col2)).autoTrack) {
+                            def chW:double ((it.box.paddingLeftPx + it.box.paddingRightPx) + (it.box.borderWidthPx * 2.0))
+                            def mwO:double it.minWidth.pixels
+                            if (mwO < chW) {
+                                mwO = chW
+                            }
+                            mwO = ((mwO + it.box.marginLeftPx) + it.box.marginRightPx)
+                            if (mwO < m2) {
+                                m2 = mwO
+                            }
+                        }
                         if (m2 > (itemAt colMinContent col2)) {
                             set colMinContent col2 m2
                         }
@@ -5650,9 +5667,11 @@ class EVGLayout {
             ; align-content normal or stretch grows the auto ones
             if (rows.hasIntrinsicTrack()) {
                 def rowContent:[double]
+                def rowMinC:[double]
                 def rc0:int 0
                 while (rc0 < (rows.count())) {
                     push rowContent 0.0
+                    push rowMinC 0.0
                     rc0 = (rc0 + 1)
                 }
                 def rm:int 0
@@ -5684,13 +5703,38 @@ class EVGLayout {
                         if (rh > (itemAt rowContent rri)) {
                             set rowContent rri rh
                         }
+                        ; (in an auto row an item of a min-height of its own
+                        ; counts that, not its content, CSS Grid 6.6)
+                        def rmh:double rh
+                        def rtk:EVGGridTrack (rows.trackAt(rri))
+                        if ((rit.minHeight.isSet && (pctRMin == false)) && rtk.autoTrack) {
+                            def mhO:double rit.minHeight.pixels
+                            if (mhO < (rit.box.getVerticalChrome())) {
+                                mhO = (rit.box.getVerticalChrome())
+                            }
+                            mhO = ((mhO + rit.box.marginTopPx) + rit.box.marginBottomPx)
+                            if (mhO < rmh) {
+                                rmh = mhO
+                            }
+                        }
+                        if (rmh > (itemAt rowMinC rri)) {
+                            set rowMinC rri rmh
+                        }
                     }
                     rm = (rm + 1)
                 }
+                def rowPre:[double]
+                for rowContent rpv:double rpi {
+                    push rowPre rpv
+                }
                 ext.gridRowBaselines(this parent items placedRow rowSpans rowContent)
+                ; (a baseline shim adds to the minimum as well)
+                for rowContent rcv:double rci {
+                    set rowMinC rci ((itemAt rowMinC rci) + (rcv - (itemAt rowPre rci)))
+                }
                 def acS:string parent.alignContent
                 rows.stretchAutos = (((strlen acS) == 0) || ((acS == "normal") || ((acS == "stretch") || (acS == "flex-start"))))
-                rows.resolveWithContent(((innerHeight - rowGapTotal) + rowGiveBack) rowContent rowContent)
+                rows.resolveWithContent(((innerHeight - rowGapTotal) + rowGiveBack) rowContent rowMinC)
             } {
                 rows.resolve(((innerHeight - rowGapTotal) + rowGiveBack))
             }

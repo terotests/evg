@@ -1324,6 +1324,63 @@ class CssBoxCheck {
         this.ok("column of max-height 30: a 40px-content item with min-height 0 shrinks to 20" (this.near(a63.calculatedHeight 20.0)))
         this.ok("and the inflexible item after it starts at 20" (this.near((b63.calculatedY - c63.calculatedY) 20.0)))
 
+        ; --- 60. an auto grid column holding an item of min-width 0 under a 0px grid ---
+        def page64 (EVGElement.createDiv())
+        page64.setAttribute("width" "300px")
+        def g64 (EVGElement.createDiv())
+        g64.display = "grid"
+        g64.setAttribute("grid-template-columns" "auto auto")
+        g64.setAttribute("width" "0px")
+        def a64 (EVGElement.createDiv())
+        a64.setAttribute("min-width" "0px")
+        def ak64 (EVGElement.createDiv())
+        ak64.setAttribute("width" "100px")
+        ak64.setAttribute("height" "10px")
+        a64.addChild(ak64)
+        g64.addChild(a64)
+        def b64 (EVGElement.createDiv())
+        def bk64 (EVGElement.createDiv())
+        bk64.setAttribute("width" "100px")
+        bk64.setAttribute("height" "10px")
+        b64.addChild(bk64)
+        g64.addChild(b64)
+        page64.addChild(g64)
+        this.layoutAt(page64 300.0 600.0)
+        this.ok("auto columns of a 0px grid: the min-width 0 item's column is 0, the other's its content" ((this.near(a64.calculatedWidth 0.0)) && (this.near(b64.calculatedWidth 100.0))))
+
+        ; --- 61. a clipping box's baseline stays within its border box ---
+        def page65 (EVGElement.createDiv())
+        page65.setAttribute("width" "300px")
+        def c65 (EVGElement.createDiv())
+        c65.setAttribute("overflow" "hidden")
+        c65.setAttribute("height" "50px")
+        def t65 (EVGElement.createSpan())
+        t65.setAttribute("font-size" "20px")
+        t65.setAttribute("margin-top" "200px")
+        t65.textContent = "a"
+        c65.addChild(t65)
+        page65.addChild(c65)
+        this.layoutAt(page65 300.0 600.0)
+        this.ok("overflow hidden box 50px tall whose text is 200px down: baseline at its bottom edge" (this.near(c65.calculatedBaseline 50.0)))
+
+        ; --- 62. a grid row grows for its last-baseline group ---
+        def page66 (EVGElement.createDiv())
+        page66.setAttribute("width" "300px")
+        def g66 (EVGElement.createDiv())
+        g66.display = "grid"
+        g66.setAttribute("grid-template-columns" "100px 100px")
+        g66.setAttribute("align-items" "last baseline")
+        def a66 (EVGElement.createDiv())
+        a66.setAttribute("height" "40px")
+        a66.setAttribute("margin-bottom" "30px")
+        g66.addChild(a66)
+        def b66 (EVGElement.createDiv())
+        b66.setAttribute("height" "60px")
+        g66.addChild(b66)
+        page66.addChild(g66)
+        this.layoutAt(page66 300.0 600.0)
+        this.ok("last-baseline items of 40px + 30px margin and 60px, no text: the row is 90, the first item 20 down" ((this.near(g66.calculatedHeight 90.0)) && (this.near((a66.calculatedY - g66.calculatedY) 20.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

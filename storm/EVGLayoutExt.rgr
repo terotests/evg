@@ -113,6 +113,10 @@ class EVGLayoutExt {
         return false
     }
 
+    ; a clipping box's baseline once it has one (the core leaves it)
+    fn clampBaseline:void (lay:EVGLayout element:EVGElement) {
+    }
+
     ; the width a row's item with a flex basis of its own shrinks no further
     ; than when it has no min-width (-1: nothing, as the core has it)
     fn shrinkFloorWidth:double (lay:EVGLayout parent:EVGElement c:EVGElement) {

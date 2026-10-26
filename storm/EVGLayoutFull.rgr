@@ -703,6 +703,15 @@ class EVGLayoutFull {
             push below 0.0
             r = (r + 1)
         }
+        ; (and the last-baseline group of each row, by its last baselines)
+        def aboveL:[double]
+        def belowL:[double]
+        def rl:int 0
+        while (rl < (array_length rowSizes)) {
+            push aboveL 0.0
+            push belowL 0.0
+            rl = (rl + 1)
+        }
         def any:boolean false
         def i:int 0
         while (i < (array_length items)) {
@@ -712,7 +721,8 @@ class EVGLayoutFull {
                 ga = parent.alignItems
             }
             def ri:int (itemAt placedRow i)
-            if ((((ga == "baseline") || (ga == "first baseline")) && ((itemAt rowSpans i) == 1)) && ((ri < (array_length rowSizes)) && ((it.marginAutoTop || it.marginAutoBottom) == false))) {
+            def inRow:boolean (((itemAt rowSpans i) == 1) && ((ri < (array_length rowSizes)) && ((it.marginAutoTop || it.marginAutoBottom) == false)))
+            if (((ga == "baseline") || (ga == "first baseline")) && inRow) {
                 def b:double (lay.baselineOffsetOf(it))
                 def outer:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
                 if (b > (itemAt above ri)) {
@@ -720,6 +730,17 @@ class EVGLayoutFull {
                 }
                 if ((outer - b) > (itemAt below ri)) {
                     set below ri (outer - b)
+                }
+                any = true
+            }
+            if ((ga == "last baseline") && inRow) {
+                def bl:double (this.lastBaselineOf(lay it))
+                def outerL:double ((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx)
+                if (bl > (itemAt aboveL ri)) {
+                    set aboveL ri bl
+                }
+                if ((outerL - bl) > (itemAt belowL ri)) {
+                    set belowL ri (outerL - bl)
                 }
                 any = true
             }
@@ -731,6 +752,10 @@ class EVGLayoutFull {
                 def need:double ((itemAt above k) + (itemAt below k))
                 if (need > (itemAt rowSizes k)) {
                     set rowSizes k need
+                }
+                def needL:double ((itemAt aboveL k) + (itemAt belowL k))
+                if (needL > (itemAt rowSizes k)) {
+                    set rowSizes k needL
                 }
                 k = (k + 1)
             }
@@ -750,7 +775,14 @@ class EVGLayoutFull {
             push above 0.0
             r = (r + 1)
         }
+        def belowL:[double]
+        def rl:int 0
+        while (rl < rowCount) {
+            push belowL 0.0
+            rl = (rl + 1)
+        }
         def offs:[double]
+        def offsL:[double]
         def i:int 0
         while (i < (array_length items)) {
             def it:EVGElement (itemAt items i)
@@ -760,13 +792,24 @@ class EVGLayoutFull {
             }
             def ri:int (itemAt placedRow i)
             def b:double -1.0
-            if ((((ga == "baseline") || (ga == "first baseline")) && ((itemAt rowSpans i) == 1)) && ((ri < rowCount) && ((it.marginAutoTop || it.marginAutoBottom) == false))) {
+            def bL:double -1.0
+            def inRow:boolean (((itemAt rowSpans i) == 1) && ((ri < rowCount) && ((it.marginAutoTop || it.marginAutoBottom) == false)))
+            if (((ga == "baseline") || (ga == "first baseline")) && inRow) {
                 b = (lay.baselineOffsetOf(it))
                 if (b > (itemAt above ri)) {
                     set above ri b
                 }
             }
+            ; (a last-baseline item's shim is under it: the group's lowest
+            ; reach below the baseline less its own)
+            if ((ga == "last baseline") && inRow) {
+                bL = (((it.calculatedHeight + it.box.marginTopPx) + it.box.marginBottomPx) - (this.lastBaselineOf(lay it)))
+                if (bL > (itemAt belowL ri)) {
+                    set belowL ri bL
+                }
+            }
             push offs b
+            push offsL bL
             i = (i + 1)
         }
         lay.synthTop = wasTop
@@ -775,10 +818,15 @@ class EVGLayoutFull {
         def k:int 0
         while (k < (array_length items)) {
             def ob:double (itemAt offs k)
-            if (ob < 0.0) {
-                push shims 0.0
+            def obL:double (itemAt offsL k)
+            if (obL >= 0.0) {
+                push shims ((itemAt belowL (itemAt placedRow k)) - obL)
             } {
-                push shims ((itemAt above (itemAt placedRow k)) - ob)
+                if (ob < 0.0) {
+                    push shims 0.0
+                } {
+                    push shims ((itemAt above (itemAt placedRow k)) - ob)
+                }
             }
             k = (k + 1)
         }
@@ -3308,7 +3356,39 @@ class EVGLayoutFull {
         return -1.0
     }
 
+    ; a scroll container's baseline is within its border box (CSS Align
+    ; 9.1): content scrolled out of it gives the nearer edge
+    fn clampBaseline:void (lay:EVGLayout element:EVGElement) {
+        if (!null? element.css) {
+            def css:EVGCssExtra (EVGLayoutFull.cx(element))
+            if ((css.baseFromBottom >= 0.0) || css.lastBase) {
+                return
+            }
+        }
+        if (element.calculatedBaseline < 0.0) {
+            element.calculatedBaseline = 0.0
+        }
+        if (element.calculatedBaseline > element.calculatedHeight) {
+            element.calculatedBaseline = element.calculatedHeight
+        }
+        element.calculatedDescent = (element.calculatedHeight - element.calculatedBaseline)
+    }
+
     fn lastBaselineOffsetOf:double (lay:EVGLayout el:EVGElement) {
+        def lb:double (this.lastBaselineOffsetRaw(lay el))
+        ; (a scroll container's, within its border box)
+        if ((lb >= 0.0) && (el.clipsContent())) {
+            if (lb < el.box.marginTopPx) {
+                lb = el.box.marginTopPx
+            }
+            if (lb > (el.box.marginTopPx + el.calculatedHeight)) {
+                lb = (el.box.marginTopPx + el.calculatedHeight)
+            }
+        }
+        return lb
+    }
+
+    fn lastBaselineOffsetRaw:double (lay:EVGLayout el:EVGElement) {
         if (!null? el.css) {
             def fx:EVGCssExtra (EVGLayoutFull.cx(el))
             if (fx.flipBase && fx.flipDone) {
