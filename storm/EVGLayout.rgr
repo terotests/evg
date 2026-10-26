@@ -1450,7 +1450,8 @@ class EVGLayout {
             }
         } {
             if ((c.clipsContent()) == false) {
-                def autoMin:double (this.minIntrinsicWidthOf(c))
+                ; (the measure is of the margin box, the size is not)
+                def autoMin:double (((this.minIntrinsicWidthOf(c)) - c.box.marginLeftPx) - c.box.marginRightPx)
                 if (out < autoMin) {
                     out = autoMin
                 }
@@ -1880,6 +1881,30 @@ class EVGLayout {
         ; would shrink content to a height that does not exist yet — which is how
         ; document flow (auto-height Views stacked down a page) differs from the
         ; fixed-size panels this was originally written for.
+        ; (a column of no height of its own shrinks its items into its
+        ; max-height, where the extension does so)
+        if ((isColumn && (parent.hasDefiniteHeight == false)) && ((parent.maxHeight.isSet && ((parent.maxHeight.isPercent()) == false)) && (parent.flexWrap == "nowrap"))) {
+            def mxIn:double (parent.maxHeight.pixels - (parent.box.getVerticalChrome()))
+            if (mxIn < 0.0) {
+                mxIn = 0.0
+            }
+            def flowM:int 0
+            def jx:int 0
+            while (jx < childCount) {
+                def cx:EVGElement (parent.getChild(jx))
+                cx.inheritProperties(parent)
+                cx.resolveUnits(innerWidth innerHeight)
+                if (cx.isAbsolute == false) {
+                    flowM = (flowM + 1)
+                }
+                jx = (jx + 1)
+            }
+            def gapM:double 0.0
+            if (flowM > 1) {
+                gapM = ((to_double (flowM - 1)) * gapPx)
+            }
+            ext.columnShrink(this parent innerWidth mxIn gapM)
+        }
         if (isColumn && parent.hasDefiniteHeight) {
             def fixedHeight:double 0.0
             def totalFlexC:double 0.0
@@ -2010,6 +2035,9 @@ class EVGLayout {
                 ; (nor in a wrapping column: it wraps instead, each line
                 ; shrinking on its own)
                 if ((parent.clipsContent()) || (parent.flexWrap != "nowrap")) {
+                    overflowH = 0.0
+                }
+                if ((parent.flexWrap == "nowrap") && (ext.columnShrink(this parent innerWidth innerHeight gapTotalC))) {
                     overflowH = 0.0
                 }
                 if ((overflowH > 0.0) && (fixedHeight > 0.0)) {
@@ -2178,7 +2206,11 @@ class EVGLayout {
                             if c.minWidth.isSet {
                                 push minsW c.minWidth.pixels
                             } {
-                                push minsW 0.0
+                                def floorW:double (ext.shrinkFloorWidth(this parent c))
+                                if (floorW < 0.0) {
+                                    floorW = 0.0
+                                }
+                                push minsW floorW
                             }
                         }
                         if (canShrink == false) {
@@ -2318,6 +2350,13 @@ class EVGLayout {
                         ; (its margins stay inside the line)
                         if ((innerHeight > 0.0) && ((child.box.marginTopPx + child.box.marginBottomPx) > 0.0)) {
                             child.calculatedFlexHeight = ((innerHeight - child.box.marginTopPx) - child.box.marginBottomPx)
+                            ; (margins that take the whole line leave it
+                            ; nothing but its padding and border, not its
+                            ; content's height)
+                            if (child.calculatedFlexHeight <= 0.0) {
+                                child.calculatedFlexHeight = (child.box.getVerticalChrome())
+                                child.hasFlexHeight = true
+                            }
                         }
                     }
                 }

@@ -107,6 +107,18 @@ class EVGLayoutExt {
         return false
     }
 
+    ; a column with no growing item that overflows its height: true when
+    ; its items were shrunk here, and the core leaves them
+    fn columnShrink:boolean (lay:EVGLayout parent:EVGElement innerWidth:double innerHeight:double gapTotal:double) {
+        return false
+    }
+
+    ; the width a row's item with a flex basis of its own shrinks no further
+    ; than when it has no min-width (-1: nothing, as the core has it)
+    fn shrinkFloorWidth:double (lay:EVGLayout parent:EVGElement c:EVGElement) {
+        return -1.0
+    }
+
     ; the last-baseline group of a row's items (align-self: last
     ; baseline); not used when the core aligns them at the start
     fn lastBaselineLine:EVGLastLine (lay:EVGLayout row:[EVGElement] align:string) {

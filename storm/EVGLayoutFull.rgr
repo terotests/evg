@@ -794,6 +794,156 @@ class EVGLayoutFull {
         return ((EVGLayoutFull.cx(parent)).heightThrough == false)
     }
 
+    ; a CSS flex column's items shrink (CSS Flexbox 9.7), those of a height
+    ; of their own as the core shrinks them, and the ones of their
+    ; content's height too, to their min-height, or else to their content
+    ; (their automatic minimum, 4.5) unless they clip; in a scroll
+    ; container as well
+    fn columnShrink:boolean (lay:EVGLayout parent:EVGElement innerWidth:double innerHeight:double gapTotal:double) {
+        if ((EVGLayoutFull.cx(parent)).flexBox == false) {
+            return false
+        }
+        def n:int (parent.getChildCount())
+        def bases:[double]
+        def mins:[double]
+        def canS:[boolean]
+        def used:double gapTotal
+        def anyAuto:boolean false
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            def b:double 0.0
+            def mn:double 0.0
+            def can:boolean false
+            if (((c.isAbsolute == false) && ((c.isHidden()) == false)) && (c.flex <= 0.0)) {
+                used = ((used + c.box.marginTopPx) + c.box.marginBottomPx)
+                if c.height.isSet {
+                    b = c.height.pixels
+                    mn = (c.box.getVerticalChrome())
+                } {
+                    ; (its content's height at the width it is laid out at)
+                    def availM:double ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx)
+                    def cw:double (lay.estimateChildWidth(c availM (lay.crossShrinksUnder(parent))))
+                    if c.hasFlexWidth {
+                        cw = c.calculatedFlexWidth
+                    } {
+                        if c.width.isSet {
+                            cw = c.width.pixels
+                            if (cw >= innerWidth) {
+                                cw = availM
+                            }
+                        }
+                    }
+                    def wasRow:boolean lay.layingOutAlongRow
+                    def wasShrink:boolean lay.columnCrossShrinks
+                    lay.layingOutAlongRow = false
+                    lay.columnCrossShrinks = (lay.crossShrinksUnder(parent))
+                    c.calculatedFlexHeight = 0.0
+                    c.hasFlexHeight = false
+                    lay.layoutElement(c 0.0 0.0 cw innerHeight)
+                    lay.layingOutAlongRow = wasRow
+                    lay.columnCrossShrinks = wasShrink
+                    b = c.calculatedHeight
+                    mn = b
+                    if (c.clipsContent()) {
+                        mn = (c.box.getVerticalChrome())
+                    }
+                    anyAuto = true
+                }
+                if c.minHeight.isSet {
+                    mn = c.minHeight.pixels
+                }
+                if (mn > b) {
+                    mn = b
+                }
+                can = ((c.flexShrink > 0.0) && (b > mn))
+                used = (used + b)
+            }
+            push bases b
+            push mins mn
+            push canS can
+            i = (i + 1)
+        }
+        if (anyAuto == false) {
+            return false
+        }
+        def over:double (used - innerHeight)
+        if (over <= 0.0) {
+            return true
+        }
+        ; (each pass freezes the items that reach their minimum)
+        def fin:[double]
+        def frozen:[boolean]
+        def k:int 0
+        while (k < n) {
+            push fin (itemAt bases k)
+            push frozen ((itemAt canS k) == false)
+            k = (k + 1)
+        }
+        def pass:int 0
+        while ((over > 0.01) && (pass <= n)) {
+            def w:double 0.0
+            def j:int 0
+            while (j < n) {
+                if ((itemAt frozen j) == false) {
+                    w = (w + ((parent.getChild(j)).flexShrink * (itemAt bases j)))
+                }
+                j = (j + 1)
+            }
+            if (w <= 0.0) {
+                break
+            }
+            def left:double over
+            def j2:int 0
+            while (j2 < n) {
+                if ((itemAt frozen j2) == false) {
+                    def c2:EVGElement (parent.getChild(j2))
+                    def want:double ((itemAt fin j2) - ((over * (c2.flexShrink * (itemAt bases j2))) / w))
+                    if (want <= (itemAt mins j2)) {
+                        want = (itemAt mins j2)
+                        set frozen j2 true
+                    }
+                    left = (left - ((itemAt fin j2) - want))
+                    set fin j2 want
+                }
+                j2 = (j2 + 1)
+            }
+            over = left
+            pass = (pass + 1)
+        }
+        def m:int 0
+        while (m < n) {
+            def c3:EVGElement (parent.getChild(m))
+            if ((itemAt fin m) < (itemAt bases m)) {
+                c3.calculatedFlexHeight = (itemAt fin m)
+                c3.hasFlexHeight = true
+            }
+            m = (m + 1)
+        }
+        return true
+    }
+
+    ; a CSS flex item's automatic minimum width (CSS Flexbox 4.5): its
+    ; content's min-content width, no more than its width when it has one;
+    ; nothing when it clips
+    fn shrinkFloorWidth:double (lay:EVGLayout parent:EVGElement c:EVGElement) {
+        if ((EVGLayoutFull.cx(parent)).flexBox == false) {
+            return -1.0
+        }
+        if (c.clipsContent()) {
+            return -1.0
+        }
+        def had:boolean c.width.isSet
+        c.width.isSet = false
+        ; (the measure is of its margin box)
+        def m:double (((lay.intrinsicWidthNow(c true)) - c.box.marginLeftPx) - c.box.marginRightPx)
+        c.width.isSet = had
+        if (had && (c.width.pixels < m)) {
+            m = c.width.pixels
+        }
+        return m
+    }
+
     fn lastBaselineLine:EVGLastLine (lay:EVGLayout row:[EVGElement] align:string) {
         def ll (new EVGLastLine())
         for row bel:EVGElement b {
