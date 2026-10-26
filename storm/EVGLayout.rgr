@@ -1376,9 +1376,126 @@ class EVGLayout {
     ; Where a growing item with a height starts down a column.
     fn colBasis:double (c:EVGElement) {
         if c.flexBasis.isSet {
-            return c.flexBasis.pixels
+            return (EVGLayout.basisDown(c))
         }
         return c.height.pixels
+    }
+
+    ; the growing items of a column that a min-height or max-height holds
+    ; are frozen there and the rest share what they left (CSS Flexbox 9.7
+    ; 4d): nothing to do unless one is held
+    fn freezeColumnGrow:void (parent:EVGElement availC:double divC:double) {
+        def n:int (parent.getChildCount())
+        def held:boolean false
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            if (((c.isAbsolute == false) && (c.flex > 0.0)) && (c.calculatedFlexHeight > 0.0)) {
+                def t:double c.calculatedFlexHeight
+                if (((EVGLayout.limitH(c t)) != t)) {
+                    held = true
+                }
+            }
+            i = (i + 1)
+        }
+        if (held == false) {
+            return
+        }
+        def base:[double]
+        def frozen:[boolean]
+        i = 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            def grows:boolean (((c.isAbsolute == false) && (c.flex > 0.0)) && (c.calculatedFlexHeight > 0.0))
+            push frozen (grows == false)
+            if grows {
+                push base (c.calculatedFlexHeight - ((availC * c.flex) / divC))
+            } {
+                push base 0.0
+            }
+            i = (i + 1)
+        }
+        def pass:int 0
+        def again:boolean true
+        while (again && (pass <= n)) {
+            again = false
+            def left:double availC
+            def sumF:double 0.0
+            i = 0
+            while (i < n) {
+                def c:EVGElement (parent.getChild(i))
+                if (((c.isAbsolute == false) && (c.flex > 0.0)) && (c.calculatedFlexHeight > 0.0)) {
+                    if (itemAt frozen i) {
+                        left = (left - (c.calculatedFlexHeight - (itemAt base i)))
+                    } {
+                        sumF = (sumF + c.flex)
+                    }
+                }
+                i = (i + 1)
+            }
+            if (sumF <= 0.0) {
+                return
+            }
+            if (left < 0.0) {
+                left = 0.0
+            }
+            def totalV:double 0.0
+            i = 0
+            while (i < n) {
+                def c:EVGElement (parent.getChild(i))
+                if ((itemAt frozen i) == false) {
+                    def t:double ((itemAt base i) + ((left * c.flex) / (EVGLayout.flexDivisor(sumF))))
+                    c.calculatedFlexHeight = t
+                    totalV = (totalV + ((EVGLayout.limitH(c t)) - t))
+                }
+                i = (i + 1)
+            }
+            i = 0
+            while (i < n) {
+                def c:EVGElement (parent.getChild(i))
+                if ((itemAt frozen i) == false) {
+                    def t:double c.calculatedFlexHeight
+                    def dv:double ((EVGLayout.limitH(c t)) - t)
+                    def hit:boolean (dv != 0.0)
+                    if (totalV > 0.001) {
+                        hit = (dv > 0.0)
+                    }
+                    if (totalV < -0.001) {
+                        hit = (dv < 0.0)
+                    }
+                    if hit {
+                        c.calculatedFlexHeight = (EVGLayout.limitH(c t))
+                        set frozen i true
+                        again = true
+                    }
+                }
+                i = (i + 1)
+            }
+            pass = (pass + 1)
+        }
+    }
+
+    ; h within the item's own min-height and max-height in px (max first)
+    sfn limitH:double (c:EVGElement h:double) {
+        def out:double h
+        if ((c.maxHeight.isSet && ((c.maxHeight.isPercent()) == false)) && (out > c.maxHeight.pixels)) {
+            out = c.maxHeight.pixels
+        }
+        if ((c.minHeight.isSet && ((c.minHeight.isPercent()) == false)) && (out < c.minHeight.pixels)) {
+            out = c.minHeight.pixels
+        }
+        return out
+    }
+
+    ; a flex-basis down a column: content-box added the horizontal edges
+    ; to it (EVG reads flex-basis along a row), the vertical ones belong
+    sfn basisDown:double (c:EVGElement) {
+        if c.contentBox {
+            def ex:double ((c.box.paddingLeftPx + c.box.paddingRightPx) + (c.box.borderWidthPx * 2.0))
+            def ey:double ((c.box.paddingTopPx + c.box.paddingBottomPx) + (c.box.borderWidthPx * 2.0))
+            return ((c.flexBasis.pixels - ex) + ey)
+        }
+        return c.flexBasis.pixels
     }
 
     fn baseMain:double (c:EVGElement) {
@@ -1856,10 +1973,20 @@ class EVGLayout {
                 ; its basis gives the difference back to the others)
                 def poolSpace:double ((innerWidth - fixedWidth) - totalGap)
                 def poolFlex:double totalFlex
+                ; (each pass sizes every unfrozen item from the same free
+                ; space, then freezes the min violations when the clamps
+                ; added room overall, the max ones when they took it, all
+                ; when they cancel, CSS Flexbox 9.7 4d)
                 def pass:int 0
                 def settled:boolean false
                 while ((pass < childCount) && (settled == false)) {
                     settled = true
+                    def useSpace:double poolSpace
+                    if ((poolFlex < 1.0) && ((availableForFlex * poolFlex) < useSpace)) {
+                        useSpace = (availableForFlex * poolFlex)
+                    }
+                    def totalV:double 0.0
+                    def anyV:boolean false
                     j = 0
                     while (j < childCount) {
                         def c:EVGElement (parent.getChild(j))
@@ -1877,16 +2004,9 @@ class EVGLayout {
                             def sizeW:double basisW
                             ; (factors that sum to less than 1 take that share
                             ; of the free space, CSS Flexbox 9.7 4b)
-                            if ((poolFlex > 0.0) && (poolSpace > 0.0)) {
-                                def useSpace:double poolSpace
-                                if ((poolFlex < 1.0) && ((availableForFlex * poolFlex) < useSpace)) {
-                                    useSpace = (availableForFlex * poolFlex)
-                                }
+                            if ((poolFlex > 0.0) && (useSpace > 0.0)) {
                                 sizeW = (basisW + ((useSpace * c.flex) / poolFlex))
                             }
-                            ; Clamp, and if the clamp bit, freeze here and give
-                            ; the difference back to the remaining items.
-                            ;
                             ; `clampMain` is shared with the basis pass above
                             ; and with the shrink pass below, which is how the
                             ; three of them stopped disagreeing about which of
@@ -1894,15 +2014,52 @@ class EVGLayout {
                             ; automatic minimum lives there now.
                             def clampedW:double (this.clampMain(c sizeW))
                             if (clampedW != sizeW) {
-                                set frozen j true
-                                poolSpace = ((poolSpace - clampedW) + basisW)
-                                poolFlex = (poolFlex - c.flex)
-                                settled = false
+                                anyV = true
+                                totalV = (totalV + (clampedW - sizeW))
                             }
                             c.calculatedFlexWidth = clampedW
                             c.hasFlexWidth = true
                         }
                         j = j + 1
+                    }
+                    if anyV {
+                        settled = false
+                        ; (the sizes as wanted: worked out again from this
+                        ; pass's free space, which freezing now changes)
+                        def passUse:double useSpace
+                        def passFlex:double poolFlex
+                        j = 0
+                        while (j < childCount) {
+                            def c:EVGElement (parent.getChild(j))
+                            if ((c.flex > 0.0) && ((itemAt frozen j) == false)) {
+                                def basisF:double 0.0
+                                if c.flexBasis.isSet {
+                                    basisF = c.flexBasis.pixels
+                                } {
+                                    if c.width.isSet {
+                                        basisF = c.width.pixels
+                                    }
+                                }
+                                def wantW:double basisF
+                                if ((passFlex > 0.0) && (passUse > 0.0)) {
+                                    wantW = (basisF + ((passUse * c.flex) / passFlex))
+                                }
+                                def dv:double (c.calculatedFlexWidth - wantW)
+                                def hit:boolean (dv != 0.0)
+                                if (totalV > 0.001) {
+                                    hit = (dv > 0.0)
+                                }
+                                if (totalV < -0.001) {
+                                    hit = (dv < 0.0)
+                                }
+                                if hit {
+                                    set frozen j true
+                                    poolSpace = ((poolSpace - c.calculatedFlexWidth) + basisF)
+                                    poolFlex = (poolFlex - c.flex)
+                                }
+                            }
+                            j = j + 1
+                        }
                     }
                     pass = (pass + 1)
                 }
@@ -1976,7 +2133,7 @@ class EVGLayout {
                             fixedHeight = (fixedHeight + mAxis)
                             ; (it grows from a flex-basis of its own)
                             if (c.flexBasis.isSet && ((c.flexBasis.isPercent()) == false)) {
-                                fixedHeight = (fixedHeight + c.flexBasis.pixels)
+                                fixedHeight = (fixedHeight + (EVGLayout.basisDown(c)))
                             }
                         } {
                             ; auto-height non-flex child: measured below, when
@@ -2053,7 +2210,7 @@ class EVGLayout {
                                 c.calculatedFlexHeight = ((itemAt autoBasisC jg) + c.calculatedFlexHeight)
                             }
                             if (c.flexBasis.isSet && ((c.flexBasis.isPercent()) == false)) {
-                                c.calculatedFlexHeight = (c.flexBasis.pixels + c.calculatedFlexHeight)
+                                c.calculatedFlexHeight = ((EVGLayout.basisDown(c)) + c.calculatedFlexHeight)
                             }
                         }
                         if (c.height.isSet && (c.flex > 0.0)) {
@@ -2063,6 +2220,7 @@ class EVGLayout {
                     }
                     jg = (jg + 1)
                 }
+                this.freezeColumnGrow(parent availC totalFlexC)
             } {
                 ; No grow flex — shrink to fit. Each item gives up space in
                 ; proportion to (flex-shrink x its size), so flex-shrink: 0
@@ -6134,6 +6292,18 @@ class EVGLayout {
             rowShift = (itemAt rowDist 0)
             rowGapPx = (rowGapPx + (itemAt rowDist 1))
             rowGapTotal = (rowGapTotal + ((itemAt rowDist 1) * (to_double (rowsUsed - 1))))
+        }
+
+        ; (a percentage row gap of a grid of no definite height is of the
+        ; height its rows make, which it does not change, CSS Grid 10.1)
+        if ((parent.hasDefiniteHeight == false) && (rowsUsed > 1)) {
+            def rgU:EVGUnit parent.gap
+            if parent.rowGap.isSet {
+                rgU = parent.rowGap
+            }
+            if (rgU.isSet && (rgU.isPercent())) {
+                rowGapPx = (rowGapPx + ((rowsH * rgU.value) / 100.0))
+            }
         }
 
         ; --- final placement -------------------------------------------------
