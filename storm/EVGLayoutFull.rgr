@@ -166,6 +166,20 @@ class EVGLayoutFull {
                 }
             }
         }
+        ; (an inline-block sits on the line by its last line's baseline,
+        ; CSS 2.1 10.8.1)
+        if css.lastBase {
+            if ((element.hasBaseline == false) && (childCount > 0)) {
+                lay.inheritBaselineFromFirstChild(element)
+            }
+            if element.hasBaseline {
+                def llb:double ((this.lastBaselineOffsetOf(lay element)) - element.box.marginTopPx)
+                if (llb > element.calculatedBaseline) {
+                    element.calculatedBaseline = llb
+                    element.calculatedDescent = (element.calculatedHeight - llb)
+                }
+            }
+        }
         if (css.isCb && (childCount > 0)) {
             this.placeOuterAbs(lay element element)
         }

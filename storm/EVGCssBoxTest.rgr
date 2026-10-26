@@ -1211,6 +1211,23 @@ class CssBoxCheck {
         this.layoutAt(page58 300.0 600.0)
         this.ok("flex row with a baseline-aligned second item: the row's baseline is that item's" (this.near(c58.calculatedBaseline ((b58.calculatedY - c58.calculatedY) + b58.calculatedBaseline))))
 
+        ; --- 55. baseline-last: a box of two lines has its second's baseline ---
+        def page59 (EVGElement.createDiv())
+        page59.setAttribute("width" "300px")
+        def c59 (EVGElement.createDiv())
+        c59.setAttribute("baseline-last" "true")
+        def l1 (EVGElement.createSpan())
+        l1.setAttribute("font-size" "20px")
+        l1.textContent = "a"
+        c59.addChild(l1)
+        def l2 (EVGElement.createSpan())
+        l2.setAttribute("font-size" "20px")
+        l2.textContent = "b"
+        c59.addChild(l2)
+        page59.addChild(c59)
+        this.layoutAt(page59 300.0 600.0)
+        this.ok("baseline-last on a column of two lines: the second line's baseline" (this.near(c59.calculatedBaseline ((l2.calculatedY - c59.calculatedY) + l2.calculatedBaseline))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

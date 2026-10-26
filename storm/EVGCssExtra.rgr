@@ -56,6 +56,8 @@ class EVGCssExtra {
     ; (or this far under its top: baseline-from-top, a line of boxes at
     ; its top and the strut there)
     def baseFromTop:double -1.0
+    ; an inline-block: its baseline is its last line's (baseline-last)
+    def lastBase:boolean false
     ; border sides of unequal widths that the front end gave EVG as padding
     ; (EVG's border is one width): the padding edge is this far inside
     ; (folded-border: top right bottom left)
@@ -96,7 +98,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || (name == "beside-floats")))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || (name == "beside-floats"))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -191,6 +193,10 @@ class EVGCssExtra {
             }
             return
         }
+        if (name == "baseline-last") {
+            lastBase = (value == "true")
+            return
+        }
         if (name == "baseline-from-top") {
             def bft@(optional):double (str2double value)
             if (!null? bft) {
@@ -224,6 +230,7 @@ class EVGCssExtra {
         c.flexBox = flexBox
         c.baseFromBottom = baseFromBottom
         c.baseFromTop = baseFromTop
+        c.lastBase = lastBase
         c.central = central
         c.flipBase = flipBase
         c.skipFirst = skipFirst
