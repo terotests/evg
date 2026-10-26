@@ -4609,6 +4609,13 @@ class EVGLayout {
 
     fn intrinsicWidthNow:double (el:EVGElement wantMin:boolean) {
         def outer:double 0.0
+        ; (a box under size containment counts as its contain-intrinsic-size)
+        if ((!null? el.css) && (el.width.isSet == false)) {
+            def cwOv:double (ext.containedWidth(el))
+            if (cwOv >= 0.0) {
+                return (((cwOv + (el.box.getHorizontalChrome())) + el.box.marginLeftPx) + el.box.marginRightPx)
+            }
+        }
         ; A PERCENTAGE IS NOT A DEFINITE WIDTH HERE. Intrinsic sizing is the
         ; question "how wide would this be with unlimited / with no space",
         ; asked while the containing block's width is still being worked out —

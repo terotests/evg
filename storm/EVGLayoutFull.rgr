@@ -3502,6 +3502,11 @@ class EVGLayoutFull {
     ; a percentage height of a height not yet known is auto (CSS 2.1
     ; 10.5); a stretched flex item lays its children out again once its
     ; height is definite
+    fn containedWidth:double (el:EVGElement) {
+        def cc:EVGCssExtra (EVGLayoutFull.cx(el))
+        return cc.containW
+    }
+
     fn pctHeightAuto:boolean (lay:EVGLayout el:EVGElement) {
         def pc:EVGCssExtra (EVGLayoutFull.cx(el))
         return pc.pctAuto

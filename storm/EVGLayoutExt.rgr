@@ -119,6 +119,12 @@ class EVGLayoutExt {
         return false
     }
 
+    ; the content width a box counts as for its intrinsic size, or -1 for
+    ; its content's (size containment)
+    fn containedWidth:double (el:EVGElement) {
+        return -1.0
+    }
+
     ; once the whole tree is laid out
     fn afterLayout:void (lay:EVGLayout root:EVGElement) {
     }
