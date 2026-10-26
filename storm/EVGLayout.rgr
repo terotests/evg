@@ -5401,9 +5401,17 @@ class EVGLayout {
                         def dmv:double m2
                         def dmTk:EVGGridTrack (cols.trackAt(col2))
                         if ((dmTk.kind == 0) && (dmTk.minIntrinsic == 1)) {
-                            def dmBox:double (m2 - dmOut)
+                            ; (percentage margins count as nothing here)
+                            if ((it.box.marginLeft.isPercent()) || (it.box.marginRight.isPercent())) {
+                                dmOut = 0.0
+                            }
+                            def dmBox:double (m2 - (it.box.marginLeftPx + it.box.marginRightPx))
                             if (dmBox > (dmTk.value - dmOut)) {
                                 dmBox = (dmTk.value - dmOut)
+                            }
+                            ; (a set width is its own minimum, unclamped)
+                            if (it.width.isSet && ((it.width.isPercent()) == false)) {
+                                dmBox = it.width.pixels
                             }
                             if (it.minWidth.isSet && ((it.minWidth.isPercent()) == false)) {
                                 dmBox = it.minWidth.pixels
@@ -5414,8 +5422,12 @@ class EVGLayout {
                             if ((it.minWidth.isSet == false) && ((it.minWidth.unitType == 8) || (it.minWidth.unitType == 6))) {
                                 dmBox = (w2 - dmOut)
                             }
-                            if (dmBox < (it.box.getHorizontalChrome())) {
-                                dmBox = (it.box.getHorizontalChrome())
+                            def dmCh:double (it.box.getHorizontalChrome())
+                            if ((it.box.paddingLeft.isPercent()) || (it.box.paddingRight.isPercent())) {
+                                dmCh = 0.0
+                            }
+                            if (dmBox < dmCh) {
+                                dmBox = dmCh
                             }
                             dmv = (dmBox + dmOut)
                         }

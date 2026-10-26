@@ -1599,6 +1599,41 @@ class EVGLayoutFull {
             } {
                 size = (lay.minIntrinsicWidthOf(it))
             }
+            ; (an item spanning only fixed-max tracks: its minimum is its
+            ; min-width, else its content clamped by those maxes, CSS Grid
+            ; 6.6, and never under its padding and border)
+            if (step == 1) {
+                def allFixed:boolean true
+                def mxSum:double ((to_double (span - 1)) * gap)
+                def tf:int c0
+                while (tf < (c0 + span)) {
+                    if ((itemAt maxT tf) != 0) {
+                        allFixed = false
+                    }
+                    mxSum = (mxSum + (itemAt G tf))
+                    tf = (tf + 1)
+                }
+                if allFixed {
+                    def sOut:double (it.box.marginLeftPx + it.box.marginRightPx)
+                    if (size > mxSum) {
+                        size = mxSum
+                    }
+                    ; (a set width is its own minimum, unclamped)
+                    if (it.width.isSet && ((it.width.isPercent()) == false)) {
+                        size = (it.width.pixels + sOut)
+                    }
+                    if ((it.minWidth.isSet && ((it.minWidth.isPercent()) == false)) && ((it.minWidth.pixels + sOut) > size)) {
+                        size = (it.minWidth.pixels + sOut)
+                    }
+                    def sCh:double (it.box.getHorizontalChrome())
+                    if ((it.box.paddingLeft.isPercent()) || (it.box.paddingRight.isPercent())) {
+                        sCh = 0.0
+                    }
+                    if (size < (sCh + sOut)) {
+                        size = (sCh + sOut)
+                    }
+                }
+            }
             size = (size - ((to_double (span - 1)) * gap))
             ; the affected tracks, and what is left to distribute
             def aff:[int]
