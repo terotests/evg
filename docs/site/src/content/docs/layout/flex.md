@@ -32,13 +32,20 @@ description: EVG's flex layout, including the places it differs from CSS.
 
 A text leaf shrink-wraps to its measured content. It does not claim the parent's width.
 
+## Auto height and `justify-content`
+
+A column with an auto height is as tall as its content, within `min-height` and `max-height`. `justify-content: center` in such a column centres against that height. A button that is a column with `justify-content: center` keeps its label in the middle ([evg#74](https://github.com/terotests/evg/pull/74)).
+
+Percentage heights of a flexed column item's children resolve against the item's flexed height.
+
 ## How a line is sized
 
 1. Each item starts at its `flex-basis` (or its content size).
 2. Free space is shared by `flex-grow`.
 3. Overflow is shared by `flex-shrink` × base size.
-4. An item that hits `min-width` or `max-width` is **frozen** at the limit. What it did not take is offered to the rest.
+4. An item that hits `min-width` or `max-width` is **frozen** at the limit. What it did not take is offered to the rest. The loop is CSS Flexbox 9.7, for rows and columns.
 5. `max-width` is applied before `min-width`. When the two contradict, the minimum wins.
+6. An item does not shrink under its padding and border. With `min-width: auto` (and EVGFull) it does not shrink under its content's minimum size.
 
 [`EVGFlexRulesTest.rgr`](https://github.com/terotests/evg/blob/master/storm/EVGFlexRulesTest.rgr) is the statement of those rules.
 
