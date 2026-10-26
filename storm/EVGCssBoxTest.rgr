@@ -1149,6 +1149,17 @@ class CssBoxCheck {
         this.layoutAt(page54 300.0 600.0)
         this.ok("minmax(auto, 0px) tracks around min-width 40, min-height 30, margin 5: the item is 40 x 30" ((this.near(a54.calculatedWidth 40.0)) && (this.near(a54.calculatedHeight 30.0))))
 
+        ; --- 51. aspect-ratio with a set height: a fit-content width of it ---
+        def page55 (EVGElement.createDiv())
+        page55.setAttribute("width" "300px")
+        def a55 (EVGElement.createDiv())
+        a55.setAttribute("width" "fit-content")
+        a55.setAttribute("height" "60px")
+        a55.setAttribute("aspect-ratio" "2 / 1")
+        page55.addChild(a55)
+        this.layoutAt(page55 300.0 600.0)
+        this.ok("width fit-content, height 60px, aspect-ratio 2/1, empty: 120 wide" (this.near(a55.calculatedWidth 120.0)))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

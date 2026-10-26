@@ -4236,6 +4236,20 @@ class EVGLayout {
                     outer = (this.intrinsicOfChildren(el wantMin))
                 }
             }
+            ; (a set height and an aspect-ratio give the width it asks for,
+            ; CSS Sizing 4, 5.1)
+            if ((el.aspectRatio > 0.0) && (el.height.isSet && ((el.height.isPercent()) == false))) {
+                def arEX:double ((el.box.paddingLeftPx + el.box.paddingRightPx) + (el.box.borderWidthPx * 2.0))
+                def arEY:double ((el.box.paddingTopPx + el.box.paddingBottomPx) + (el.box.borderWidthPx * 2.0))
+                def arIn:double (el.height.pixels - arEY)
+                if (arIn < 0.0) {
+                    arIn = 0.0
+                }
+                def arW:double ((arIn * el.aspectRatio) + arEX)
+                if (arW > outer) {
+                    outer = arW
+                }
+            }
             ; (max-width: min-content holds a measure at most the min-content
             ; one, then min-width: max-content at least the max-content one)
             def kwMeasure:boolean ((measuringKeyword == false) && (((el.minWidth.isSet == false) && (el.minWidth.unitType == 8)) || ((el.maxWidth.isSet == false) && (el.maxWidth.unitType == 7))))
