@@ -1160,6 +1160,16 @@ class CssBoxCheck {
         this.layoutAt(page55 300.0 600.0)
         this.ok("width fit-content, height 60px, aspect-ratio 2/1, empty: 120 wide" (this.near(a55.calculatedWidth 120.0)))
 
+        ; --- 52. baseline-from-top: a line with no text has its baseline there ---
+        def page56 (EVGElement.createDiv())
+        page56.setAttribute("width" "300px")
+        def a56 (EVGElement.createDiv())
+        a56.setAttribute("height" "25px")
+        a56.setAttribute("baseline-from-top" "4")
+        page56.addChild(a56)
+        this.layoutAt(page56 300.0 600.0)
+        this.ok("baseline-from-top 4 on a 25px box: baseline 4, descent 21" ((a56.hasBaseline && (this.near(a56.calculatedBaseline 4.0))) && (this.near(a56.calculatedDescent 21.0))))
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {

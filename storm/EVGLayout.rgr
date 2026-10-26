@@ -4894,13 +4894,15 @@ class EVGLayout {
     ; minmax(auto, <length>) rows: the auto min is the items' minimum
     ; contribution, their margins and min-height (or padding and border),
     ; the content-based minimum being clamped by the fixed max (CSS Grid 6.6)
-    fn gridRowAutoMins:void (rowSpec:string items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
+    fn gridRowAutoMins:void (parent:EVGElement rowSpec:string items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
         if ((strlen rowSpec) == 0) {
             return
         }
         if ((indexOf rowSpec "auto") < 0) {
             return
         }
+        ; (a baseline-aligned item's shift is part of its contribution)
+        def shims:[double] (ext.gridBaselineShims(this parent items placedRow rowSpans (array_length rowSizes)))
         def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
         def r:int 0
         while ((r < (declared.count())) && (r < (array_length rowSizes))) {
@@ -4916,6 +4918,9 @@ class EVGLayout {
                             box = it.minHeight.pixels
                         }
                         def outer:double ((box + it.box.marginTopPx) + it.box.marginBottomPx)
+                        if (m < (array_length shims)) {
+                            outer = (outer + (itemAt shims m))
+                        }
                         if (outer > floor) {
                             floor = outer
                         }
@@ -5763,7 +5768,7 @@ class EVGLayout {
             ext.gridFlexRows(parent rowSpec rowGapTotal rowSizes)
         }
 
-        this.gridRowAutoMins(rowSpec items placedRow rowSpans rowSizes)
+        this.gridRowAutoMins(parent rowSpec items placedRow rowSpans rowSizes)
         for rowCollapsed rcz:int rczi {
             if (rcz < (array_length rowSizes)) {
                 set rowSizes rcz (0.0 - rowGapPx)

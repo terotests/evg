@@ -167,6 +167,12 @@ class EVGLayoutExt {
     fn gridRowBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double]) {
     }
 
+    ; each item's baseline shift in its row (none: an empty list)
+    fn gridBaselineShims:[double] (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowCount:int) {
+        def none:[double]
+        return none
+    }
+
     ; an item with no baseline has it at its top, not its bottom
     fn synthTop:boolean (parent:EVGElement) {
         return false

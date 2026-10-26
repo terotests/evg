@@ -105,6 +105,11 @@ class EVGLayoutFull {
             element.calculatedDescent = css.baseFromBottom
             element.hasBaseline = true
         }
+        if ((element.hasBaseline == false) && (css.baseFromTop >= 0.0)) {
+            element.calculatedBaseline = css.baseFromTop
+            element.calculatedDescent = (element.calculatedHeight - css.baseFromTop)
+            element.hasBaseline = true
+        }
         if ((element.hasBaseline == false) && (childCount > 0)) {
             def i:int 0
             def n:int childCount
@@ -680,6 +685,49 @@ class EVGLayoutFull {
             }
         }
         lay.synthTop = wasTop
+    }
+
+    fn gridBaselineShims:[double] (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowCount:int) {
+        def wasTop:boolean lay.synthTop
+        lay.synthTop = (this.synthTop(parent))
+        def above:[double]
+        def r:int 0
+        while (r < rowCount) {
+            push above 0.0
+            r = (r + 1)
+        }
+        def offs:[double]
+        def i:int 0
+        while (i < (array_length items)) {
+            def it:EVGElement (itemAt items i)
+            def ga:string it.alignSelf
+            if (((strlen ga) == 0) || (ga == "auto")) {
+                ga = parent.alignItems
+            }
+            def ri:int (itemAt placedRow i)
+            def b:double -1.0
+            if ((((ga == "baseline") || (ga == "first baseline")) && ((itemAt rowSpans i) == 1)) && ((ri < rowCount) && ((it.marginAutoTop || it.marginAutoBottom) == false))) {
+                b = (lay.baselineOffsetOf(it))
+                if (b > (itemAt above ri)) {
+                    set above ri b
+                }
+            }
+            push offs b
+            i = (i + 1)
+        }
+        lay.synthTop = wasTop
+        def shims:[double]
+        def k:int 0
+        while (k < (array_length items)) {
+            def ob:double (itemAt offs k)
+            if (ob < 0.0) {
+                push shims 0.0
+            } {
+                push shims ((itemAt above (itemAt placedRow k)) - ob)
+            }
+            k = (k + 1)
+        }
+        return shims
     }
 
     fn synthTop:boolean (parent:EVGElement) {
