@@ -1710,6 +1710,19 @@ class EVGLayoutFull {
                 def ow:double ((c2.calculatedWidth + ml) + c2.box.marginRightPx)
                 def oh:double ((c2.calculatedHeight + c2.box.marginTopPx) + c2.box.marginBottomPx)
                 def y:double minTop
+                ; (a float that clears goes under the earlier floats of
+                ; that side, CSS 2.1 9.5.2)
+                def cxc:EVGCssExtra (EVGLayoutFull.cx(c2))
+                if cxc.clearFloats {
+                    def cj:int 0
+                    while (cj < (array_length fx)) {
+                        def cside:boolean ((cxc.clearSide == "true") || ((cxc.clearSide == "right") == (itemAt fr cj)))
+                        if (cside && (((itemAt fy cj) + (itemAt fh cj)) > y)) {
+                            y = ((itemAt fy cj) + (itemAt fh cj))
+                        }
+                        cj = (cj + 1)
+                    }
+                }
                 def x:double 0.0
                 def found:boolean false
                 def guard:int 0
