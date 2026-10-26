@@ -96,6 +96,9 @@ class EVGCssExtra {
     ; a block formatting context whose float rows take no room in its flow
     ; (float-holder: true): it is as tall as its floats reach
     def floatHolder:boolean false
+    ; (pct-auto: true): its percentage height is auto while its parent's
+    ; height is not known
+    def pctAuto:boolean false
     ; a sticky box's top / left inset (sticky-top, sticky-left: px), kept
     ; from its scrollport's edge at scroll position 0; -1: none
     def stickyTop:double -1.0
@@ -107,7 +110,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || (name == "sticky-left")))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || (name == "pct-auto"))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -165,6 +168,9 @@ class EVGCssExtra {
         if (name == "beside-floats") {
             besideFloats = (value == "true")
             return
+        }
+        if (name == "pct-auto") {
+            pctAuto = (value == "true")
         }
         if (name == "float-holder") {
             floatHolder = (value == "true")
@@ -264,6 +270,7 @@ class EVGCssExtra {
         c.clearSide = clearSide
         c.besideFloats = besideFloats
         c.floatHolder = floatHolder
+        c.pctAuto = pctAuto
         c.stickyTop = stickyTop
         c.stickyLeft = stickyLeft
         c.foldT = foldT

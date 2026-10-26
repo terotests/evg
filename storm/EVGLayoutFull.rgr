@@ -1042,6 +1042,19 @@ class EVGLayoutFull {
             push frozen ((itemAt canS k) == false)
             k = (k + 1)
         }
+        ; (factors that sum to less than 1 cut that share of the overflow,
+        ; CSS Flexbox 9.7 4b)
+        def sSum:double 0.0
+        def ks:int 0
+        while (ks < n) {
+            if ((itemAt frozen ks) == false) {
+                sSum = (sSum + (parent.getChild(ks)).flexShrink)
+            }
+            ks = (ks + 1)
+        }
+        if (sSum < 1.0) {
+            over = (over * sSum)
+        }
         def pass:int 0
         while ((over > 0.01) && (pass <= n)) {
             def w:double 0.0
@@ -3472,6 +3485,14 @@ class EVGLayoutFull {
 
     ; a scroll container's baseline is within its border box (CSS Align
     ; 9.1): content scrolled out of it gives the nearer edge
+    ; a percentage height of a height not yet known is auto (CSS 2.1
+    ; 10.5); a stretched flex item lays its children out again once its
+    ; height is definite
+    fn pctHeightAuto:boolean (lay:EVGLayout el:EVGElement) {
+        def pc:EVGCssExtra (EVGLayoutFull.cx(el))
+        return pc.pctAuto
+    }
+
     fn clampBaseline:void (lay:EVGLayout element:EVGElement) {
         if (!null? element.css) {
             def css:EVGCssExtra (EVGLayoutFull.cx(element))

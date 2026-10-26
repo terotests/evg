@@ -113,6 +113,12 @@ class EVGLayoutExt {
         return false
     }
 
+    ; whether a percentage height of a height still unknown is auto (the
+    ; core has it as 0)
+    fn pctHeightAuto:boolean (lay:EVGLayout el:EVGElement) {
+        return false
+    }
+
     ; once the whole tree is laid out
     fn afterLayout:void (lay:EVGLayout root:EVGElement) {
     }
