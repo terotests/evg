@@ -302,7 +302,9 @@ class EVGStyleSheet {
 
     Constructor () {
         ruleCounter = 0
-        this.dropPlans()
+        ; the plan fields start empty: dropPlans() would only bump the
+        ; generation, and a constructor cannot call it on Rust
+        generation = (generation + 1)
     }
 
     ; Everything cached is a function of the rules and the viewport, so both of
