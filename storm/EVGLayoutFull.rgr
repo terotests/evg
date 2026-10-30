@@ -3665,6 +3665,55 @@ class EVGLayoutFull {
         ; (a flex container's is its last item's, synthesized from that
         ; item's border box when it has none)
         if ((EVGLayoutFull.cx(el)).flexBox && (el.display == "flex")) {
+            ; (a wrapping row's last line, back from its last item while the
+            ; items go on to the left: its baseline-aligned items give the
+            ; shared baseline, CSS Flexbox 8.5)
+            if (((el.flexWrap == "wrap") || (el.flexWrap == "wrap-reverse")) && (el.flexDirection == "row")) {
+                ; (with wrap-reverse the line at the block end is the first)
+                def rev:boolean (el.flexWrap == "wrap-reverse")
+                def bi:int (n - 1)
+                def step:int -1
+                if rev {
+                    bi = 0
+                    step = 1
+                }
+                def prevX:double -1.0
+                def found:boolean false
+                def fb:double -1.0
+                while (((bi >= 0) && (bi < n)) && (found == false)) {
+                    def bc:EVGElement (el.getChild(bi))
+                    if ((bc.isAbsolute == false) && ((bc.isHidden()) == false)) {
+                        def newLine:boolean ((prevX >= 0.0) && (bc.calculatedX >= prevX))
+                        if rev {
+                            newLine = ((prevX >= 0.0) && (bc.calculatedX <= prevX))
+                        }
+                        if newLine {
+                            found = true
+                        } {
+                            prevX = bc.calculatedX
+                            def bas:string bc.alignSelf
+                            if (((strlen bas) == 0) || (bas == "auto")) {
+                                bas = el.alignItems
+                            }
+                            if ((indexOf bas "baseline") >= 0) {
+                                def bb:double -1.0
+                                if ((indexOf bas "last") >= 0) {
+                                    bb = (this.lastBaselineOffsetOf(lay bc))
+                                } {
+                                    bb = (lay.baselineOffsetOf(bc))
+                                }
+                                if (bb >= 0.0) {
+                                    fb = ((((bc.calculatedY - bc.box.marginTopPx) - el.calculatedY) + bb) + el.box.marginTopPx)
+                                }
+                            }
+                        }
+                    }
+                    bi = (bi + step)
+                }
+                if (fb >= 0.0) {
+                    return fb
+                }
+            }
             def li:int (n - 1)
             while (li >= 0) {
                 def lc:EVGElement (el.getChild(li))
