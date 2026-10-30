@@ -1276,7 +1276,7 @@ class EVGLayoutFull {
 
     ; align-self: last baseline: the items share their last baselines, the
     ; group at the end of the row they end in (its fallback is safe end)
-    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
+    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
         def itemCount:int (array_length items)
     def lp:int 0
     while (lp < itemCount) {
@@ -1358,7 +1358,7 @@ class EVGLayoutFull {
         }
         lp = (lp + 1)
     }
-    this.gridFirstBaseline(lay parent items placedRow rowSpans)
+    this.gridFirstBaseline(lay parent items placedRow rowSpans placedCol)
     }
 
     ; a grid's first (last) baseline is the shared baseline of the items of
@@ -1366,7 +1366,7 @@ class EVGLayoutFull {
     ; Grid 10.8); otherwise the first (last) item's, the first as in the
     ; core. The last is kept in calculatedLastBaseline for
     ; lastBaselineOffsetOf.
-    fn gridFirstBaseline:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int]) {
+    fn gridFirstBaseline:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int]) {
         def itemCount:int (array_length items)
         if (itemCount == 0) {
             return
@@ -1387,6 +1387,9 @@ class EVGLayoutFull {
         }
         def firstDone:boolean false
         def lastB:double -1.0
+        ; (an item with no baseline has it at its border box's bottom)
+        def wasB:boolean lay.synthBorder
+        lay.synthBorder = true
         def j:int 0
         while (j < itemCount) {
             def el:EVGElement (itemAt items j)
@@ -1405,7 +1408,13 @@ class EVGLayoutFull {
                         b = (el.box.marginTopPx + el.calculatedHeight)
                     }
                 }
-                if ((firstDone == false) && ((itemAt placedRow j) == firstRow)) {
+                ; (one aligned by its last baseline is in the group of the row it
+                ; ends in)
+                def inFirst:boolean (byFirst && ((itemAt placedRow j) == firstRow))
+                if (byLast && ((((itemAt placedRow j) + (itemAt rowSpans j)) - 1) == firstRow)) {
+                    inFirst = true
+                }
+                if ((firstDone == false) && inFirst) {
                     parent.calculatedBaseline = (top + b)
                     parent.calculatedDescent = 0.0
                     parent.hasBaseline = true
@@ -1417,6 +1426,31 @@ class EVGLayoutFull {
             }
             j = (j + 1)
         }
+        ; (none aligns by a baseline: the first row's item in grid order,
+        ; the lowest column, then the document order; one with no
+        ; baseline gives its border box's bottom)
+        if (firstDone == false) {
+            def pick:int -1
+            def q:int 0
+            while (q < itemCount) {
+                if ((itemAt placedRow q) == firstRow) {
+                    if ((pick < 0) || ((itemAt placedCol q) < (itemAt placedCol pick))) {
+                        pick = q
+                    }
+                }
+                q = (q + 1)
+            }
+            if (pick >= 0) {
+                def pel:EVGElement (itemAt items pick)
+                parent.calculatedBaseline = (((pel.calculatedY - pel.box.marginTopPx) - parent.calculatedY) + (lay.baselineOffsetOf(pel)))
+                parent.calculatedDescent = 0.0
+                if pel.hasBaseline {
+                    parent.calculatedDescent = pel.calculatedDescent
+                }
+                parent.hasBaseline = true
+            }
+        }
+        lay.synthBorder = wasB
         if (lastB < 0.0) {
             def k:int (itemCount - 1)
             while ((k >= 0) && (lastB < 0.0)) {

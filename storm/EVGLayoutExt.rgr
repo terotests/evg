@@ -151,7 +151,7 @@ class EVGLayoutExt {
     }
 
     ; a grid's items aligned on their last baselines
-    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
+    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
     }
 
     ; the absolute children of a grid in their grid areas; false when the
