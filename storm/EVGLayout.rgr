@@ -6041,7 +6041,7 @@ class EVGLayout {
 
         if haveTemplateRows {
             ; Explicit row tracks against a definite container height.
-            def rows:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
+            def rows:EVGGridTemplate (EVGGridTemplate.parse((ext.implicitRows(parent rowSpec rowsUsed))))
             if (rows.hadError) {
                 this.warn(("grid-template-rows: " + rows.errorText))
             }
@@ -6163,6 +6163,10 @@ class EVGLayout {
                 }
                 r2 = (r2 + 1)
             }
+            ; (items spanning content-sized rows, the CSS layer's)
+            if (rows.hasIntrinsicTrack()) {
+                ext.gridRowSpanContent(this parent items placedRow rowSpans placedCol colSpans cols measureGap rowSpec rowGapPx innerHeight rowSizes)
+            }
         } {
             ; Content-sized rows: measure each single-row item at its cell width
             ; and take the tallest per row. Items spanning rows are left out of
@@ -6250,7 +6254,11 @@ class EVGLayout {
                     if (dr < (declared.count())) {
                         def dt:EVGGridTrack (declared.trackAt(dr))
                         if (dt.kind == 0) {
-                            set rowSizes dr dt.value
+                            ; (a min-content or max-content min, minmax(min-content, 40px):
+                            ; the content when that is more)
+                            if ((dt.minIntrinsic < 2) || (dt.value > (itemAt rowSizes dr))) {
+                                set rowSizes dr dt.value
+                            }
                         }
                         ; (a minmax() length min floors a content-sized row)
                         if (((dt.kind != 0) && dt.hasMin) && ((dt.minUnit.isPercent()) == false)) {
