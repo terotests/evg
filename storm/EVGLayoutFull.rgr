@@ -2365,7 +2365,8 @@ class EVGLayoutFull {
     sfn fixedRow:boolean (r:int declared:EVGGridTemplate autoRows:EVGGridTemplate) {
         if (r < (declared.count())) {
             def dt:EVGGridTrack (declared.trackAt(r))
-            return (dt.kind != 3)
+            ; (a minmax() with a content-sized min grows to its items too)
+            return ((dt.kind != 3) && (dt.minIntrinsic < 2))
         }
         if ((autoRows.count()) > 0) {
             def at:EVGGridTrack (autoRows.trackAt(((r - (declared.count())) % (autoRows.count()))))
@@ -3098,6 +3099,25 @@ class EVGLayoutFull {
             z = (z + 1)
         }
         return h
+    }
+
+    ; implicit rows past the template are grid-auto-rows' auto (CSS Grid
+    ; 7.6), content-sized and stretched, not copies of the last track
+    fn implicitRows:string (parent:EVGElement rowSpec:string rowsUsed:int) {
+        if (((strlen parent.gridAutoRows) > 0) && (parent.gridAutoRows != "auto")) {
+            return rowSpec
+        }
+        def have:int ((EVGGridTemplate.parse(rowSpec)).count())
+        if ((have == 0) || (have >= rowsUsed)) {
+            return rowSpec
+        }
+        def out:string rowSpec
+        def k:int have
+        while (k < rowsUsed) {
+            out = (out + " auto")
+            k = (k + 1)
+        }
+        return out
     }
 
     fn implicitColumns:string (parent:EVGElement colSpec0:string) {
