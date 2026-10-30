@@ -1276,7 +1276,7 @@ class EVGLayoutFull {
 
     ; align-self: last baseline: the items share their last baselines, the
     ; group at the end of the row they end in (its fallback is safe end)
-    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
+    fn gridLastBaselines:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] rowSizes:[double] rowGapPx:double startY:double rowShift:double) {
         def itemCount:int (array_length items)
     def lp:int 0
     while (lp < itemCount) {
@@ -1358,7 +1358,7 @@ class EVGLayoutFull {
         }
         lp = (lp + 1)
     }
-    this.gridFirstBaseline(lay parent items placedRow rowSpans)
+    this.gridFirstBaseline(lay parent items placedRow rowSpans placedCol)
     }
 
     ; a grid's first (last) baseline is the shared baseline of the items of
@@ -1366,7 +1366,7 @@ class EVGLayoutFull {
     ; Grid 10.8); otherwise the first (last) item's, the first as in the
     ; core. The last is kept in calculatedLastBaseline for
     ; lastBaselineOffsetOf.
-    fn gridFirstBaseline:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int]) {
+    fn gridFirstBaseline:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int]) {
         def itemCount:int (array_length items)
         if (itemCount == 0) {
             return
@@ -1387,6 +1387,9 @@ class EVGLayoutFull {
         }
         def firstDone:boolean false
         def lastB:double -1.0
+        ; (an item with no baseline has it at its border box's bottom)
+        def wasB:boolean lay.synthBorder
+        lay.synthBorder = true
         def j:int 0
         while (j < itemCount) {
             def el:EVGElement (itemAt items j)
@@ -1405,7 +1408,13 @@ class EVGLayoutFull {
                         b = (el.box.marginTopPx + el.calculatedHeight)
                     }
                 }
-                if ((firstDone == false) && ((itemAt placedRow j) == firstRow)) {
+                ; (one aligned by its last baseline is in the group of the row it
+                ; ends in)
+                def inFirst:boolean (byFirst && ((itemAt placedRow j) == firstRow))
+                if (byLast && ((((itemAt placedRow j) + (itemAt rowSpans j)) - 1) == firstRow)) {
+                    inFirst = true
+                }
+                if ((firstDone == false) && inFirst) {
                     parent.calculatedBaseline = (top + b)
                     parent.calculatedDescent = 0.0
                     parent.hasBaseline = true
@@ -1417,6 +1426,31 @@ class EVGLayoutFull {
             }
             j = (j + 1)
         }
+        ; (none aligns by a baseline: the first row's item in grid order,
+        ; the lowest column, then the document order; one with no
+        ; baseline gives its border box's bottom)
+        if (firstDone == false) {
+            def pick:int -1
+            def q:int 0
+            while (q < itemCount) {
+                if ((itemAt placedRow q) == firstRow) {
+                    if ((pick < 0) || ((itemAt placedCol q) < (itemAt placedCol pick))) {
+                        pick = q
+                    }
+                }
+                q = (q + 1)
+            }
+            if (pick >= 0) {
+                def pel:EVGElement (itemAt items pick)
+                parent.calculatedBaseline = (((pel.calculatedY - pel.box.marginTopPx) - parent.calculatedY) + (lay.baselineOffsetOf(pel)))
+                parent.calculatedDescent = 0.0
+                if pel.hasBaseline {
+                    parent.calculatedDescent = pel.calculatedDescent
+                }
+                parent.hasBaseline = true
+            }
+        }
+        lay.synthBorder = wasB
         if (lastB < 0.0) {
             def k:int (itemCount - 1)
             while ((k >= 0) && (lastB < 0.0)) {
@@ -1803,6 +1837,83 @@ class EVGLayoutFull {
         return (t.hasMin && ((t.minUnit.isPercent()) == false))
     }
 
+    ; a box's margin, border and padding on its left (or right) side in
+    ; px, from the resolved values or, before it is laid out, the set ones
+    sfn sideChrome:double (el:EVGElement left:boolean) {
+        def m:double el.box.marginRightPx
+        def mu:EVGUnit el.box.marginRight
+        def p:double el.box.paddingRightPx
+        def pu:EVGUnit el.box.paddingRight
+        if left {
+            m = el.box.marginLeftPx
+            mu = el.box.marginLeft
+            p = el.box.paddingLeftPx
+            pu = el.box.paddingLeft
+        }
+        def b:double el.box.borderWidthPx
+        if ((m == 0.0) && (mu.isSet && ((mu.isPercent()) == false))) {
+            m = mu.pixels
+        }
+        if ((p == 0.0) && (pu.isSet && ((pu.isPercent()) == false))) {
+            p = pu.pixels
+        }
+        if ((b == 0.0) && (el.box.borderWidth.isSet && ((el.box.borderWidth.isPercent()) == false))) {
+            b = el.box.borderWidth.pixels
+        }
+        return ((m + b) + p)
+    }
+
+    ; a column subgrid's items into the tracks it spans (sgAt..), the edges
+    ; given what the subgrids around them add; a nested column subgrid
+    ; passes its own items on
+    fn subgridContribute:void (lay:EVGLayout sgi:EVGElement sgAt:int sgSpan:int lead:double trail:double content:[double] minContent:[double]) {
+        def sgTpl:string ""
+        def st:int 0
+        while (st < sgSpan) {
+            sgTpl = (sgTpl + " auto")
+            st = (st + 1)
+        }
+        def tpl:EVGGridTemplate (EVGGridTemplate.parse(sgTpl))
+        def sgCols:[int] (this.gridItemColumns(lay sgi tpl))
+        def sc:int 0
+        while (sc < (sgi.getChildCount())) {
+            def sgk:EVGElement (sgi.getChild(sc))
+            if (sc < (array_length sgCols)) {
+                def kc:int (itemAt sgCols sc)
+                def kp:EVGGridPlacement (EVGGridPlacement.parse(sgk.gridColumn))
+                kp.resolveNames(tpl)
+                def ks:int kp.span
+                if ((kc >= 0) && ((kc + ks) <= sgSpan)) {
+                    def edgeL:double 0.0
+                    def edgeR:double 0.0
+                    if (kc == 0) {
+                        edgeL = lead
+                    }
+                    if ((kc + ks) == sgSpan) {
+                        edgeR = trail
+                    }
+                    if ((ks > 1) && (sgk.gridTemplateColumns == "subgrid")) {
+                        def kl:double (edgeL + (EVGLayoutFull.sideChrome(sgk true)))
+                        def kr:double (edgeR + (EVGLayoutFull.sideChrome(sgk false)))
+                        this.subgridContribute(lay sgk (sgAt + kc) ks kl kr content minContent)
+                    }
+                    if (ks == 1) {
+                        def tc:int (sgAt + kc)
+                        def kw:double (((lay.intrinsicWidthOf(sgk)) + edgeL) + edgeR)
+                        if ((tc < (array_length content)) && (kw > (itemAt content tc))) {
+                            set content tc kw
+                        }
+                        def km:double (((lay.minIntrinsicWidthOf(sgk)) + edgeL) + edgeR)
+                        if ((tc < (array_length minContent)) && (km > (itemAt minContent tc))) {
+                            set minContent tc km
+                        }
+                    }
+                }
+            }
+            sc = (sc + 1)
+        }
+    }
+
     ; Items spanning several columns, the narrower spans first (CSS Grid
     ; 12.5.3): each track has a base size and a growth limit, which the
     ; items' min-content and max-content contributions raise in four
@@ -1844,6 +1955,25 @@ class EVGLayoutFull {
                 }
             }
             k0 = (k0 + 1)
+        }
+        ; (a column subgrid's items size the tracks it spans, its margin,
+        ; border and padding added at its edges, CSS Grid 2 9: the subgrid
+        ; itself is not a spanning item)
+        def subSkip:[int]
+        def sk:int 0
+        while (sk < (array_length items)) {
+            def sgi:EVGElement (itemAt items sk)
+            def sgSpan:int (itemAt colSpans sk)
+            def sgAt:int (itemAt placedCol sk)
+            if (((sgi.gridTemplateColumns == "subgrid") && (sgSpan > 1)) && ((sgAt + sgSpan) <= nc)) {
+                def lead:double (EVGLayoutFull.sideChrome(sgi true))
+                def trail:double (EVGLayoutFull.sideChrome(sgi false))
+                this.subgridContribute(lay sgi sgAt sgSpan lead trail content minContent)
+                push subSkip 1
+            } {
+                push subSkip 0
+            }
+            sk = (sk + 1)
         }
         i = 0
         while (i < nc) {
@@ -1951,7 +2081,7 @@ class EVGLayoutFull {
             def k:int 0
             while (k < (array_length items)) {
                 def c0:int (itemAt placedCol k)
-                if (((itemAt colSpans k) == span) && ((c0 + span) <= nc)) {
+                if ((((itemAt colSpans k) == span) && ((c0 + span) <= nc)) && ((itemAt subSkip k) == 0)) {
                     def ok:boolean true
                     def t1:int c0
                     while (t1 < (c0 + span)) {
@@ -3569,6 +3699,55 @@ class EVGLayoutFull {
         ; (a flex container's is its last item's, synthesized from that
         ; item's border box when it has none)
         if ((EVGLayoutFull.cx(el)).flexBox && (el.display == "flex")) {
+            ; (a wrapping row's last line, back from its last item while the
+            ; items go on to the left: its baseline-aligned items give the
+            ; shared baseline, CSS Flexbox 8.5)
+            if (((el.flexWrap == "wrap") || (el.flexWrap == "wrap-reverse")) && (el.flexDirection == "row")) {
+                ; (with wrap-reverse the line at the block end is the first)
+                def rev:boolean (el.flexWrap == "wrap-reverse")
+                def bi:int (n - 1)
+                def step:int -1
+                if rev {
+                    bi = 0
+                    step = 1
+                }
+                def prevX:double -1.0
+                def found:boolean false
+                def fb:double -1.0
+                while (((bi >= 0) && (bi < n)) && (found == false)) {
+                    def bc:EVGElement (el.getChild(bi))
+                    if ((bc.isAbsolute == false) && ((bc.isHidden()) == false)) {
+                        def newLine:boolean ((prevX >= 0.0) && (bc.calculatedX >= prevX))
+                        if rev {
+                            newLine = ((prevX >= 0.0) && (bc.calculatedX <= prevX))
+                        }
+                        if newLine {
+                            found = true
+                        } {
+                            prevX = bc.calculatedX
+                            def bas:string bc.alignSelf
+                            if (((strlen bas) == 0) || (bas == "auto")) {
+                                bas = el.alignItems
+                            }
+                            if ((indexOf bas "baseline") >= 0) {
+                                def bb:double -1.0
+                                if ((indexOf bas "last") >= 0) {
+                                    bb = (this.lastBaselineOffsetOf(lay bc))
+                                } {
+                                    bb = (lay.baselineOffsetOf(bc))
+                                }
+                                if (bb >= 0.0) {
+                                    fb = ((((bc.calculatedY - bc.box.marginTopPx) - el.calculatedY) + bb) + el.box.marginTopPx)
+                                }
+                            }
+                        }
+                    }
+                    bi = (bi + step)
+                }
+                if (fb >= 0.0) {
+                    return fb
+                }
+            }
             def li:int (n - 1)
             while (li >= 0) {
                 def lc:EVGElement (el.getChild(li))

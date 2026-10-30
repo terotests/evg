@@ -5440,8 +5440,25 @@ class EVGLayout {
                 ; no enclosing grid at all.
                 if (parent.subgridPending == false) {
                     this.warn("grid-template-columns: subgrid has no enclosing grid to inherit tracks from; falling back to 1fr")
+                    colSpec = "1fr"
+                } {
+                    ; (while measured, an auto track per column it spans: its
+                    ; items side by side as they will be, not stacked)
+                    def sgp:EVGGridPlacement (EVGGridPlacement.parse(parent.gridColumn))
+                    def sgn:int sgp.span
+                    if ((sgp.spanExplicit == false) && (sgp.endLine < 0)) {
+                        sgn = (parent.getChildCount())
+                    }
+                    if (sgn < 1) {
+                        sgn = 1
+                    }
+                    colSpec = "auto"
+                    def sgx:int 1
+                    while (sgx < sgn) {
+                        colSpec = (colSpec + " auto")
+                        sgx = (sgx + 1)
+                    }
                 }
-                colSpec = "1fr"
             }
         }
         ; grid-template-areas names a rectangle per area and, when no explicit
@@ -6235,6 +6252,13 @@ class EVGLayout {
                         if (dt.kind == 0) {
                             set rowSizes dr dt.value
                         }
+                        ; (a minmax() length min floors a content-sized row)
+                        if (((dt.kind != 0) && dt.hasMin) && ((dt.minUnit.isPercent()) == false)) {
+                            dt.minUnit.resolve(0.0 parent.inheritedFontSize)
+                            if (dt.minUnit.pixels > (itemAt rowSizes dr)) {
+                                set rowSizes dr dt.minUnit.pixels
+                            }
+                        }
                     }
                     dr = (dr + 1)
                 }
@@ -6509,7 +6533,19 @@ class EVGLayout {
                 def sgi:int 0
                 while (sgi < cSpan) {
                     def tk:EVGGridTrack (cols.trackAt(cIdx + sgi))
-                    push el.subgridColumnSizes tk.sizePx
+                    ; (less its own margin, border and padding at its edges,
+                    ; CSS Grid 2 9)
+                    def tkw:double tk.sizePx
+                    if (sgi == 0) {
+                        tkw = (((tkw - el.box.marginLeftPx) - el.box.borderWidthPx) - el.box.paddingLeftPx)
+                    }
+                    if (sgi == (cSpan - 1)) {
+                        tkw = (((tkw - el.box.marginRightPx) - el.box.borderWidthPx) - el.box.paddingRightPx)
+                    }
+                    if (tkw < 0.0) {
+                        tkw = 0.0
+                    }
+                    push el.subgridColumnSizes tkw
                     sgi = (sgi + 1)
                 }
             }
@@ -6666,7 +6702,7 @@ class EVGLayout {
         synthBorder = wasGBorder
 
         ; (align-self: last baseline is the CSS layer's)
-        ext.gridLastBaselines(this parent items placedRow rowSpans rowSizes rowGapPx startY rowShift)
+        ext.gridLastBaselines(this parent items placedRow rowSpans placedCol rowSizes rowGapPx startY rowShift)
 
         ; Leave the rows behind for an enclosing grid that has to size its own
         ; rows around this one.
