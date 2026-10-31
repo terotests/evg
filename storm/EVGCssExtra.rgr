@@ -106,6 +106,15 @@ class EVGCssExtra {
     ; from its scrollport's edge at scroll position 0; -1: none
     def stickyTop:double -1.0
     def stickyLeft:double -1.0
+    ; border sides that differ in width or color (side-borders: top right
+    ; bottom left widths, then | and each side's color): the front end
+    ; folded them into the padding, the display list paints them there
+    ; a positioned box (paint-late: true): painted after its in-flow
+    ; siblings, as CSS 2.1 Appendix E paints positioned descendants
+    def paintLate:boolean false
+    def sideBorders:boolean false
+    def sbW:[double]
+    def sbC:[EVGColor]
     def foldT:double 0.0
     def foldR:double 0.0
     def foldB:double 0.0
@@ -113,7 +122,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -213,6 +222,30 @@ class EVGCssExtra {
             central = (value == "true")
             return
         }
+        if (name == "paint-late") {
+            paintLate = (value == "true")
+            return
+        }
+        if (name == "side-borders") {
+            def sp:[string] (strsplit value "|")
+            if ((array_length sp) == 5) {
+                def wp:[string] (strsplit (trim (itemAt sp 0)) " ")
+                if ((array_length wp) == 4) {
+                    sideBorders = true
+                    def nw:[double]
+                    def nc:[EVGColor]
+                    def si:int 0
+                    while (si < 4) {
+                        push nw (EVGCssExtra.num((itemAt wp si)))
+                        push nc (EVGColor.parse((trim (itemAt sp (si + 1)))))
+                        si = (si + 1)
+                    }
+                    sbW = nw
+                    sbC = nc
+                }
+            }
+            return
+        }
         if (name == "folded-border") {
             def fp:[string] (strsplit (trim value) " ")
             if ((array_length fp) == 4) {
@@ -284,6 +317,10 @@ class EVGCssExtra {
         c.stickyTop = stickyTop
         c.stickyLeft = stickyLeft
         c.foldT = foldT
+        c.paintLate = paintLate
+        c.sideBorders = sideBorders
+        c.sbW = sbW
+        c.sbC = sbC
         c.foldR = foldR
         c.foldB = foldB
         c.foldL = foldL
