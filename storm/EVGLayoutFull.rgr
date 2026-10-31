@@ -3217,6 +3217,7 @@ class EVGLayoutFull {
         if ((indexOf parent.gridAutoFlow "column") < 0) {
             def perRow:[int]
             def fixedRow:[int]
+            def anyLocked:boolean false
             def ri:int 0
             while (ri < (parent.getChildCount())) {
                 def rc:EVGElement (parent.getChild(ri))
@@ -3230,6 +3231,9 @@ class EVGLayoutFull {
                     ; its rows)
                     def both:boolean (((rpl.start > 0) && (cpl.start > 0)) && (((strlen cpl.startName) == 0) && ((strlen rpl.startName) == 0)))
                     def locked:boolean ((rpl.start > 0) && (cpl.start == 0) && ((strlen cpl.startName) == 0) && (cpl.endLine == 0))
+                    if locked {
+                        anyLocked = true
+                    }
                     if (locked || both) {
                         def rr:int (rpl.start - 1)
                         while (rr < ((rpl.start - 1) + rpl.span)) {
@@ -3251,7 +3255,11 @@ class EVGLayoutFull {
             ; (the locked items placed as CSS Grid 8.5 step 2 does, sparse:
             ; each past the ones before it in its row, past the cells the
             ; items with both lines hold; dense: from the row's start)
-            if ((array_length perRow) > 0) {
+            ; (items with both lines set are where they are: their columns
+            ; are counted above, and with no locked item there is nothing to
+            ; place — a table's cells, each row a band of them, would build
+            ; a rows x items grid here for nothing)
+            if (((array_length perRow) > 0) && anyLocked) {
                 def W:int (lastLine + 1)
                 def wi:int 0
                 while (wi < (parent.getChildCount())) {
