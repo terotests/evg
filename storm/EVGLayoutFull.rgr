@@ -2862,6 +2862,32 @@ class EVGLayoutFull {
         return (itemAt r 0)
     }
 
+    ; an absolute box's numbered lines moved `lead` tracks on (a negative
+    ; one from the explicit grid's end, of `n` tracks); auto, spans and
+    ; names stay
+    sfn shiftedAbsLines:string (spec:string n:int lead:int) {
+        if ((strlen (trim spec)) == 0) {
+            return spec
+        }
+        def sides:[string] (strsplit spec "/")
+        def out:string ""
+        for sides sd:string si {
+            def t:string (trim sd)
+            if (EVGGridPlacement.isNumericToken(t)) {
+                def v:int (EVGGridPlacement.lineNumber(t))
+                if (v < 0) {
+                    v = ((n + 2) + v)
+                }
+                t = (to_string (v + lead))
+            }
+            if (si > 0) {
+                out = (out + " / ")
+            }
+            out = (out + t)
+        }
+        return out
+    }
+
     ; the placement moved `lead` tracks on, as two line numbers
     sfn shiftedPlacement:string (spec:string tplSpec:string areas:string isRow:boolean lead:int) {
         def r:[int] (EVGLayoutFull.rawLines(spec tplSpec areas isRow))
@@ -3020,6 +3046,15 @@ class EVGLayoutFull {
             def c:EVGElement (parent.getChild(j))
             push savedC c.gridColumn
             push savedR c.gridRow
+            ; (an absolute box's lines move with the tracks as well)
+            if (c.hasAbsolutePosition()) {
+                if (leadC > 0) {
+                    c.gridColumn = (EVGLayoutFull.shiftedAbsLines(c.gridColumn nc leadC))
+                }
+                if (leadR > 0) {
+                    c.gridRow = (EVGLayoutFull.shiftedAbsLines(c.gridRow nr leadR))
+                }
+            }
             if ((c.hasAbsolutePosition()) == false) {
                 if ((leadC > 0) || needC) {
                     c.gridColumn = (EVGLayoutFull.shiftedPlacement(c.gridColumn cLines parent.gridTemplateAreas false leadC))
@@ -3369,6 +3404,7 @@ class EVGLayoutFull {
             if ((((EVGLayoutFull.cx(c)).cbOuterX || (EVGLayoutFull.cx(c)).cbOuterY) || (EVGLayoutFull.cx(c)).cbOuterSize) && c.isAbsolute) {
                 def oldX:double c.calculatedX
                 def oldY:double c.calculatedY
+                def oldW:double c.calculatedWidth
                 def sx:double ((cb.calculatedX + cb.box.borderWidthPx) + cb.box.paddingLeftPx)
                 def sy:double ((cb.calculatedY + cb.box.borderWidthPx) + cb.box.paddingTopPx)
                 c.unitsResolved = false
@@ -3378,6 +3414,10 @@ class EVGLayoutFull {
                 def dy:double 0.0
                 if ((EVGLayoutFull.cx(c)).cbOuterX == false) {
                     dx = (oldX - c.calculatedX)
+                    ; (right to left the static place keeps its right edge)
+                    if node.resolvedRtl {
+                        dx = ((oldX + oldW) - (c.calculatedX + c.calculatedWidth))
+                    }
                 }
                 if ((EVGLayoutFull.cx(c)).cbOuterY == false) {
                     dy = (oldY - c.calculatedY)
@@ -3929,6 +3969,16 @@ class EVGLayoutFull {
                         ah = ((EVGLayoutFull.atLeast((ay + (lay.gridRowExtent(rowSizes (rp.start - 1) rp.span rowGap))) rowShift)) - ay)
                     }
                 }
+                ; (with its containing block further up the grid's lines are
+                ; not its: its static place is the grid's content box,
+                ; CSS Grid 9.2)
+                def ocx:EVGCssExtra (EVGLayoutFull.cx(c))
+                if (ocx.cbOuterX || (ocx.cbOuterY || ocx.cbOuterSize)) {
+                    ax = 0.0
+                    ay = 0.0
+                    aw = innerWidth
+                    ah = contentHeight
+                }
                 c.unitsResolved = false
                 c.resolveUnits(aw ah)
                 lay.layoutOutOfFlowChild(parent c aw ah (startX + ax) (startY + ay) true)
@@ -4000,8 +4050,9 @@ class EVGLayoutFull {
     sfn absAutoArea:[double] (spec0:string tpl:EVGGridTemplate starts:[double] ends:[double] padS:double padE:double inner:double) {
         def res:[double]
         def spec:string (trim spec0)
+        ; (none given is auto: the padding box, CSS Grid 9.1)
         if ((strlen spec) == 0) {
-            return res
+            spec = "auto"
         }
         def lhs:string spec
         def rhs:string "auto"
@@ -4014,7 +4065,8 @@ class EVGLayoutFull {
                 if (EVGGridPlacement.isNumericToken(lhs) == false) {
                     return res
                 }
-                rhs = "span 1"
+                ; (an absolute box's end left auto is the padding edge,
+                ; CSS Grid 9.1)
             }
         }
         def n:int (array_length starts)
