@@ -112,6 +112,18 @@ class EVGCssExtra {
     ; a positioned box (paint-late: true): painted after its in-flow
     ; siblings, as CSS 2.1 Appendix E paints positioned descendants
     def paintLate:boolean false
+    ; a background picture (bg-picture: part|natural width|natural
+    ; height|repeat|x y|size): the display list tiles it over the box
+    def bgSrc:string ""
+    ; the root's background, painted over the whole canvas (bg-canvas:
+    ; the viewport's width and height); 0: not the root
+    def canvasW:double 0.0
+    def canvasH:double 0.0
+    def bgNatW:double 0.0
+    def bgNatH:double 0.0
+    def bgRepeat:string ""
+    def bgPos:string ""
+    def bgSize:string ""
     def sideBorders:boolean false
     def sbW:[double]
     def sbC:[EVGColor]
@@ -122,7 +134,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -226,6 +238,26 @@ class EVGCssExtra {
             paintLate = (value == "true")
             return
         }
+        if (name == "bg-canvas") {
+            def cp:[string] (strsplit (trim value) " ")
+            if ((array_length cp) == 2) {
+                canvasW = (EVGCssExtra.num((itemAt cp 0)))
+                canvasH = (EVGCssExtra.num((itemAt cp 1)))
+            }
+            return
+        }
+        if (name == "bg-picture") {
+            def bp:[string] (strsplit value "|")
+            if ((array_length bp) == 6) {
+                bgSrc = (itemAt bp 0)
+                bgNatW = (EVGCssExtra.num((itemAt bp 1)))
+                bgNatH = (EVGCssExtra.num((itemAt bp 2)))
+                bgRepeat = (itemAt bp 3)
+                bgPos = (itemAt bp 4)
+                bgSize = (itemAt bp 5)
+            }
+            return
+        }
         if (name == "side-borders") {
             def sp:[string] (strsplit value "|")
             if ((array_length sp) == 5) {
@@ -318,6 +350,14 @@ class EVGCssExtra {
         c.stickyLeft = stickyLeft
         c.foldT = foldT
         c.paintLate = paintLate
+        c.canvasW = canvasW
+        c.canvasH = canvasH
+        c.bgSrc = bgSrc
+        c.bgNatW = bgNatW
+        c.bgNatH = bgNatH
+        c.bgRepeat = bgRepeat
+        c.bgPos = bgPos
+        c.bgSize = bgSize
         c.sideBorders = sideBorders
         c.sbW = sbW
         c.sbC = sbC

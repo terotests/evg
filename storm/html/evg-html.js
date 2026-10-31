@@ -523,6 +523,18 @@ export function renderDisplayList(target, doc, opts = {}) {
         // window over the box, and clipping to the box. `none` because the
         // window is stretched to fill the box exactly — Figma's crop tool
         // already keeps it the shape of the frame, so nothing is distorted.
+        // A tiled picture (a CSS background): a pattern of tiles, the one
+        // at tile[0..1] tile[2] by tile[3], over the command's rectangle.
+        if (c.tile) {
+          const [tx, ty, tw, th] = c.tile;
+          const id = `evgtile${uid++}`;
+          defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" x="${n(tx)}" y="${n(ty)}" width="${n(tw)}" height="${n(th)}">` +
+            `<image width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"/></pattern>`);
+          body.push(`<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}" fill="url(#${id})"/>`);
+          drawnImages += 1;
+          drawn += 1;
+          break;
+        }
         const cu = c.cu;
         const cw = cu ? cu[2] - cu[0] : 1, chh = cu ? cu[3] - cu[1] : 1;
         const dw = cu ? c.w / cw : c.w, dh = cu ? c.h / chh : c.h;
