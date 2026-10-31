@@ -64,6 +64,14 @@ class EVGPatPaint {
     def cmds:[EVGDrawCmd]
 }
 
+; one picture's tiles: the one at x, y, w by h, and the rest beside it
+class EVGDrawTile {
+    def x:double 0.0
+    def y:double 0.0
+    def w:double 0.0
+    def h:double 0.0
+}
+
 class EVGDrawCmd {
     def kind:int 0
     def x:double 0.0
@@ -172,16 +180,9 @@ class EVGDrawCmd {
     ; four numbers mean anything: 0,0,1,1 is a legal window and is also what
     ; an uncropped command leaves behind, so the flag cannot be inferred.
     def hasCrop:boolean false
-    ; A picture tiled over the command's rectangle (a CSS background):
-    ; tiles tileW by tileH, one with its corner at tileX, tileY, repeated
-    ; along the axes tileRepX / tileRepY say
-    def hasTile:boolean false
-    def tileX:double 0.0
-    def tileY:double 0.0
-    def tileW:double 0.0
-    def tileH:double 0.0
-    def tileRepX:boolean false
-    def tileRepY:boolean false
+    ; A picture tiled over the command's rectangle (a CSS background),
+    ; made only for such a command
+    def tile@(optional):EVGDrawTile
     def cropX:double 0.0
     def cropY:double 0.0
     def cropW:double 1.0
@@ -556,13 +557,12 @@ class EVGDisplayList {
         c.w = (cx1 - cx0)
         c.h = (cy1 - cy0)
         c.src = bx.bgSrc
-        c.hasTile = true
-        c.tileX = ox
-        c.tileY = oy
-        c.tileW = tw
-        c.tileH = th
-        c.tileRepX = rx
-        c.tileRepY = ry
+        def tl (new EVGDrawTile())
+        tl.x = ox
+        tl.y = oy
+        tl.w = tw
+        tl.h = th
+        c.tile = tl
         this.addCmd(c)
     }
 
@@ -4338,8 +4338,9 @@ class EVGDisplayList {
             if ((strlen c.src) > 0) {
                 co = co + ",\"src\":" + (EVGDisplayList.jsonString(c.src))
             }
-            if c.hasTile {
-                co = co + ",\"tile\":[" + (EVGDisplayList.num(c.tileX)) + "," + (EVGDisplayList.num(c.tileY)) + "," + (EVGDisplayList.num(c.tileW)) + "," + (EVGDisplayList.num(c.tileH)) + "]"
+            if (!null? c.tile) {
+                def ct:EVGDrawTile (unwrap c.tile)
+                co = co + ",\"tile\":[" + (EVGDisplayList.num(ct.x)) + "," + (EVGDisplayList.num(ct.y)) + "," + (EVGDisplayList.num(ct.w)) + "," + (EVGDisplayList.num(ct.h)) + "]"
             }
             if c.flipH {
                 co = co + ",\"fx\":true"
