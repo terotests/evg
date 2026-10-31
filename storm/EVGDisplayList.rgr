@@ -406,6 +406,35 @@ class EVGDisplayList {
     ; Every command in this file is appended here, so the element being walked
     ; is stamped on it in one place rather than at twenty. The walk sets
     ; `curNode`; this is the only thing that reads it.
+    sfn paintsLate:boolean (kid:EVGElement) {
+        if (null? kid.css) {
+            return false
+        }
+        def kx:EVGCssExtra (unwrap kid.css)
+        return kx.paintLate
+    }
+
+    ; one side of a box's border, a filled rectangle
+    fn addSide:void (sx:double sy:double sw:double sh:double sc:EVGColor) {
+        if ((sw <= 0.0) || (sh <= 0.0)) {
+            return
+        }
+        if ((sc.alpha()) <= 0.0) {
+            return
+        }
+        def c (new EVGDrawCmd())
+        c.kind = 0
+        c.x = sx
+        c.y = sy
+        c.w = sw
+        c.h = sh
+        c.r = (sc.red())
+        c.g = (sc.green())
+        c.b = (sc.blue())
+        c.a = (sc.alpha())
+        this.addCmd(c)
+    }
+
     fn addCmd:void (c:EVGDrawCmd) {
         c.node = curNode
         push cmds c
@@ -3177,6 +3206,22 @@ class EVGDisplayList {
             c2.a = (bc.alpha())
             this.addCmd(c2)
         }
+        ; Border sides that differ (EVGCssExtra side-borders): a CSS front end
+        ; gave them to the layout as padding, and they are filled here, the
+        ; top and bottom across the box and the left and right between them.
+        if (!null? el.css) {
+            def sx:EVGCssExtra (unwrap el.css)
+            if (sx.sideBorders && ((array_length sx.sbW) == 4)) {
+                def sbt:double (itemAt sx.sbW 0)
+                def sbr:double (itemAt sx.sbW 1)
+                def sbb:double (itemAt sx.sbW 2)
+                def sbl:double (itemAt sx.sbW 3)
+                this.addSide(x y w sbt (itemAt sx.sbC 0))
+                this.addSide(x ((y + h) - sbb) w sbb (itemAt sx.sbC 2))
+                this.addSide(x (y + sbt) sbl ((h - sbt) - sbb) (itemAt sx.sbC 3))
+                this.addSide(((x + w) - sbr) (y + sbt) sbr ((h - sbt) - sbb) (itemAt sx.sbC 1))
+            }
+        }
 
 
         ; Vector paths. Flattened here, in page coordinates, because this is
@@ -3440,6 +3485,7 @@ class EVGDisplayList {
             }
         }
         def i:int 0
+        def late:[EVGElement]
         while (i < (el.getChildCount())) {
             def kid:EVGElement (el.getChild(i))
             ; A surface is not drawn here. `build` comes back to it once the
@@ -3447,9 +3493,19 @@ class EVGDisplayList {
             if (kid.isSurface()) {
                 push deferredOverlays kid
             } {
-                this.walk(kid)
+                if (EVGDisplayList.paintsLate(kid)) {
+                    push late kid
+                } {
+                    this.walk(kid)
+                }
             }
             i = (i + 1)
+        }
+        ; (CSS positioned boxes: after the in-flow ones, in tree order)
+        def li2:int 0
+        while (li2 < (array_length late)) {
+            this.walk((itemAt late li2))
+            li2 = (li2 + 1)
         }
         ; …and after them, whatever a host built for this element — see
         ; `paintAt`. Inside the clip and inside the scroll layer's range,
