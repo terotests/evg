@@ -638,6 +638,16 @@ class EVGLayout {
                     innerHa = 0.0
                 }
                 width = ((innerHa * element.aspectRatio) + edgeXa)
+                ; (min-width auto keeps the min-content width, CSS Sizing 4 5.2)
+                if ((element.minWidth.isSet == false) && (element.overflow == "visible")) {
+                    def arMinW:double (((this.intrinsicWidth(element true)) - element.box.marginLeftPx) - element.box.marginRightPx)
+                    if (element.maxWidth.isSet && (arMinW > element.maxWidth.pixels)) {
+                        arMinW = element.maxWidth.pixels
+                    }
+                    if (width < arMinW) {
+                        width = arMinW
+                    }
+                }
             }
         }
         ; aspect-ratio: an auto height from the width, the content box's
@@ -5172,6 +5182,35 @@ class EVGLayout {
                 if ((wasResolved || kid.unitsFixed) == false) {
                     kid.unitsResolved = false
                 }
+                ; (a kid with an aspect-ratio whose height comes from this
+                ; box's set height, a percentage or a row's stretch, asks for
+                ; the width the ratio gives, CSS Sizing 4, 5.1)
+                if (((kid.aspectRatio > 0.0) && (kid.width.isSet == false)) && (el.height.isSet && ((el.height.isPercent()) == false))) {
+                    def kpin:double (el.height.pixels - (el.box.getVerticalChrome()))
+                    def kh:double -1.0
+                    if (kid.height.isSet && (kid.height.isPercent())) {
+                        kh = ((kpin * kid.height.value) / 100.0)
+                    } {
+                        def kas:string kid.alignSelf
+                        if (((strlen kas) == 0) || (kas == "auto")) {
+                            kas = el.alignItems
+                        }
+                        if ((((kid.height.isSet == false) && (el.display == "flex")) && (isColumn == false)) && (kas == "stretch")) {
+                            kh = ((kpin - kid.box.marginTopPx) - kid.box.marginBottomPx)
+                        }
+                    }
+                    if (kh >= 0.0) {
+                        def kEY:double (kid.box.getVerticalChrome())
+                        def kIn:double (kh - kEY)
+                        if (kIn < 0.0) {
+                            kIn = 0.0
+                        }
+                        def kW:double ((((kIn * kid.aspectRatio) + (kid.box.getHorizontalChrome())) + kid.box.marginLeftPx) + kid.box.marginRightPx)
+                        if (kW > w) {
+                            w = kW
+                        }
+                    }
+                }
                 if colLines {
                     push kidWs w
                     def km:double -1.0
@@ -6547,6 +6586,12 @@ class EVGLayout {
                 el.hasFlexWidth = true
                 el.calculatedFlexWidth = (((boxH - arY) * el.aspectRatio) + arX)
                 placedH = true
+            }
+            ; an explicit justify-self: stretch fills the area also when the
+            ; ratio would give the width from a set height (CSS Align 3 6.1)
+            if (((el.aspectRatio > 0.0) && (el.justifySelf == "stretch")) && ((el.width.isSet == false) && (el.height.isSet && (boxW > 0.0)))) {
+                el.hasFlexWidth = true
+                el.calculatedFlexWidth = boxW
             }
 
             ; Hand this cell's tracks down to a subgrid child before it lays
