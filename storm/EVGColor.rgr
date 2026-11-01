@@ -266,6 +266,10 @@ class EVGColor {
     sfn parseNumber:double (str:string) {
         ; Parse a number, handling potential whitespace
         def val@(optional):double (to_double (trim str))
+        ; (not a number: none of it, not a crash)
+        if (null? val) {
+            return 0.0
+        }
         return (unwrap val)
     }
     
