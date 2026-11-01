@@ -129,6 +129,8 @@ class EVGCssExtra {
     def sideBorders:boolean false
     def sbW:[double]
     def sbC:[EVGColor]
+    ; each side's border-style when one is dotted or dashed ("" otherwise)
+    def sbS:[string]
     def foldT:double 0.0
     def foldR:double 0.0
     def foldB:double 0.0
@@ -270,7 +272,7 @@ class EVGCssExtra {
         }
         if (name == "side-borders") {
             def sp:[string] (strsplit value "|")
-            if ((array_length sp) == 5) {
+            if ((array_length sp) >= 5) {
                 def wp:[string] (strsplit (trim (itemAt sp 0)) " ")
                 if ((array_length wp) == 4) {
                     sideBorders = true
@@ -284,6 +286,13 @@ class EVGCssExtra {
                     }
                     sbW = nw
                     sbC = nc
+                    ; an optional sixth part: the four sides' styles
+                    if ((array_length sp) == 6) {
+                        def stp:[string] (strsplit (trim (itemAt sp 5)) " ")
+                        if ((array_length stp) == 4) {
+                            sbS = stp
+                        }
+                    }
                 }
             }
             return
@@ -373,6 +382,7 @@ class EVGCssExtra {
         c.sideBorders = sideBorders
         c.sbW = sbW
         c.sbC = sbC
+        c.sbS = sbS
         c.foldR = foldR
         c.foldB = foldB
         c.foldL = foldL
