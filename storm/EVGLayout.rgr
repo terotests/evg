@@ -613,6 +613,8 @@ class EVGLayout {
         
         def height:double 0.0
         def autoHeight:boolean true
+        ; (the height is the aspect-ratio's, from the width)
+        def arHeight:boolean false
         
         ; Special handling for Page elements - they always use page size
         if ((element.tagName == "Page") || (element.tagName == "page")) {
@@ -660,12 +662,14 @@ class EVGLayout {
             }
             height = ((innerW / element.aspectRatio) + edgeY)
             autoHeight = false
+            arHeight = true
         }
         ; Column-axis flex grow / row alignItems:stretch: EVGLayout resolved a
         ; target height for this child (height not explicitly set) — adopt it.
         if (element.height.isSet == false) {
             if (element.calculatedFlexHeight > 0.0) {
                 height = element.calculatedFlexHeight
+                arHeight = false
                 autoHeight = false
             }
         }
@@ -673,6 +677,7 @@ class EVGLayout {
         ; wins, as `hasFlexWidth` does for the width.
         if element.hasFlexHeight {
             height = element.calculatedFlexHeight
+            arHeight = false
             autoHeight = false
         }
         ; aspect-ratio down a column that does not stretch: the width
@@ -1022,6 +1027,17 @@ class EVGLayout {
         if ((element.minHeight.isSet == false) && ((kmT >= 6) && (kmT <= 8))) {
             if (height < contentBoxH) {
                 height = contentBoxH
+            }
+        }
+        ; a height from aspect-ratio is at least the content's with
+        ; min-height auto and nothing clipped (CSS Sizing 4 5.2)
+        if ((arHeight && (element.minHeight.isSet == false)) && (element.overflow == "visible")) {
+            def arMin:double contentBoxH
+            if (element.maxHeight.isSet && (arMin > element.maxHeight.pixels)) {
+                arMin = element.maxHeight.pixels
+            }
+            if (height < arMin) {
+                height = arMin
             }
         }
         
