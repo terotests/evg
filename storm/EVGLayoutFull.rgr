@@ -97,6 +97,34 @@ class EVGLayoutFull {
                         }
                     }
                 }
+                ; (bottom / right: kept above / left of the scrollport's far
+                ; edge, but not out over the top / left of its block)
+                if ((sx.stickyBottom >= 0.0) && (dy == 0.0)) {
+                    def edgeB:double ((((port.calculatedY + port.calculatedHeight) - port.box.borderWidthPx) - sx.stickyBottom) - (c.calculatedY + c.calculatedHeight))
+                    if (edgeB < 0.0) {
+                        dy = edgeB
+                        def upY:double ((((el.calculatedY + el.box.borderWidthPx) + el.box.paddingTopPx) + c.box.marginTopPx) - c.calculatedY)
+                        if (dy < upY) {
+                            dy = upY
+                        }
+                        if (dy > 0.0) {
+                            dy = 0.0
+                        }
+                    }
+                }
+                if ((sx.stickyRight >= 0.0) && (dx == 0.0)) {
+                    def edgeR:double ((((port.calculatedX + port.calculatedWidth) - port.box.borderWidthPx) - sx.stickyRight) - (c.calculatedX + c.calculatedWidth))
+                    if (edgeR < 0.0) {
+                        dx = edgeR
+                        def upX:double ((((el.calculatedX + el.box.borderWidthPx) + el.box.paddingLeftPx) + c.box.marginLeftPx) - c.calculatedX)
+                        if (dx < upX) {
+                            dx = upX
+                        }
+                        if (dx > 0.0) {
+                            dx = 0.0
+                        }
+                    }
+                }
                 if ((dx != 0.0) || (dy != 0.0)) {
                     c.calculatedX = (c.calculatedX + dx)
                     c.calculatedY = (c.calculatedY + dy)
@@ -114,7 +142,7 @@ class EVGLayoutFull {
 
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
-        if ((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) {
+        if (((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) || ((css.stickyBottom >= 0.0) || (css.stickyRight >= 0.0))) {
             sawSticky = true
         }
         if (css.floatRow && (childCount > 0)) {
@@ -3217,6 +3245,7 @@ class EVGLayoutFull {
         if ((indexOf parent.gridAutoFlow "column") < 0) {
             def perRow:[int]
             def fixedRow:[int]
+            def anyLocked:boolean false
             def ri:int 0
             while (ri < (parent.getChildCount())) {
                 def rc:EVGElement (parent.getChild(ri))
@@ -3230,6 +3259,9 @@ class EVGLayoutFull {
                     ; its rows)
                     def both:boolean (((rpl.start > 0) && (cpl.start > 0)) && (((strlen cpl.startName) == 0) && ((strlen rpl.startName) == 0)))
                     def locked:boolean ((rpl.start > 0) && (cpl.start == 0) && ((strlen cpl.startName) == 0) && (cpl.endLine == 0))
+                    if locked {
+                        anyLocked = true
+                    }
                     if (locked || both) {
                         def rr:int (rpl.start - 1)
                         while (rr < ((rpl.start - 1) + rpl.span)) {
@@ -3251,7 +3283,11 @@ class EVGLayoutFull {
             ; (the locked items placed as CSS Grid 8.5 step 2 does, sparse:
             ; each past the ones before it in its row, past the cells the
             ; items with both lines hold; dense: from the row's start)
-            if ((array_length perRow) > 0) {
+            ; (items with both lines set are where they are: their columns
+            ; are counted above, and with no locked item there is nothing to
+            ; place — a table's cells, each row a band of them, would build
+            ; a rows x items grid here for nothing)
+            if (((array_length perRow) > 0) && anyLocked) {
                 def W:int (lastLine + 1)
                 def wi:int 0
                 while (wi < (parent.getChildCount())) {
