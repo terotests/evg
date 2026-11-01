@@ -582,6 +582,9 @@ export function renderDisplayList(target, doc, opts = {}) {
                 ` font-size="${n(c.size)}"`;
         if (c.weight) a += ` font-weight="${esc(c.weight)}"`;
         if (c.italic) a += ` font-style="italic"`;
+        // CSS letter-spacing: the advance after each character, which the
+        // layout measured the run with
+        if (c.ls) a += ` letter-spacing="${n(c.ls)}"`;
         body.push(`<text ${a} xml:space="preserve"${rotAttr(c)}>${esc(verbatim(c.text))}</text>`);
         textRuns += 1;
         drawn += 1;
