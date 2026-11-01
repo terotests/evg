@@ -4861,6 +4861,18 @@ class EVGLayout {
             c0 = (c0 + 1)
         }
         def n:int (el.getChildCount())
+        ; (one fixed row: the height a percentage of the area gives a kid
+        ; with an aspect-ratio, which then asks for the ratio's width)
+        def oneRowPx:double -1.0
+        if ((strlen el.gridTemplateRows) > 0) {
+            def rtpl:EVGGridTemplate (EVGGridTemplate.parse(el.gridTemplateRows))
+            if ((rtpl.count()) == 1) {
+                def rt0:EVGGridTrack (rtpl.trackAt(0))
+                if (rt0.kind == 0) {
+                    oneRowPx = rt0.value
+                }
+            }
+        }
         def at:int 0
         def i:int 0
         while (i < n) {
@@ -4907,6 +4919,17 @@ class EVGLayout {
                 }
                 if ((wasResolved || kid.unitsFixed) == false) {
                     kid.unitsResolved = false
+                }
+                if ((((oneRowPx >= 0.0) && (kid.aspectRatio > 0.0)) && ((kid.width.isSet == false) && (n <= nc))) && (kid.height.isSet && (kid.height.isPercent()))) {
+                    def gkh:double ((oneRowPx * kid.height.value) / 100.0)
+                    def gkIn:double (gkh - (kid.box.getVerticalChrome()))
+                    if (gkIn < 0.0) {
+                        gkIn = 0.0
+                    }
+                    def gkW:double ((((gkIn * kid.aspectRatio) + (kid.box.getHorizontalChrome())) + kid.box.marginLeftPx) + kid.box.marginRightPx)
+                    if (gkW > w) {
+                        w = gkW
+                    }
                 }
                 if (w > (itemAt widths col)) {
                     set widths col w
