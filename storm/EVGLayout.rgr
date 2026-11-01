@@ -6450,9 +6450,16 @@ class EVGLayout {
                 }
             }
         }
-        def colDist:[double] (EVGLayout.contentDistribution(jcD (innerWidth - colsW) nColsD))
+        ; (collapsed auto-fit tracks take no share, CSS Grid 7.2.3.2)
+        def colDist:[double] (EVGLayout.contentDistribution(jcD (innerWidth - colsW) (nColsD - (array_length collapsed))))
         def colShift:double (itemAt colDist 0)
         colGapPx = (colGapPx + (itemAt colDist 1))
+        if ((itemAt colDist 1) != 0.0) {
+            for collapsed cdk:int cdki {
+                def cdt:EVGGridTrack (cols.trackAt(cdk))
+                cdt.sizePx = (cdt.sizePx - (itemAt colDist 1))
+            }
+        }
         def rowShift:double 0.0
         def rowsH:double rowGapTotal
         def rh:int 0
@@ -6481,9 +6488,16 @@ class EVGLayout {
             if ((acD == "left") || (acD == "right")) {
                 acD = "start"
             }
-            def rowDist:[double] (EVGLayout.contentDistribution(acD (alignRoom - rowsH) rowsUsed))
+            def rowDist:[double] (EVGLayout.contentDistribution(acD (alignRoom - rowsH) (rowsUsed - (array_length rowCollapsed))))
             rowShift = (itemAt rowDist 0)
             rowGapPx = (rowGapPx + (itemAt rowDist 1))
+            if ((itemAt rowDist 1) != 0.0) {
+                for rowCollapsed rdk:int rdki {
+                    if (rdk < (array_length rowSizes)) {
+                        set rowSizes rdk ((itemAt rowSizes rdk) - (itemAt rowDist 1))
+                    }
+                }
+            }
             rowGapTotal = (rowGapTotal + ((itemAt rowDist 1) * (to_double (rowsUsed - 1))))
         }
 
