@@ -595,6 +595,101 @@ class EVGDisplayList {
         this.addCmd(c)
     }
 
+    ; One side of `len` along x (horiz) or y, `t` thick, at (sx, sy). Dotted
+    ; is t-long dots (round from 3px) with t gaps, dashed is 3t dashes with 2t
+    ; gaps (2t and t from 3px); the gap is stretched so that the side starts
+    ; and ends with a dot or dash (Blink's StrokeData::SelectBestDashGap).
+    ; Solid sides keep their place between the top and bottom.
+    fn addStyledSide:void (sx:double sy:double len:double t:double horiz:boolean sc:EVGColor style:string) {
+        if ((t <= 0.0) || (len <= 0.0)) {
+            return
+        }
+        if ((style != "dotted") && (style != "dashed")) {
+            if horiz {
+                this.addSide(sx sy len t sc)
+            } {
+                this.addSide(sx sy t len sc)
+            }
+            return
+        }
+        if ((sc.alpha()) <= 0.0) {
+            return
+        }
+        def dash:double t
+        def gap:double t
+        if (style == "dashed") {
+            if (t >= 3.0) {
+                dash = (t * 2.0)
+                gap = t
+            } {
+                dash = (t * 3.0)
+                gap = (t * 2.0)
+            }
+        }
+        if (len <= dash) {
+            if horiz {
+                this.addSide(sx sy len t sc)
+            } {
+                this.addSide(sx sy t len sc)
+            }
+            return
+        }
+        def avail:double (len + gap)
+        def minN:double (to_double (floor (avail / (dash + gap))))
+        def maxN:double (minN + 1.0)
+        def useGap:double gap
+        def minGap:double 0.0
+        def maxGap:double 0.0
+        if (minN > 1.0) {
+            minGap = ((len - (minN * dash)) / (minN - 1.0))
+        }
+        maxGap = ((len - (maxN * dash)) / (maxN - 1.0))
+        def n:double minN
+        if ((maxGap <= 0.0) || ((minN > 1.0) && ((EVGDisplayList.absD((minGap - gap))) < (EVGDisplayList.absD((maxGap - gap)))))) {
+            useGap = minGap
+        } {
+            useGap = maxGap
+            n = maxN
+        }
+        if (n < 2.0) {
+            n = 1.0
+        }
+        def round:boolean ((style == "dotted") && (t >= 3.0))
+        def k:double 0.0
+        while (k < n) {
+            def at:double (k * (dash + useGap))
+            def c (new EVGDrawCmd())
+            c.kind = 0
+            if horiz {
+                c.x = (sx + at)
+                c.y = sy
+                c.w = dash
+                c.h = t
+            } {
+                c.x = sx
+                c.y = (sy + at)
+                c.w = t
+                c.h = dash
+            }
+            if round {
+                c.radius = (t / 2.0)
+            }
+            c.r = (sc.red())
+            c.g = (sc.green())
+            c.b = (sc.blue())
+            c.a = (sc.alpha())
+            this.addCmd(c)
+            k = (k + 1.0)
+        }
+    }
+
+    sfn absD:double (v:double) {
+        if (v < 0.0) {
+            return (0.0 - v)
+        }
+        return v
+    }
+
     fn addCmd:void (c:EVGDrawCmd) {
         c.node = curNode
         push cmds c
@@ -3378,10 +3473,27 @@ class EVGDisplayList {
                 def sbr:double (itemAt bx.sbW 1)
                 def sbb:double (itemAt bx.sbW 2)
                 def sbl:double (itemAt bx.sbW 3)
-                this.addSide(x y w sbt (itemAt bx.sbC 0))
-                this.addSide(x ((y + h) - sbb) w sbb (itemAt bx.sbC 2))
-                this.addSide(x (y + sbt) sbl ((h - sbt) - sbb) (itemAt bx.sbC 3))
-                this.addSide(((x + w) - sbr) (y + sbt) sbr ((h - sbt) - sbb) (itemAt bx.sbC 1))
+                if ((array_length bx.sbS) == 4) {
+                    ; dotted and dashed sides run the box's whole length,
+                    ; as a browser strokes them
+                    this.addStyledSide(x y w sbt true (itemAt bx.sbC 0) (itemAt bx.sbS 0))
+                    this.addStyledSide(x ((y + h) - sbb) w sbb true (itemAt bx.sbC 2) (itemAt bx.sbS 2))
+                    if (((itemAt bx.sbS 3) == "dotted") || ((itemAt bx.sbS 3) == "dashed")) {
+                        this.addStyledSide(x y h sbl false (itemAt bx.sbC 3) (itemAt bx.sbS 3))
+                    } {
+                        this.addSide(x (y + sbt) sbl ((h - sbt) - sbb) (itemAt bx.sbC 3))
+                    }
+                    if (((itemAt bx.sbS 1) == "dotted") || ((itemAt bx.sbS 1) == "dashed")) {
+                        this.addStyledSide(((x + w) - sbr) y h sbr false (itemAt bx.sbC 1) (itemAt bx.sbS 1))
+                    } {
+                        this.addSide(((x + w) - sbr) (y + sbt) sbr ((h - sbt) - sbb) (itemAt bx.sbC 1))
+                    }
+                } {
+                    this.addSide(x y w sbt (itemAt bx.sbC 0))
+                    this.addSide(x ((y + h) - sbb) w sbb (itemAt bx.sbC 2))
+                    this.addSide(x (y + sbt) sbl ((h - sbt) - sbb) (itemAt bx.sbC 3))
+                    this.addSide(((x + w) - sbr) (y + sbt) sbr ((h - sbt) - sbb) (itemAt bx.sbC 1))
+                }
             }
         }
         ; Border. Read through the element's own accessor rather than a field
@@ -3429,6 +3541,25 @@ class EVGDisplayList {
             c3.y = y
             c3.w = w
             c3.h = h
+            ; the picture fills the content box: inside the border and the
+            ; padding (side borders are folded into the padding)
+            def ibw:double el.box.borderWidthPx
+            def iL:double (ibw + el.box.paddingLeftPx)
+            def iT:double (ibw + el.box.paddingTopPx)
+            def iR:double (ibw + el.box.paddingRightPx)
+            def iB:double (ibw + el.box.paddingBottomPx)
+            if ((((iL > 0.0) || (iT > 0.0)) || (iR > 0.0)) || (iB > 0.0)) {
+                c3.x = (x + iL)
+                c3.y = (y + iT)
+                c3.w = ((w - iL) - iR)
+                c3.h = ((h - iT) - iB)
+                if (c3.w < 0.0) {
+                    c3.w = 0.0
+                }
+                if (c3.h < 0.0) {
+                    c3.h = 0.0
+                }
+            }
             c3.radius = radius
             c3.perCorner = perCorner
             if perCorner {
