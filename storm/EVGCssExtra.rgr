@@ -106,6 +106,8 @@ class EVGCssExtra {
     ; from its scrollport's edge at scroll position 0; -1: none
     def stickyTop:double -1.0
     def stickyLeft:double -1.0
+    def stickyBottom:double -1.0
+    def stickyRight:double -1.0
     ; border sides that differ in width or color (side-borders: top right
     ; bottom left widths, then | and each side's color): the front end
     ; folded them into the padding, the display list paints them there
@@ -134,7 +136,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || (name == "contain-w")))))))))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -212,6 +214,14 @@ class EVGCssExtra {
         }
         if (name == "sticky-left") {
             stickyLeft = (?? (to_double value) -1.0)
+            return
+        }
+        if (name == "sticky-bottom") {
+            stickyBottom = (?? (to_double value) -1.0)
+            return
+        }
+        if (name == "sticky-right") {
+            stickyRight = (?? (to_double value) -1.0)
             return
         }
         if (name == "float-side") {
@@ -348,6 +358,8 @@ class EVGCssExtra {
         c.containW = containW
         c.stickyTop = stickyTop
         c.stickyLeft = stickyLeft
+        c.stickyBottom = stickyBottom
+        c.stickyRight = stickyRight
         c.foldT = foldT
         c.paintLate = paintLate
         c.canvasW = canvasW

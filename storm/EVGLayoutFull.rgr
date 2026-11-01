@@ -97,6 +97,34 @@ class EVGLayoutFull {
                         }
                     }
                 }
+                ; (bottom / right: kept above / left of the scrollport's far
+                ; edge, but not out over the top / left of its block)
+                if ((sx.stickyBottom >= 0.0) && (dy == 0.0)) {
+                    def edgeB:double ((((port.calculatedY + port.calculatedHeight) - port.box.borderWidthPx) - sx.stickyBottom) - (c.calculatedY + c.calculatedHeight))
+                    if (edgeB < 0.0) {
+                        dy = edgeB
+                        def upY:double ((((el.calculatedY + el.box.borderWidthPx) + el.box.paddingTopPx) + c.box.marginTopPx) - c.calculatedY)
+                        if (dy < upY) {
+                            dy = upY
+                        }
+                        if (dy > 0.0) {
+                            dy = 0.0
+                        }
+                    }
+                }
+                if ((sx.stickyRight >= 0.0) && (dx == 0.0)) {
+                    def edgeR:double ((((port.calculatedX + port.calculatedWidth) - port.box.borderWidthPx) - sx.stickyRight) - (c.calculatedX + c.calculatedWidth))
+                    if (edgeR < 0.0) {
+                        dx = edgeR
+                        def upX:double ((((el.calculatedX + el.box.borderWidthPx) + el.box.paddingLeftPx) + c.box.marginLeftPx) - c.calculatedX)
+                        if (dx < upX) {
+                            dx = upX
+                        }
+                        if (dx > 0.0) {
+                            dx = 0.0
+                        }
+                    }
+                }
                 if ((dx != 0.0) || (dy != 0.0)) {
                     c.calculatedX = (c.calculatedX + dx)
                     c.calculatedY = (c.calculatedY + dy)
@@ -114,7 +142,7 @@ class EVGLayoutFull {
 
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
-        if ((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) {
+        if (((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) || ((css.stickyBottom >= 0.0) || (css.stickyRight >= 0.0))) {
             sawSticky = true
         }
         if (css.floatRow && (childCount > 0)) {
