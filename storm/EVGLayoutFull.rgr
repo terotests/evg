@@ -2958,6 +2958,9 @@ class EVGLayoutFull {
     ; grid-area: a name no area has is that name on all four sides
     ; (CSS Grid 8.4), which the line placement below resolves
     fn gridLeading:double (lay:EVGLayout parent:EVGElement) {
+        if ((strlen ((EVGLayoutFull.cx(parent)).lanes)) > 0) {
+            return (this.gridLanes(lay parent))
+        }
         def ar:EVGGridAreas (EVGGridAreas.parse(parent.gridTemplateAreas))
         def n:int (parent.getChildCount())
         def moved:boolean false
@@ -2997,6 +3000,889 @@ class EVGLayoutFull {
             z = (z + 1)
         }
         return h
+    }
+
+    ; --- grid-lanes (CSS Grid 3) ---------------------------------------------
+    ; The lanes are the template's tracks across one axis; an item goes into
+    ; the lane (or the run of lanes it spans) that is filled least, within
+    ; flow-tolerance of the least filled the earliest, and its running
+    ; position there grows by its outer size and the gap.
+    fn gridLanes:double (lay:EVGLayout parent:EVGElement) {
+        def mode:string ((EVGLayoutFull.cx(parent)).lanes)
+        def rowDir:boolean ((indexOf mode "row") >= 0)
+        def fillRev:boolean ((indexOf mode "fill-reverse") >= 0)
+        def trackRev:boolean ((indexOf mode "track-reverse") >= 0)
+        def innerWidth:double parent.calculatedInnerWidth
+        def innerHeight:double parent.calculatedInnerHeight
+        def startX:double ((parent.calculatedX + parent.box.borderWidthPx) + parent.box.paddingLeftPx)
+        def startY:double ((parent.calculatedY + parent.box.borderWidthPx) + parent.box.paddingTopPx)
+        def gaps:[double] (lay.gridGaps(parent innerWidth innerHeight))
+        def colGapPx:double (itemAt gaps 0)
+        def rowGapPx:double (itemAt gaps 1)
+        ; (the gap between lanes and the gap down a lane)
+        def laneGap:double colGapPx
+        def flowGap:double rowGapPx
+        def laneRoom:double innerWidth
+        def spec:string parent.gridTemplateColumns
+        if rowDir {
+            laneGap = rowGapPx
+            flowGap = colGapPx
+            laneRoom = innerHeight
+            spec = parent.gridTemplateRows
+        }
+        def tol:double ((EVGLayoutFull.cx(parent)).laneTol)
+        if (tol < 0.0) {
+            tol = parent.inheritedFontSize
+        }
+        def items:[EVGElement]
+        def starts:[int]
+        def spans:[int]
+        def n:int (parent.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (parent.getChild(i))
+            c.inheritProperties(parent)
+            c.resolveUnits(innerWidth innerHeight)
+            if ((c.gridTemplateColumns == "subgrid") || (c.gridTemplateRows == "subgrid")) {
+                c.subgridPending = true
+            }
+            if (c.isAbsolute == false) {
+                push items c
+            }
+            i = (i + 1)
+        }
+        def itemCount:int (array_length items)
+        def lanes:EVGGridTemplate (this.laneTracks(lay parent rowDir spec laneRoom laneGap items starts spans))
+        def laneCount:int (lanes.count())
+        if (laneCount < 1) {
+            return 0.0
+        }
+        def laneExtent:double (lanes.extentOf(0 laneCount laneGap))
+        ; the running position of each lane
+        def run:[double]
+        def r:int 0
+        while (r < laneCount) {
+            push run 0.0
+            r = (r + 1)
+        }
+        def placedAt:[double]
+        def placedLane:[int]
+        def cursor:int 0
+        def holeA:[double]
+        def holeB:[double]
+        def holeL:[int]
+        def placedOuter:[double]
+        def lastOf:[int]
+        def lo:int 0
+        while (lo < laneCount) {
+            push lastOf -1
+            lo = (lo + 1)
+        }
+        def wasRow:boolean lay.layingOutAlongRow
+        def wasShrink:boolean lay.columnCrossShrinks
+        def p:int 0
+        while (p < itemCount) {
+            def el:EVGElement (itemAt items p)
+            def sp2:int (itemAt spans p)
+            def lane:int (itemAt starts p)
+            ; (with track-reverse the lanes count from the end: a line
+            ; number is still the physical one)
+            if (trackRev && (lane >= 0)) {
+                lane = ((laneCount - lane) - sp2)
+            }
+            def explicitLane:boolean (lane >= 0)
+            if ((lane < 0) && (((indexOf parent.gridAutoFlow "dense") >= 0) == false)) {
+                lane = (this.chooseLane(run cursor sp2 laneCount tol))
+                cursor = (lane + sp2)
+                if (cursor >= laneCount) {
+                    cursor = 0
+                }
+            }
+            def dense:boolean (((indexOf parent.gridAutoFlow "dense") >= 0) && ((array_length items) > 0))
+            def pos:double 0.0
+            if dense {
+                ; (dense: the item goes in the first room, also a hole a
+                ; spanning item left above it, CSS Grid 3)
+                def l0:int lane
+                if (l0 < 0) {
+                    l0 = 0
+                }
+                def need:double ((this.laneItem(lay parent el rowDir lanes l0 sp2 0.0 laneGap trackRev laneExtent startX startY innerWidth innerHeight)) + flowGap)
+                if explicitLane {
+                    pos = (this.laneFit(run holeA holeB holeL lane sp2 need))
+                } {
+                    def fits:[double]
+                    def fl:int 0
+                    while (fl <= (laneCount - sp2)) {
+                        push fits (this.laneFit(run holeA holeB holeL fl sp2 need))
+                        fl = (fl + 1)
+                    }
+                    lane = (this.chooseFit(fits cursor tol))
+                    cursor = (lane + sp2)
+                    if (cursor >= laneCount) {
+                        cursor = 0
+                    }
+                    pos = (itemAt fits lane)
+                }
+            } {
+                pos = (this.laneRunMax(run lane sp2))
+            }
+            def outer:double (this.laneItem(lay parent el rowDir lanes lane sp2 pos laneGap trackRev laneExtent startX startY innerWidth innerHeight))
+            if dense {
+                this.laneOccupy(run holeA holeB holeL lane sp2 pos (outer + flowGap))
+            }
+            push placedAt pos
+            push placedLane lane
+            push placedOuter outer
+            def u:int lane
+            while (u < (lane + sp2)) {
+                if (dense == false) {
+                    set run u ((pos + outer) + flowGap)
+                }
+                set lastOf u p
+                u = (u + 1)
+            }
+            p = (p + 1)
+        }
+        lay.layingOutAlongRow = wasRow
+        lay.columnCrossShrinks = wasShrink
+        def total:double 0.0
+        def t:int 0
+        while (t < laneCount) {
+            if ((itemAt run t) > total) {
+                total = (itemAt run t)
+            }
+            t = (t + 1)
+        }
+        if (itemCount > 0) {
+            total = (total - flowGap)
+        }
+        if (total < 0.0) {
+            total = 0.0
+        }
+        ; the last item down a lane has the room to the end of the lanes
+        ; to align in (align-self, or justify-self along rows)
+        def la:int 0
+        while (la < itemCount) {
+            def lel:EVGElement (itemAt items la)
+            def lln:int (itemAt placedLane la)
+            def lsp:int (itemAt spans la)
+            def isLast:boolean true
+            def lu:int lln
+            while (lu < (lln + lsp)) {
+                if ((itemAt lastOf lu) != la) {
+                    isLast = false
+                }
+                lu = (lu + 1)
+            }
+            def lfree:double ((total - (itemAt placedAt la)) - (itemAt placedOuter la))
+            if (isLast && (lfree > 0.5)) {
+                def al:string lel.alignSelf
+                if (((strlen al) == 0) || (al == "auto")) {
+                    al = parent.alignItems
+                }
+                if rowDir {
+                    al = lel.justifySelf
+                    if (((strlen al) == 0) || (al == "auto")) {
+                        al = parent.justifyItems
+                    }
+                }
+                def ld:double 0.0
+                if ((al == "center") || (al == "safe center")) {
+                    ld = (lfree / 2.0)
+                }
+                if ((al == "end") || ((al == "flex-end") || ((al == "self-end") || ((al == "safe end") || ((rowDir && (al == "right")) || (al == "last baseline")))))) {
+                    ld = lfree
+                }
+                if (ld > 0.0) {
+                    if rowDir {
+                        lay.translateSubtree(lel ld 0.0)
+                    } {
+                        lay.translateSubtree(lel 0.0 ld)
+                    }
+                }
+                if (al == "stretch") {
+                    if rowDir {
+                        if (lel.width.isSet == false) {
+                            def nw:double (lel.calculatedWidth + lfree)
+                            lel.hasFlexWidth = true
+                            lel.calculatedFlexWidth = nw
+                            lay.layingOutAlongRow = false
+                            lay.columnCrossShrinks = false
+                            lay.layoutElement(lel lel.calculatedX lel.calculatedY nw lel.calculatedHeight)
+                        }
+                    } {
+                        if (lel.height.isSet == false) {
+                            def nh:double (lel.calculatedHeight + lfree)
+                            lel.calculatedFlexHeight = nh
+                            lel.hasFlexHeight = true
+                            lay.layingOutAlongRow = false
+                            lay.columnCrossShrinks = false
+                            lay.layoutElement(lel lel.calculatedX lel.calculatedY lel.calculatedWidth nh)
+                        }
+                    }
+                }
+            }
+            la = (la + 1)
+        }
+        lay.layingOutAlongRow = wasRow
+        lay.columnCrossShrinks = wasShrink
+        ; fill-reverse: the lanes fill from their end
+        if fillRev {
+            def room2:double total
+            if rowDir {
+                if (innerWidth > room2) {
+                    room2 = innerWidth
+                }
+            } {
+                if (parent.hasDefiniteHeight && (innerHeight > room2)) {
+                    room2 = innerHeight
+                }
+            }
+            def f:int 0
+            while (f < itemCount) {
+                def fe:EVGElement (itemAt items f)
+                if rowDir {
+                    def fx:double ((fe.calculatedX - fe.box.marginLeftPx) - startX)
+                    def fw:double ((fe.calculatedWidth + fe.box.marginLeftPx) + fe.box.marginRightPx)
+                    lay.translateSubtree(fe ((room2 - fx) - fw - fx) 0.0)
+                } {
+                    def fy:double ((fe.calculatedY - fe.box.marginTopPx) - startY)
+                    def fh:double ((fe.calculatedHeight + fe.box.marginTopPx) + fe.box.marginBottomPx)
+                    lay.translateSubtree(fe 0.0 ((room2 - fy) - fh - fy))
+                }
+                f = (f + 1)
+            }
+        }
+        def result:double total
+        if rowDir {
+            result = laneExtent
+        }
+        def absH:double innerHeight
+        if (absH <= 0.0) {
+            absH = result
+        }
+        lay.layoutGridOutOfFlow(parent innerWidth absH startX startY)
+        return result
+    }
+
+    ; the lanes of a grid-lanes container, sized: the template's, and past
+    ; them (or with none) grid-auto-columns / grid-auto-rows ones as far as
+    ; the items' lines and spans reach; each item's start lane (-1: auto)
+    ; and span go to starts and spans
+    fn laneTracks:EVGGridTemplate (lay:EVGLayout parent:EVGElement rowDir:boolean spec0:string laneRoom:double laneGap:double items:[EVGElement] starts:[int] spans:[int]) {
+        def itemCount:int (array_length items)
+        def spec:string spec0
+        def autoSpec:string parent.gridAutoColumns
+        if rowDir {
+            autoSpec = parent.gridAutoRows
+        }
+        if (((strlen autoSpec) == 0) || (autoSpec == "none")) {
+            autoSpec = "auto"
+        }
+        if (spec == "none") {
+            spec = ""
+        }
+        if ((strlen spec) > 0) {
+            spec = (this.intrinsicRepeat(lay parent rowDir spec laneRoom laneGap items))
+            spec = (EVGGridTemplate.resolveAutoRepeat(spec laneRoom laneGap itemCount parent.inheritedFontSize))
+        }
+        def tpl:EVGGridTemplate (EVGGridTemplate.parse(spec))
+        def pls:[EVGGridPlacement]
+        def need:int 1
+        def q:int 0
+        while (q < itemCount) {
+            def it:EVGElement (itemAt items q)
+            def pl:EVGGridPlacement (EVGGridPlacement.parse(it.gridColumn))
+            if rowDir {
+                pl = (EVGGridPlacement.parse(it.gridRow))
+            }
+            pl.resolveNames(tpl)
+            if (pl.span < 1) {
+                pl.span = 1
+            }
+            def reach:int pl.span
+            if (pl.start >= 1) {
+                reach = ((pl.start - 1) + pl.span)
+            }
+            if (reach > need) {
+                need = reach
+            }
+            push pls pl
+            q = (q + 1)
+        }
+        def have:int (tpl.count())
+        if (have < need) {
+            def add:string spec
+            def h:int have
+            while (h < need) {
+                if ((strlen add) > 0) {
+                    add = (add + " ")
+                }
+                add = (add + autoSpec)
+                h = (h + 1)
+            }
+            tpl = (EVGGridTemplate.parse(add))
+        }
+        def laneCount:int (tpl.count())
+        if (laneCount < 1) {
+            return tpl
+        }
+        def w:int 0
+        while (w < itemCount) {
+            def pl2:EVGGridPlacement (itemAt pls w)
+            def sp:int pl2.span
+            if (sp > laneCount) {
+                sp = laneCount
+            }
+            def st:int (pl2.start - 1)
+            if (st >= laneCount) {
+                st = (laneCount - 1)
+            }
+            if ((st >= 0) && ((st + sp) > laneCount)) {
+                sp = (laneCount - st)
+            }
+            push starts st
+            push spans sp
+            w = (w + 1)
+        }
+        def lanes:EVGGridTemplate tpl
+        ; the lanes' sizes: an item placed in a lane counts there, an
+        ; auto-placed one in every lane it could go to
+        def content:[double]
+        def minContent:[double]
+        def k:int 0
+        while (k < laneCount) {
+            push content 0.0
+            push minContent 0.0
+            push lanes.definiteMin 0.0
+            k = (k + 1)
+        }
+        if (lanes.hasIntrinsicTrack()) {
+            def m:int 0
+            while (m < itemCount) {
+                if ((itemAt spans m) == 1) {
+                    def it2:EVGElement (itemAt items m)
+                    def big:double 0.0
+                    def small:double 0.0
+                    if rowDir {
+                        big = (this.laneItemHeight(lay it2))
+                        small = big
+                    } {
+                        big = (lay.intrinsicWidthOf(it2))
+                        small = (lay.minIntrinsicWidthOf(it2))
+                    }
+                    def a:int 0
+                    while (a < laneCount) {
+                        if (((itemAt starts m) < 0) || ((itemAt starts m) == a)) {
+                            if (big > (itemAt content a)) {
+                                set content a big
+                            }
+                            if (small > (itemAt minContent a)) {
+                                set minContent a small
+                            }
+                        }
+                        a = (a + 1)
+                    }
+                }
+                m = (m + 1)
+            }
+        }
+        def gapTotal:double ((to_double (laneCount - 1)) * laneGap)
+        def room:double (laneRoom - gapTotal)
+        if (room < 0.0) {
+            room = 0.0
+        }
+        lanes.stretchAutos = true
+        if rowDir {
+            lanes.stretchAutos = parent.hasDefiniteHeight
+        }
+        lanes.percentOf = laneRoom
+        lanes.resolveWithContent(room content minContent)
+        return lanes
+    }
+
+    ; the start of the least filled run of span lanes: the first, from
+    ; the placement cursor round to it, within tol of the least
+    fn chooseLane:int (run:[double] cursor:int span:int laneCount:int tol:double) {
+        def best:double -1.0
+        def s:int 0
+        while (s <= (laneCount - span)) {
+            def at:double (this.laneRunMax(run s span))
+            if ((best < 0.0) || (at < best)) {
+                best = at
+            }
+            s = (s + 1)
+        }
+        def nStarts:int ((laneCount - span) + 1)
+        def tries:int 0
+        while (tries < nStarts) {
+            def s3:int ((cursor + tries) % nStarts)
+            if ((this.laneRunMax(run s3 span)) <= (best + tol)) {
+                return s3
+            }
+            tries = (tries + 1)
+        }
+        return 0
+    }
+
+    ; a grid-lanes container's intrinsic width (below 0: not one)
+    fn lanesIntrinsic:double (lay:EVGLayout el:EVGElement wantMin:boolean) {
+        def mode:string ((EVGLayoutFull.cx(el)).lanes)
+        if ((strlen mode) == 0) {
+            return -1.0
+        }
+        def rowDir:boolean ((indexOf mode "row") >= 0)
+        def items:[EVGElement]
+        def k:int 0
+        while (k < (el.getChildCount())) {
+            def c:EVGElement (el.getChild(k))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                push items c
+            }
+            k = (k + 1)
+        }
+        def cg:double 0.0
+        if el.gap.isSet {
+            cg = el.gap.pixels
+        }
+        if el.columnGap.isSet {
+            cg = el.columnGap.pixels
+        }
+        def rg:double 0.0
+        if el.gap.isSet {
+            rg = el.gap.pixels
+        }
+        if el.rowGap.isSet {
+            rg = el.rowGap.pixels
+        }
+        def chrome:double (el.box.getHorizontalChrome())
+        def starts:[int]
+        def spans:[int]
+        if (rowDir == false) {
+            def lanes:EVGGridTemplate (this.laneTracks(lay el false el.gridTemplateColumns 0.0 cg items starts spans))
+            if ((lanes.count()) < 1) {
+                return chrome
+            }
+            return ((lanes.extentOf(0 (lanes.count()) cg)) + chrome)
+        }
+        def lanesR:EVGGridTemplate (this.laneTracks(lay el true el.gridTemplateRows 0.0 rg items starts spans))
+        def laneCount:int (lanesR.count())
+        if (laneCount < 1) {
+            return chrome
+        }
+        def tol:double ((EVGLayoutFull.cx(el)).laneTol)
+        if (tol < 0.0) {
+            tol = el.inheritedFontSize
+        }
+        def run:[double]
+        def r:int 0
+        while (r < laneCount) {
+            push run 0.0
+            r = (r + 1)
+        }
+        def cursor:int 0
+        def p:int 0
+        while (p < (array_length items)) {
+            def it:EVGElement (itemAt items p)
+            def sp:int (itemAt spans p)
+            def lane:int (itemAt starts p)
+            if (lane < 0) {
+                lane = (this.chooseLane(run cursor sp laneCount tol))
+                cursor = (lane + sp)
+                if (cursor >= laneCount) {
+                    cursor = 0
+                }
+            }
+            def w:double (lay.intrinsicWidthOf(it))
+            if (it.width.isSet && ((it.width.isPercent()) == false)) {
+                w = ((it.width.pixels + it.box.marginLeftPx) + it.box.marginRightPx)
+            }
+            def pos:double (this.laneRunMax(run lane sp))
+            def u:int lane
+            while (u < (lane + sp)) {
+                set run u ((pos + w) + cg)
+                u = (u + 1)
+            }
+            p = (p + 1)
+        }
+        def total:double 0.0
+        for run v:double vi {
+            if (v > total) {
+                total = v
+            }
+        }
+        if ((array_length items) > 0) {
+            total = (total - cg)
+        }
+        return (total + chrome)
+    }
+
+    ; repeat(auto-fill / auto-fit, <intrinsic tracks>) in grid-lanes: as
+    ; many repetitions as fit when each track is as big as the biggest item
+    ; (CSS Grid 3), the tracks themselves staying intrinsic
+    fn intrinsicRepeat:string (lay:EVGLayout parent:EVGElement rowDir:boolean spec:string room:double gap:double items:[EVGElement]) {
+        def tokens:[string] (EVGGridTemplate.tokenize(spec))
+        def at:int -1
+        def listStr:string ""
+        def kind:string ""
+        def i:int 0
+        while (i < (array_length tokens)) {
+            def tok:string (itemAt tokens i)
+            if ((EVGGridTemplate.isLineNameToken(tok)) == false) {
+                def k:string (EVGGridTemplate.autoRepeatKind(tok))
+                if (k != "") {
+                    def inner:string (substring tok 7 ((strlen tok) - 1))
+                    def comma:int (indexOf inner ",")
+                    def ls:string (trim (substring inner (comma + 1) (strlen inner)))
+                    def lt:EVGGridTemplate (EVGGridTemplate.parse(ls))
+                    if ((lt.hasIntrinsicTrack()) && ((lt.count()) > 0)) {
+                        at = i
+                        listStr = ls
+                        kind = k
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        if (at < 0) {
+            return spec
+        }
+        def wantMin:boolean ((indexOf listStr "min-content") >= 0)
+        def size:double 0.0
+        for items it:EVGElement ii {
+            def v:double 0.0
+            if rowDir {
+                v = (this.laneItemHeight(lay it))
+            } {
+                if wantMin {
+                    v = (lay.minIntrinsicWidthOf(it))
+                } {
+                    v = (lay.intrinsicWidthOf(it))
+                }
+            }
+            def spx:EVGGridPlacement (EVGGridPlacement.parse(it.gridColumn))
+            if rowDir {
+                spx = (EVGGridPlacement.parse(it.gridRow))
+            }
+            if (spx.span <= 1) {
+                if (v > size) {
+                    size = v
+                }
+            }
+        }
+        if (size <= 0.0) {
+            size = 1.0
+        }
+        def lt2:EVGGridTemplate (EVGGridTemplate.parse(listStr))
+        def per:string ""
+        def t:int 0
+        while (t < (lt2.count())) {
+            if (t > 0) {
+                per = (per + " ")
+            }
+            per = ((per + (to_string size)) + "px")
+            t = (t + 1)
+        }
+        def countSpec:string ""
+        def outSpec:string ""
+        def j:int 0
+        while (j < (array_length tokens)) {
+            if (j > 0) {
+                countSpec = (countSpec + " ")
+                outSpec = (outSpec + " ")
+            }
+            if (j == at) {
+                countSpec = (countSpec + "repeat(" + kind + ", " + per + ")")
+            } {
+                countSpec = (countSpec + (itemAt tokens j))
+            }
+            j = (j + 1)
+        }
+        def counted:string (EVGGridTemplate.resolveAutoRepeat(countSpec room gap (array_length items) parent.inheritedFontSize))
+        ; (the count is the one in the repeat() it wrote)
+        def rp:int (indexOf counted "repeat(")
+        if (rp < 0) {
+            return spec
+        }
+        def rest:string (substring counted (rp + 7) (strlen counted))
+        def cm:int (indexOf rest ",")
+        def nStr:string (trim (substring rest 0 cm))
+        def j2:int 0
+        while (j2 < (array_length tokens)) {
+            if (j2 > 0) {
+                outSpec = (outSpec + " ")
+            }
+            if (j2 == at) {
+                outSpec = (outSpec + "repeat(" + nStr + ", " + listStr + ")")
+            } {
+                outSpec = (outSpec + (itemAt tokens j2))
+            }
+            j2 = (j2 + 1)
+        }
+        return outSpec
+    }
+
+    ; one grid-lanes item laid out in lanes lane .. lane + span at pos down
+    ; them: its outer size along the lanes
+    fn laneItem:double (lay:EVGLayout parent:EVGElement el:EVGElement rowDir:boolean lanes:EVGGridTemplate lane:int sp2:int pos:double laneGap:double trackRev:boolean laneExtent:double startX:double startY:double innerWidth:double innerHeight:double) {
+        def cell:double (lanes.extentOf(lane sp2 laneGap))
+        def off:double (lanes.offsetOf(lane laneGap))
+        if trackRev {
+            off = ((laneExtent - off) - cell)
+        }
+        def outer:double 0.0
+        if rowDir {
+            el.unitsResolved = false
+            el.resolveUnits(innerWidth cell)
+            def bh:double ((cell - el.box.marginTopPx) - el.box.marginBottomPx)
+            if (bh < 0.0) {
+                bh = 0.0
+            }
+            def ga:string el.alignSelf
+            if (((strlen ga) == 0) || (ga == "auto")) {
+                ga = parent.alignItems
+            }
+            def placedV:boolean ((ga == "center") || ((ga == "end") || ((ga == "flex-end") || ((ga == "start") || ((ga == "self-start") || ((ga == "self-end") || ((indexOf ga "baseline") >= 0)))))))
+            def bw:double (((lay.intrinsicWidthOf(el)) - el.box.marginLeftPx) - el.box.marginRightPx)
+            if (bw < 0.0) {
+                bw = 0.0
+            }
+            ; (after the measuring, which starts the box afresh)
+            if ((placedV == false) && (el.height.isSet == false)) {
+                el.calculatedFlexHeight = bh
+            }
+            el.calculatedX = ((startX + pos) + el.box.marginLeftPx)
+            el.calculatedY = ((startY + off) + el.box.marginTopPx)
+            if (el.gridTemplateRows == "subgrid") {
+                this.laneSubgrid(el lanes lane sp2 true)
+            }
+            lay.layingOutAlongRow = false
+            lay.columnCrossShrinks = true
+            lay.layoutElement(el el.calculatedX el.calculatedY bw bh)
+            if placedV {
+                def freeY:double (bh - el.calculatedHeight)
+                if (freeY > 0.0) {
+                    def dy:double 0.0
+                    if (ga == "center") {
+                        dy = (freeY / 2.0)
+                    }
+                    if ((ga == "end") || ((ga == "flex-end") || (ga == "self-end"))) {
+                        dy = freeY
+                    }
+                    if (dy != 0.0) {
+                        lay.translateSubtree(el 0.0 dy)
+                    }
+                }
+            }
+            outer = ((el.calculatedWidth + el.box.marginLeftPx) + el.box.marginRightPx)
+        } {
+            el.unitsResolved = false
+            el.resolveUnits(cell innerHeight)
+            def bw2:double ((cell - el.box.marginLeftPx) - el.box.marginRightPx)
+            if (bw2 < 0.0) {
+                bw2 = 0.0
+            }
+            def gj:string el.justifySelf
+            if (((strlen gj) == 0) || (gj == "auto")) {
+                gj = parent.justifyItems
+            }
+            def placedH:boolean ((gj == "center") || ((gj == "end") || ((gj == "flex-end") || ((gj == "start") || ((gj == "flex-start") || ((gj == "left") || ((gj == "right") || ((gj == "self-start") || (gj == "self-end")))))))))
+            el.calculatedX = ((startX + off) + el.box.marginLeftPx)
+            el.calculatedY = ((startY + pos) + el.box.marginTopPx)
+            if (el.gridTemplateColumns == "subgrid") {
+                this.laneSubgrid(el lanes lane sp2 false)
+            }
+            lay.layingOutAlongRow = false
+            lay.columnCrossShrinks = placedH
+            lay.layoutElement(el el.calculatedX el.calculatedY bw2 0.0)
+            if placedH {
+                def freeX:double (bw2 - el.calculatedWidth)
+                if (freeX > 0.0) {
+                    def dx:double 0.0
+                    if (gj == "center") {
+                        dx = (freeX / 2.0)
+                    }
+                    if ((gj == "end") || ((gj == "flex-end") || ((gj == "right") || (gj == "self-end")))) {
+                        dx = freeX
+                    }
+                    if (dx != 0.0) {
+                        lay.translateSubtree(el dx 0.0)
+                    }
+                }
+            }
+            outer = ((el.calculatedHeight + el.box.marginTopPx) + el.box.marginBottomPx)
+        }
+        return outer
+    }
+
+    ; the first place down lanes lane .. lane + span with need free in all
+    ; of them: at or after each one's end, or in a hole of each
+    fn laneFit:double (run:[double] holeA:[double] holeB:[double] holeL:[int] lane:int span:int need:double) {
+        def cands:[double]
+        def u:int lane
+        while (u < (lane + span)) {
+            push cands (itemAt run u)
+            u = (u + 1)
+        }
+        def h:int 0
+        while (h < (array_length holeA)) {
+            def hl:int (itemAt holeL h)
+            if ((hl >= lane) && (hl < (lane + span))) {
+                push cands (itemAt holeA h)
+            }
+            h = (h + 1)
+        }
+        def best:double -1.0
+        for cands y:double ci {
+            if ((best < 0.0) || (y < best)) {
+                def ok:boolean true
+                def v:int lane
+                while ((v < (lane + span)) && ok) {
+                    if (y < ((itemAt run v) - 0.01)) {
+                        def inHole:boolean false
+                        def g:int 0
+                        while (g < (array_length holeA)) {
+                            if ((((itemAt holeL g) == v) && ((itemAt holeA g) <= (y + 0.01))) && ((y + need) <= ((itemAt holeB g) + 0.01))) {
+                                inHole = true
+                            }
+                            g = (g + 1)
+                        }
+                        if (inHole == false) {
+                            ok = false
+                        }
+                    }
+                    v = (v + 1)
+                }
+                if ok {
+                    best = y
+                }
+            }
+        }
+        return best
+    }
+
+    ; the start, from the cursor round, whose fit is within tol of the least
+    fn chooseFit:int (fits:[double] cursor:int tol:double) {
+        def n:int (array_length fits)
+        def best:double -1.0
+        for fits f:double fi {
+            if ((best < 0.0) || (f < best)) {
+                best = f
+            }
+        }
+        def c:int cursor
+        if (c >= n) {
+            c = 0
+        }
+        def t:int 0
+        while (t < n) {
+            def s:int ((c + t) % n)
+            if ((itemAt fits s) <= (best + tol)) {
+                return s
+            }
+            t = (t + 1)
+        }
+        return 0
+    }
+
+    ; lanes lane .. lane + span taken from pos for need: a lane's end moves
+    ; past it (the room left above it a hole), or the hole it is in splits
+    fn laneOccupy:void (run:[double] holeA:[double] holeB:[double] holeL:[int] lane:int span:int pos:double need:double) {
+        def u:int lane
+        while (u < (lane + span)) {
+            if (pos >= ((itemAt run u) - 0.01)) {
+                if (pos > ((itemAt run u) + 0.01)) {
+                    push holeA (itemAt run u)
+                    push holeB pos
+                    push holeL u
+                }
+                set run u (pos + need)
+            } {
+                def g:int 0
+                def done:boolean false
+                while ((g < (array_length holeA)) && (done == false)) {
+                    if ((((itemAt holeL g) == u) && ((itemAt holeA g) <= (pos + 0.01))) && ((pos + need) <= ((itemAt holeB g) + 0.01))) {
+                        def ha:double (itemAt holeA g)
+                        set holeA g (pos + need)
+                        if (pos > (ha + 0.01)) {
+                            push holeA ha
+                            push holeB pos
+                            push holeL u
+                        }
+                        done = true
+                    }
+                    g = (g + 1)
+                }
+            }
+            u = (u + 1)
+        }
+    }
+
+    ; a subgrid item takes the lanes it spans as its tracks, less its own
+    ; margin, border and padding at its edges (CSS Grid 2 9)
+    fn laneSubgrid:void (el:EVGElement lanes:EVGGridTemplate lane:int span:int rows:boolean) {
+        if rows {
+            clear el.subgridRowSizes
+        } {
+            clear el.subgridColumnSizes
+        }
+        def k:int 0
+        while (k < span) {
+            def tk:EVGGridTrack (lanes.trackAt(lane + k))
+            def w:double tk.sizePx
+            if (k == 0) {
+                if rows {
+                    w = (((w - el.box.marginTopPx) - el.box.borderWidthPx) - el.box.paddingTopPx)
+                } {
+                    w = (((w - el.box.marginLeftPx) - el.box.borderWidthPx) - el.box.paddingLeftPx)
+                }
+            }
+            if (k == (span - 1)) {
+                if rows {
+                    w = (((w - el.box.marginBottomPx) - el.box.borderWidthPx) - el.box.paddingBottomPx)
+                } {
+                    w = (((w - el.box.marginRightPx) - el.box.borderWidthPx) - el.box.paddingRightPx)
+                }
+            }
+            if (w < 0.0) {
+                w = 0.0
+            }
+            if rows {
+                push el.subgridRowSizes w
+            } {
+                push el.subgridColumnSizes w
+            }
+            k = (k + 1)
+        }
+    }
+
+    fn laneRunMax:double (run:[double] from:int span:int) {
+        def v:double 0.0
+        def i:int from
+        while (i < (from + span)) {
+            if ((itemAt run i) > v) {
+                v = (itemAt run i)
+            }
+            i = (i + 1)
+        }
+        return v
+    }
+
+    ; an item laid out at its max-content width: its outer height
+    fn laneItemHeight:double (lay:EVGLayout el:EVGElement) {
+        def w:double (((lay.intrinsicWidthOf(el)) - el.box.marginLeftPx) - el.box.marginRightPx)
+        if (w < 0.0) {
+            w = 0.0
+        }
+        def wasRow:boolean lay.layingOutAlongRow
+        def wasShrink:boolean lay.columnCrossShrinks
+        lay.layingOutAlongRow = false
+        lay.columnCrossShrinks = true
+        lay.layoutElement(el 0.0 0.0 w 0.0)
+        lay.layingOutAlongRow = wasRow
+        lay.columnCrossShrinks = wasShrink
+        return ((el.calculatedHeight + el.box.marginTopPx) + el.box.marginBottomPx)
     }
 
     fn gridLeadingLines:double (lay:EVGLayout parent:EVGElement) {

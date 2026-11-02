@@ -166,6 +166,11 @@ class EVGLayoutExt {
         return -1.0
     }
 
+    ; a grid-lanes container's intrinsic width; below 0 when it is not one
+    fn lanesIntrinsic:double (lay:EVGLayout el:EVGElement wantMin:boolean) {
+        return -1.0
+    }
+
     ; grid-auto-flow: column; below 0 when the core lays the grid out by rows
     fn gridColumnFlow:double (lay:EVGLayout parent:EVGElement) {
         return -1.0
