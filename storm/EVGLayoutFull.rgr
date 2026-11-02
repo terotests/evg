@@ -3655,7 +3655,7 @@ class EVGLayoutFull {
             el.calculatedX = ((startX + pos) + el.box.marginLeftPx)
             el.calculatedY = ((startY + off) + el.box.marginTopPx)
             if (el.gridTemplateRows == "subgrid") {
-                this.laneSubgrid(el lanes lane sp2 true)
+                this.laneSubgrid(el lanes lane sp2 true laneGap)
             }
             lay.layingOutAlongRow = false
             lay.columnCrossShrinks = true
@@ -3691,7 +3691,7 @@ class EVGLayoutFull {
             el.calculatedX = ((startX + off) + el.box.marginLeftPx)
             el.calculatedY = ((startY + pos) + el.box.marginTopPx)
             if (el.gridTemplateColumns == "subgrid") {
-                this.laneSubgrid(el lanes lane sp2 false)
+                this.laneSubgrid(el lanes lane sp2 false laneGap)
             }
             lay.layingOutAlongRow = false
             lay.columnCrossShrinks = placedH
@@ -3821,7 +3821,20 @@ class EVGLayoutFull {
 
     ; a subgrid item takes the lanes it spans as its tracks, less its own
     ; margin, border and padding at its edges (CSS Grid 2 9)
-    fn laneSubgrid:void (el:EVGElement lanes:EVGGridTemplate lane:int span:int rows:boolean) {
+    fn laneSubgrid:void (el:EVGElement lanes:EVGGridTemplate lane:int span:int rows:boolean laneGap:double) {
+        ; (a gap of its own: each inner line moves half the difference into
+        ; the tracks on both sides of it, CSS Grid 2 9)
+        def own:double laneGap
+        if el.gap.isSet {
+            own = el.gap.pixels
+        }
+        if (rows && el.rowGap.isSet) {
+            own = el.rowGap.pixels
+        }
+        if ((rows == false) && el.columnGap.isSet) {
+            own = el.columnGap.pixels
+        }
+        def half:double ((own - laneGap) / 2.0)
         if rows {
             clear el.subgridRowSizes
         } {
@@ -3837,6 +3850,12 @@ class EVGLayoutFull {
                 } {
                     w = (((w - el.box.marginLeftPx) - el.box.borderWidthPx) - el.box.paddingLeftPx)
                 }
+            }
+            if (k > 0) {
+                w = (w - half)
+            }
+            if (k < (span - 1)) {
+                w = (w - half)
             }
             if (k == (span - 1)) {
                 if rows {

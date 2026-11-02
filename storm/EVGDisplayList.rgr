@@ -1746,7 +1746,17 @@ class EVGDisplayList {
 
     fn walkPath:void (el:EVGElement x:double y:double w:double h:double) {
         if ((strlen el.svgSource) > 0) {
+            ; an svg element's overflow (hidden by default, CSS 2 11.1.1 and
+            ; the UA sheet's svg:not(:root)) cuts what is drawn outside its
+            ; box; not inside a turn, for the reason the child clip gives
+            def cut:boolean ((el.overflow != "visible") && (turnedDepth == 0))
+            if cut {
+                this.addClip(x y w h)
+            }
             this.walkSvgDocument(el x y w h)
+            if cut {
+                this.addClipEnd()
+            }
             return
         }
 

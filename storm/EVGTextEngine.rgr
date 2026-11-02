@@ -432,15 +432,34 @@ class EVGTextEngine {
                     ; A micron of a pixel cannot change any wrap a person
                     ; asked for; it can only undo a round trip that should
                     ; have been the identity.
-                    if (((testWidth - maxWidth) > (EVGTextEngine.fitEpsilon())) && (tokensOnLine > 0)) {
-                        push out (this.measuredLineSpaced(currentLine fontFamily fontSize spacing))
-                        currentLine = word
-                        tokensOnLine = 1
-                    } {
-                        currentLine = testLine
-                        tokensOnLine = (tokensOnLine + 1)
+                    ; (a word that does not fit breaks after a hyphen inside
+                    ; it when the part up to there does: "upper-" / "left",
+                    ; UAX #14 HY)
+                    def cut:int -1
+                    if ((testWidth - maxWidth) > (EVGTextEngine.fitEpsilon())) {
+                        cut = (this.hyphenCut(currentLine tokensOnLine word fontFamily fontSize maxWidth spacing))
                     }
-                    w = (w + 1)
+                    if (cut > 0) {
+                        def head:string (substring word 0 cut)
+                        if (tokensOnLine == 0) {
+                            push out (this.measuredLineSpaced(head fontFamily fontSize spacing))
+                        } {
+                            push out (this.measuredLineSpaced((currentLine + " " + head) fontFamily fontSize spacing))
+                        }
+                        currentLine = ""
+                        tokensOnLine = 0
+                        set words w (substring word cut (strlen word))
+                    } {
+                        if (((testWidth - maxWidth) > (EVGTextEngine.fitEpsilon())) && (tokensOnLine > 0)) {
+                            push out (this.measuredLineSpaced(currentLine fontFamily fontSize spacing))
+                            currentLine = word
+                            tokensOnLine = 1
+                        } {
+                            currentLine = testLine
+                            tokensOnLine = (tokensOnLine + 1)
+                        }
+                        w = (w + 1)
+                    }
                 }
                 ; An empty paragraph is still a line — blank lines take vertical
                 ; space, and dropping them would shorten the block.
@@ -459,6 +478,38 @@ class EVGTextEngine {
             push out (this.measuredLineSpaced("" fontFamily fontSize spacing))
         }
         return out
+    }
+
+    ; Where to break word after one of its hyphens (the index after it) so
+    ; that the line so far and the part up to there fit maxWidth: the
+    ; latest such hyphen, between two letters or digits; -1 when none fits
+    fn hyphenCut:int (currentLine:string tokensOnLine:int word:string fontFamily:string fontSize:double maxWidth:double spacing:double) {
+        def best:int -1
+        def n:int (strlen word)
+        def i:int 1
+        while (i < (n - 1)) {
+            if ((charAt word i) == 45) {
+                def a:int (charAt word (i - 1))
+                def b:int (charAt word (i + 1))
+                if ((EVGTextEngine.isAlnum(a)) && (EVGTextEngine.isAlnum(b))) {
+                    def head:string (substring word 0 (i + 1))
+                    def t:string head
+                    if (tokensOnLine > 0) {
+                        t = (currentLine + " " + head)
+                    }
+                    def tw:double ((measurer.measureTextWidth(t fontFamily fontSize)) + (EVGTextEngine.trackingWidth(t spacing)))
+                    if ((tw - maxWidth) <= (EVGTextEngine.fitEpsilon())) {
+                        best = (i + 1)
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        return best
+    }
+
+    sfn isAlnum:boolean (c:int) {
+        return ((((c >= 48) && (c <= 57)) || ((c >= 65) && (c <= 90))) || ((c >= 97) && (c <= 122)))
     }
 
     ; One measured line, RETURNED rather than pushed into a list the caller
