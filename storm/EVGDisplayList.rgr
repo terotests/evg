@@ -4518,16 +4518,17 @@ class EVGDisplayList {
             ; ring covering everything is what a single-contour path means
             ; anyway, so say it here rather than expecting each caller to.
             if ((array_length c.pts) > 0) {
-                co = co + ",\"pts\":["
+                ; the numbers joined once, as the commands are: appending
+                ; each to the command's growing string copied it all again
+                ; for every number, and a traced drawing (14 paths of ~100k
+                ; points) took 15 s here
+                def nparts:[string]
                 def pi:int 0
                 while (pi < (array_length c.pts)) {
-                    if (pi > 0) {
-                        co = co + ","
-                    }
-                    co = co + (EVGDisplayList.num((itemAt c.pts pi)))
+                    push nparts (EVGDisplayList.num((itemAt c.pts pi)))
                     pi = (pi + 1)
                 }
-                co = co + "],\"ends\":["
+                co = co + ",\"pts\":[" + (join nparts ",") + "],\"ends\":["
                 if ((array_length c.ringEnds) == 0) {
                     co = co + (to_string (array_length c.pts))
                 } {
