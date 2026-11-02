@@ -357,8 +357,18 @@ export function createA11yMirror(host, { canvas, onActivate, onFocus, canMoveFoc
     const w = Math.max(0, b[2] * scale);
     const h = Math.max(0, b[3] * scale);
     const s = el.style;
-    if (s.left !== left + "px") s.left = left + "px";
-    if (s.top !== top + "px") s.top = top + "px";
+    // PLACED WITH A TRANSFORM, NOT left/top. The boxes follow every scroll
+    // and every frame, and Chrome counts each left/top move of a node that
+    // has text (transparent or not) as a layout shift: the M-Files window
+    // reported CLS 0.92, 121 shifts in one cluster, from a card scrolled with
+    // the wheel. A transform is not a layout shift, and it is still the box
+    // a reader, a magnifier and getBoundingClientRect see. Children are
+    // placed relative to this one either way: a transformed box is the
+    // containing block of its absolute children, as a positioned one is.
+    if (s.left !== "0px") s.left = "0px";
+    if (s.top !== "0px") s.top = "0px";
+    const tr = `translate(${left}px, ${top}px)`;
+    if (s.transform !== tr) s.transform = tr;
     if (s.width !== w + "px") s.width = w + "px";
     if (s.height !== h + "px") s.height = h + "px";
   }
