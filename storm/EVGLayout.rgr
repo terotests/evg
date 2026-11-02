@@ -5234,6 +5234,18 @@ class EVGLayout {
                         }
                     }
                 }
+                ; (along a row, a px flex-basis that cannot grow caps the
+                ; contribution and one that cannot shrink floors it, CSS
+                ; Flexbox 9.9.1)
+                if ((isColumn == false) && (kid.flexBasis.isSet && ((kid.flexBasis.isPercent()) == false))) {
+                    def kbw:double ((kid.flexBasis.pixels + kid.box.marginLeftPx) + kid.box.marginRightPx)
+                    if ((kid.flex <= 0.0) && (w > kbw)) {
+                        w = kbw
+                    }
+                    if ((kid.flexShrink <= 0.0) && (w < kbw)) {
+                        w = kbw
+                    }
+                }
                 if colLines {
                     push kidWs w
                     def km:double -1.0
