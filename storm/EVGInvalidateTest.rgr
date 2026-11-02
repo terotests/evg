@@ -412,6 +412,41 @@ class EVGInvalidateTest {
         c.ok("and the rest of the tree is skipped" (s.passSkipped >= 23))
     }
 
+    ; A window drag changes the viewport on every frame. Plans hang on which
+    ; `@media` conditions hold, not on the pixels, so a resize that crosses no
+    ; breakpoint keeps them (and the tree skips as on any frame), and one that
+    ; crosses a breakpoint drops them and restyles.
+    sfn testResizeKeepsPlans:void (c:InvCheck) {
+        print "--- a resize within a breakpoint keeps the plans ---"
+        def s (new EVGStyleSheet())
+        s.parse((EVGInvalidateTest.sheetText()) + " @media (max-width: 600px) { .row { height: 50px; } }")
+        s.setViewport(900.0 600.0 false)
+        def p:EVGElement (EVGInvalidateTest.page())
+        s.applyTree(p "")
+        def misses:int s.planMisses
+        def gen:int s.generation
+        s.setViewport(880.0 590.0 false)
+        s.applyTree(p "")
+        c.ok("no plan is rebuilt" (s.planMisses == misses))
+        c.ok("the generation stands" (s.generation == gen))
+        c.ok("and the tree is skipped" (s.passStyled == 0))
+        def r:EVGElement (EVGInvalidateTest.rowOf(p 2))
+        def before:double r.height.value
+        s.setViewport(500.0 590.0 false)
+        s.applyTree(p "")
+        c.ok("across the breakpoint the plans go" (s.generation != gen))
+        c.ok("and the narrow rule applies" ((r.height.value > 49.5) && (r.height.value < 50.5)))
+        s.setViewport(900.0 600.0 false)
+        s.applyTree(p "")
+        c.ok("and back again the wide value" ((r.height.value > (before - 0.5)) && (r.height.value < (before + 0.5))))
+        ; a fresh tree at a kept viewport is styled from the kept plans
+        def q:EVGElement (EVGInvalidateTest.page())
+        def m2:int s.planMisses
+        s.setViewport(910.0 600.0 false)
+        s.applyTree(q "")
+        c.ok("a new tree reuses the kept plans" (s.planMisses == m2))
+    }
+
     sfn main:void () {
         def c (new InvCheck())
         print "=== EVG invalidation: paint versus layout ==="
@@ -421,6 +456,7 @@ class EVGInvalidateTest {
         EVGInvalidateTest.testWhatTheSheetCannotSee(c)
         EVGInvalidateTest.testTransitionsStillRun(c)
         EVGInvalidateTest.testSkipSurvivesTransitions(c)
+        EVGInvalidateTest.testResizeKeepsPlans(c)
         print ""
         print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))
         if (c.failed > 0) {
