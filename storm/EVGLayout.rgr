@@ -3845,7 +3845,17 @@ class EVGLayout {
         ; box keeps it, CSS 2.1 10.3.7 with CSS Sizing 3)
         def kwSpanW:boolean ((element.width.unitType >= 6) && (element.width.unitType <= 8))
         def kwSpanH:boolean ((element.height.unitType >= 6) && (element.height.unitType <= 8))
-        if (((element.left.isSet && element.right.isSet) && (element.width.isSet == false)) && (kwSpanW == false)) {
+        ; (an aspect-ratio with both sizes auto: the axis whose insets both
+        ; stand is stretched, the other one follows the ratio, inline first,
+        ; CSS Position 3, 4.1 with CSS Sizing 4, 5.1)
+        def arAbs:boolean (((element.aspectRatio > 0.0) && (element.width.isSet == false)) && (element.height.isSet == false))
+        def wSpanned:boolean false
+        ; (a given size in the other axis: the ratio gives this one, not
+        ; the insets)
+        def arByH:boolean (((element.aspectRatio > 0.0) && (element.width.isSet == false)) && (element.height.isSet && ((element.height.isPercent()) == false)))
+        def arByW:boolean (((element.aspectRatio > 0.0) && (element.height.isSet == false)) && (element.width.isSet && ((element.width.isPercent()) == false)))
+        if ((((element.left.isSet && element.right.isSet) && (element.width.isSet == false)) && (kwSpanW == false)) && (arByH == false)) {
+            wSpanned = true
             def spanW:double ((((parentWidth - element.left.pixels) - element.right.pixels) - element.box.marginLeftPx) - element.box.marginRightPx)
             ; (min-width wins over the insets, CSS 2.1 10.4)
             if ((element.minWidth.isSet && ((element.minWidth.isPercent()) == false)) && (element.minWidth.pixels > spanW)) {
@@ -3856,7 +3866,14 @@ class EVGLayout {
                 element.calculatedInnerWidth = (element.box.getInnerWidth(spanW))
             }
         }
-        if (((element.top.isSet && element.bottom.isSet) && (element.height.isSet == false)) && (kwSpanH == false)) {
+        if (arAbs && (wSpanned && (element.calculatedWidth > 0.0))) {
+            def arIW:double (element.box.getInnerWidth(element.calculatedWidth))
+            def arH:double ((arIW / element.aspectRatio) + (element.box.getVerticalChrome()))
+            element.calculatedHeight = arH
+            element.calculatedInnerHeight = (element.box.getInnerHeight(arH))
+            element.hasDefiniteHeight = true
+        }
+        if ((((element.top.isSet && element.bottom.isSet) && (element.height.isSet == false)) && (kwSpanH == false)) && (((arAbs && wSpanned) == false) && (arByW == false))) {
             def spanH:double ((((parentHeight - element.top.pixels) - element.bottom.pixels) - element.box.marginTopPx) - element.box.marginBottomPx)
             if ((element.minHeight.isSet && ((element.minHeight.isPercent()) == false)) && (element.minHeight.pixels > spanH)) {
                 spanH = element.minHeight.pixels
@@ -3866,6 +3883,13 @@ class EVGLayout {
                 element.calculatedInnerHeight = (element.box.getInnerHeight(spanH))
                 element.hasDefiniteHeight = true
             }
+        }
+
+        if ((arAbs && (wSpanned == false)) && ((element.top.isSet && element.bottom.isSet) && (element.calculatedHeight > 0.0))) {
+            def arIH:double (element.box.getInnerHeight(element.calculatedHeight))
+            def arW:double ((arIH * element.aspectRatio) + (element.box.getHorizontalChrome()))
+            element.calculatedWidth = arW
+            element.calculatedInnerWidth = (element.box.getInnerWidth(arW))
         }
 
         ; X position
