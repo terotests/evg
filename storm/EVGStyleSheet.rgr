@@ -332,15 +332,48 @@ class EVGStyleSheet {
     ; State the surface once; `applyTree` then honours the media blocks.
     ; Width and height are CSS pixels, and `coarse` says the pointer is a
     ; finger rather than a mouse.
+    ;
+    ; A plan depends on the viewport only through which `@media` conditions
+    ; hold (`vw`/`vh` stay units until layout), so the plans are dropped only
+    ; when that changes. Dropping them on every pixel of a window drag rebuilt
+    ; every plan each frame: `buildPlan` was 17 % of a resize frame in the
+    ; M-Files window, and with the generation unchanged an element that keeps
+    ; its class and state now skips its restyle as on any other frame.
     fn setViewport:void (w:double h:double coarse:boolean) {
         if (((w != viewportW) || (h != viewportH)) || (coarse != coarsePointer)) {
-            ; A media query can turn a rule on or off, so every plan built under
-            ; the old surface is now a guess.
-            this.dropPlans()
+            ; The plans held were built for these rules at the old surface
+            ; (any change to the rules drops them), so the two answers are
+            ; comparable.
+            if ((this.mediaSignature(viewportW viewportH coarsePointer)) != (this.mediaSignature(w h coarse))) {
+                this.dropPlans()
+            }
         }
         viewportW = w
         viewportH = h
         coarsePointer = coarse
+    }
+
+    ; Which of the sheet's `@media` conditions (rules' and variables') hold on
+    ; a surface, one character each; unconditional ones are left out.
+    fn mediaSignature:string (w:double h:double coarse:boolean) {
+        def out:string ""
+        def i:int 0
+        while (i < (array_length rules)) {
+            def rule:EVGStyleRule (itemAt rules i)
+            if ((rule.media.isEmpty()) == false) {
+                out = (out + (? (rule.media.matches(w h coarse)) "1" "0"))
+            }
+            i = (i + 1)
+        }
+        def k:int 0
+        while (k < (array_length varMedia)) {
+            def mq:EVGMediaQuery (itemAt varMedia k)
+            if ((mq.isEmpty()) == false) {
+                out = (out + (? (mq.matches(w h coarse)) "1" "0"))
+            }
+            k = (k + 1)
+        }
+        return out
     }
 
     fn getRuleCount:int () {
