@@ -4792,6 +4792,10 @@ class EVGLayout {
     ; other the widest (or, for min-content, narrowest) of the items that
     ; fall in it in order, with the gaps
     fn intrinsicOfGrid:double (el:EVGElement wantMin:boolean) {
+        def lanesW:double (ext.lanesIntrinsic(this el wantMin))
+        if (lanesW >= 0.0) {
+            return lanesW
+        }
         def spec:string el.gridTemplateColumns
         if ((strlen spec) == 0) {
             spec = "1fr"
@@ -5232,6 +5236,29 @@ class EVGLayout {
                         if (kW > w) {
                             w = kW
                         }
+                    }
+                }
+                ; (along a row, a px flex-basis that cannot grow caps the
+                ; contribution and one that cannot shrink floors it, CSS
+                ; Flexbox 9.9.1)
+                if (((isColumn == false) && (kid.width.isSet == false)) && (kid.flexBasis.isSet && ((kid.flexBasis.isPercent()) == false))) {
+                    def kbw:double ((kid.flexBasis.pixels + kid.box.marginLeftPx) + kid.box.marginRightPx)
+                    if ((kid.flex <= 0.0) && (w > kbw)) {
+                        ; (not below its automatic minimum, its min-content
+                        ; size, or its min-width)
+                        def kmin:double (this.intrinsicWidth(kid true))
+                        if (kid.minWidth.isSet && ((kid.minWidth.isPercent()) == false)) {
+                            kmin = ((kid.minWidth.pixels + kid.box.marginLeftPx) + kid.box.marginRightPx)
+                        }
+                        if (kbw > kmin) {
+                            kmin = kbw
+                        }
+                        if (w > kmin) {
+                            w = kmin
+                        }
+                    }
+                    if ((kid.flexShrink <= 0.0) && (w < kbw)) {
+                        w = kbw
                     }
                 }
                 if colLines {

@@ -683,6 +683,156 @@ class EVGDisplayList {
         }
     }
 
+    ; A linear gradient of many stops on an axis, as bands: before the first
+    ; stop its colour, between two stops a two-stop ramp (a hard stop is no
+    ; band), after the last its colour. A stop's position is clamped to the
+    ; one before it, and one left out is spread between its neighbours (CSS
+    ; Images 3, 3.5.3).
+    fn addGradientBands:void (el:EVGElement x:double y:double w:double h:double) {
+        def g:EVGGradient el.gradient
+        def ang:double (EVGDisplayList.normAngle(g.angle))
+        def dir:int 0
+        def rev:boolean false
+        if ((ang >= 45.0) && (ang < 135.0)) {
+            dir = 1
+        }
+        if ((ang >= 225.0) && (ang < 315.0)) {
+            dir = 1
+            rev = true
+        }
+        if ((ang < 45.0) || (ang >= 315.0)) {
+            rev = true
+        }
+        def len:double h
+        if (dir == 1) {
+            len = w
+        }
+        def n:int (g.getStopCount())
+        def pos:[double]
+        def given:[boolean]
+        def i:int 0
+        while (i < n) {
+            def st:EVGGradientStop (g.getStop(i))
+            def p:double (st.percentage * len)
+            if (st.px >= 0.0) {
+                p = st.px
+            }
+            push pos p
+            push given st.given
+            i = (i + 1)
+        }
+        ; (the first and last default to the ends)
+        if ((itemAt given 0) == false) {
+            set pos 0 0.0
+            set given 0 true
+        }
+        if ((itemAt given (n - 1)) == false) {
+            set pos (n - 1) len
+            set given (n - 1) true
+        }
+        ; (clamped to the one before)
+        def k:int 1
+        while (k < n) {
+            if (itemAt given k) {
+                def prev:double 0.0
+                def pk:int (k - 1)
+                while ((pk >= 0) && ((itemAt given pk) == false)) {
+                    pk = (pk - 1)
+                }
+                if (pk >= 0) {
+                    prev = (itemAt pos pk)
+                }
+                if ((itemAt pos k) < prev) {
+                    set pos k prev
+                }
+            }
+            k = (k + 1)
+        }
+        ; (left out: evenly between the given ones around it)
+        def j:int 1
+        while (j < (n - 1)) {
+            if ((itemAt given j) == false) {
+                def e:int j
+                while ((itemAt given e) == false) {
+                    e = (e + 1)
+                }
+                def a0:double (itemAt pos (j - 1))
+                def b0:double (itemAt pos e)
+                def span:int ((e - j) + 1)
+                def m:int j
+                while (m < e) {
+                    set pos m (a0 + (((b0 - a0) * (to_double ((m - j) + 1))) / (to_double span)))
+                    set given m true
+                    m = (m + 1)
+                }
+                j = e
+            }
+            j = (j + 1)
+        }
+        ; the bands: [from, to) along the axis with two colours
+        def first:EVGGradientStop (g.getStop(0))
+        def last:EVGGradientStop (g.getStop((n - 1)))
+        this.addBand(x y w h len dir rev 0.0 (itemAt pos 0) first.color first.color)
+        def q:int 0
+        while (q < (n - 1)) {
+            def sa:EVGGradientStop (g.getStop(q))
+            def sb:EVGGradientStop (g.getStop((q + 1)))
+            this.addBand(x y w h len dir rev (itemAt pos q) (itemAt pos (q + 1)) sa.color sb.color)
+            q = (q + 1)
+        }
+        this.addBand(x y w h len dir rev (itemAt pos (n - 1)) len last.color last.color)
+    }
+
+    fn addBand:void (x:double y:double w:double h:double len:double dir:int rev:boolean a:double b:double ca:EVGColor cb:EVGColor) {
+        def p0:double a
+        def p1:double b
+        if (p0 < 0.0) {
+            p0 = 0.0
+        }
+        if (p1 > len) {
+            p1 = len
+        }
+        if (p1 <= p0) {
+            return
+        }
+        def from:EVGColor ca
+        def to:EVGColor cb
+        if rev {
+            def t0:double (len - p1)
+            p1 = (len - p0)
+            p0 = t0
+            from = cb
+            to = ca
+        }
+        def c (new EVGDrawCmd())
+        c.kind = 0
+        if (dir == 1) {
+            c.x = (x + p0)
+            c.y = y
+            c.w = (p1 - p0)
+            c.h = h
+        } {
+            c.x = x
+            c.y = (y + p0)
+            c.w = w
+            c.h = (p1 - p0)
+        }
+        c.r = (from.red())
+        c.g = (from.green())
+        c.b = (from.blue())
+        c.a = (from.alpha())
+        def same:boolean ((((from.red()) == (to.red())) && ((from.green()) == (to.green()))) && (((from.blue()) == (to.blue())) && ((from.alpha()) == (to.alpha()))))
+        if (same == false) {
+            c.hasGrad = true
+            c.gradDir = dir
+            c.r2 = (to.red())
+            c.g2 = (to.green())
+            c.b2 = (to.blue())
+            c.a2 = (to.alpha())
+        }
+        this.addCmd(c)
+    }
+
     sfn absD:double (v:double) {
         if (v < 0.0) {
             return (0.0 - v)
@@ -3348,8 +3498,21 @@ class EVGDisplayList {
             if ((strlen el.surfaceEffect) > 0) {
                 c.effectId = el.effectRuntimeId
             }
+            ; (more than two stops along an axis: the background is the
+            ; colour alone, and the ramp goes on as bands, one per pair of
+            ; stops, each a two-stop gradient or a flat colour)
+            def bands:boolean ((gradOk && (el.gradientSet == false)) && (((el.gradient.getStopCount()) > 2) && ((radius <= 0.0) && (perCorner == false))))
+            if bands {
+                c.hasGrad = false
+                if (bgSet == false) {
+                    c.a = 0.0
+                }
+            }
             EVGDisplayList.applyShadow(c el)
             this.addCmd(c)
+            if bands {
+                this.addGradientBands(el x y w h)
+            }
             painted = true
         }
         if (painted == false) {
