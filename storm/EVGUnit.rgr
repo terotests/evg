@@ -80,6 +80,11 @@ class EVGUnit {
     ; calc() of pixels and a percentage: a percent unit whose pixels add
     ; this on top (calc(200px + 20%))
     def calcPx:double 0.0
+    ; fit-content(<length-percentage>): a fit-content unit (type 6) whose
+    ; room is this length (px, or % of the room when fitArgPct) instead of
+    ; the available space, CSS Sizing 3 3.2; -1 with the plain keyword
+    def fitArg:double -1.0
+    def fitArgPct:boolean false
     
     Constructor () {
         value = 0.0
@@ -240,6 +245,34 @@ class EVGUnit {
         ; leaving the width off, which in EVG means "as wide as the parent" —
         ; that difference is why a row of containers stacked vertically instead
         ; of sitting side by side, every one of them filling the row.
+        if ((indexOf trimmed "fit-content(") == 0) {
+            def fl:int (strlen trimmed)
+            if ((charAt trimmed (fl - 1)) == 41) {
+                def farg:string (trim (substring trimmed 12 (fl - 1)))
+                def fal:int (strlen farg)
+                def fpct:boolean false
+                def fnum:string ""
+                if ((fal > 1) && ((charAt farg (fal - 1)) == 37)) {
+                    fpct = true
+                    fnum = (substring farg 0 (fal - 1))
+                }
+                if ((fal > 2) && ((substring farg (fal - 2) fal) == "px")) {
+                    fnum = (substring farg 0 (fal - 2))
+                }
+                if ((farg == "0") || ((strlen fnum) > 0)) {
+                    def fv@(optional):double (to_double fnum)
+                    unit.value = 0.0
+                    unit.unitType = 6
+                    unit.isSet = false
+                    unit.fitArg = 0.0
+                    if fv {
+                        unit.fitArg = (unwrap fv)
+                    }
+                    unit.fitArgPct = fpct
+                    return unit
+                }
+            }
+        }
         if (trimmed == "fit-content") {
             unit.value = 0.0
             unit.unitType = 6
