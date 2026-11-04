@@ -74,6 +74,7 @@ export default defineConfig({
             { label: "The CSS subset", slug: "css/overview" },
             { label: "Properties", slug: "css/properties" },
             { label: "Units", slug: "css/units" },
+            { label: "CSS conformance", slug: "css/conformance" },
           ],
         },
         {

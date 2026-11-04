@@ -14,7 +14,7 @@ The pages use the same documentation engine as the [Ranger language documentatio
 | Part | Content |
 | --- | --- |
 | Start | Install, document syntax, and the layout pipeline |
-| CSS | The cascade, the property list, and the length units |
+| CSS | The cascade, the property list, the length units, and conformance to the W3C CSS tests |
 | Layout | Flow, flex, grid, absolute, fixed, and overlay surfaces |
 | Effects | Surface-effect shaders, their CSS, and the GLSL plugin shape |
 
