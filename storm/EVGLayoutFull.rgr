@@ -732,6 +732,84 @@ class EVGLayoutFull {
         return fb
     }
 
+    ; a formatting context after float rows (bfcFloats): from its top down,
+    ; the first place where its border box (w wide, as tall as its px
+    ; height) fits between the left and the right floats beside it; its
+    ; left margin takes it past the left ones. The clearance down to there.
+    sfn placeBesideFloats:double (parent:EVGElement child:EVGElement index:int top:double w:double) {
+        def cs:double ((parent.calculatedX + parent.box.borderWidthPx) + parent.box.paddingLeftPx)
+        def ce:double (cs + parent.calculatedInnerWidth)
+        def h:double 0.0
+        if ((!null? child.height) && (child.height.isPixels())) {
+            h = child.height.pixels
+        }
+        def y:double top
+        def tries:int 0
+        while (tries < 64) {
+            def le:double cs
+            def re:double ce
+            def next:double -1.0
+            def pi:int 0
+            while (pi < index) {
+                def pc:EVGElement (parent.getChild(pi))
+                if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
+                    def k:int 0
+                    while (k < (pc.getChildCount())) {
+                        def f:EVGElement (pc.getChild(k))
+                        def side:string ((EVGLayoutFull.cx(f)).floatSide)
+                        def ft:double (f.calculatedY - f.box.marginTopPx)
+                        def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                        def fh:double (fb - ft)
+                        def over:boolean ((ft < ((y + h) - 0.01)) && (fb > (y + 0.01)))
+                        if ((h <= 0.0) && (fh > 0.0)) {
+                            over = ((ft <= (y + 0.01)) && (fb > (y + 0.01)))
+                        }
+                        if over {
+                            if (side == "left") {
+                                def edge:double ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
+                                if (edge > le) {
+                                    le = edge
+                                }
+                            }
+                            if (side == "right") {
+                                def edge2:double (f.calculatedX - f.box.marginLeftPx)
+                                if (edge2 < re) {
+                                    re = edge2
+                                }
+                            }
+                            if ((next < 0.0) || (fb < next)) {
+                                next = fb
+                            }
+                        }
+                        k = (k + 1)
+                    }
+                }
+                pi = (pi + 1)
+            }
+            def ml:double child.box.marginLeftPx
+            def a:double (cs + ml)
+            if (le > a) {
+                a = le
+            }
+            ; (its right margin may reach into the floats: only the border
+            ; box has to fit)
+            def b:double ce
+            if (re < b) {
+                b = re
+            }
+            def fitsW:boolean ((w <= ((b - a) + 0.01)) || (next < 0.0))
+            if fitsW {
+                if ((le - cs) > ml) {
+                    child.box.marginLeftPx = (le - cs)
+                }
+                return (y - top)
+            }
+            y = next
+            tries = (tries + 1)
+        }
+        return (y - top)
+    }
+
     ; a block beside the floats of the float rows before it: its lines
     ; start past the left ones and end before the right ones at its top
     ; (CSS 2.1 9.5), taken as padding for all of its content
@@ -789,6 +867,9 @@ class EVGLayoutFull {
         def child:EVGElement (parent.getChild(index))
         if ((EVGLayoutFull.cx(child)).besideFloats == true) {
             EVGLayoutFull.shiftBesideFloats(parent child index (currentY + child.box.marginTopPx))
+        }
+        if ((EVGLayoutFull.cx(child)).bfcFloats == true) {
+            return (EVGLayoutFull.placeBesideFloats(parent child index (currentY + child.box.marginTopPx) lay.curChildWidth))
         }
         if ((EVGLayoutFull.cx(child)).clearFloats == false) {
             return 0.0

@@ -56,6 +56,9 @@ class EVGLayout {
     ; the CSS conformance layer, when one is installed (EVGLayoutExt); else
     ; the core's own answers
     def ext:EVGLayoutExt
+    ; the border-box width of the child the column pass is placing, for the
+    ; extension's clearance
+    def curChildWidth:double 0.0
     
     Constructor () {
         ext = (EVGLayoutExtDefault.ext())
@@ -1180,6 +1183,22 @@ class EVGLayout {
             }
             if (bottom > h) {
                 h = bottom
+            }
+            ; (a box that does not clip passes on its children's overflow:
+            ; a line of text that does not wrap reaches past its row, one
+            ; level down)
+            if (kid.overflow == "visible") {
+                def j:int 0
+                while (j < (kid.getChildCount())) {
+                    def g:EVGElement (kid.getChild(j))
+                    if (g.isAbsolute == false) {
+                        def gr:double ((g.calculatedX + g.calculatedWidth) - innerX)
+                        if (gr > w) {
+                            w = gr
+                        }
+                    }
+                    j = (j + 1)
+                }
             }
             i = (i + 1)
         }
@@ -2671,6 +2690,7 @@ class EVGLayout {
                 currentX = (currentX + (ext.lineStartGap(child gapPx)))
             }
             if (isColumn && (!null? child.css)) {
+                curChildWidth = childWidth
                 def clr:double (ext.clearance(this parent i currentY))
                 currentY = (currentY + clr)
                 totalHeight = (totalHeight + clr)
