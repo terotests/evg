@@ -44,6 +44,9 @@ class EVGCssExtra {
     ; (cb-outer with s: its percentage sizes are of that block too, its
     ; place stays where its parent put it)
     def cbOuterSize:boolean false
+    ; (cb-outer with c: a grid's absolute child whose containing block is
+    ; not the grid has the grid's content box for its static place)
+    def cbOuterStatic:boolean false
     ; a grid with percentage rows and no definite height: its content
     ; height from the first pass, the rows sized again in it (-1: none)
     def pctRowsHeight:double -1.0
@@ -192,6 +195,7 @@ class EVGCssExtra {
             cbOuterX = ((indexOf value "x") >= 0)
             cbOuterY = ((indexOf value "y") >= 0)
             cbOuterSize = ((indexOf value "s") >= 0)
+            cbOuterStatic = ((indexOf value "c") >= 0)
             return
         }
         if (name == "flex-box") {
@@ -367,6 +371,7 @@ class EVGCssExtra {
         c.cbOuterX = cbOuterX
         c.cbOuterY = cbOuterY
         c.cbOuterSize = cbOuterSize
+        c.cbOuterStatic = cbOuterStatic
         c.flexBox = flexBox
         c.baseFromBottom = baseFromBottom
         c.baseFromTop = baseFromTop
