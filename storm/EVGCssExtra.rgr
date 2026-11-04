@@ -93,6 +93,10 @@ class EVGCssExtra {
     ; a block in the flow right after floats (beside-floats: true): its
     ; content is moved past the floats beside its top
     def besideFloats:boolean false
+    ; a formatting context in the flow after floats (beside-floats: bfc):
+    ; its border box goes where it fits beside them, moved down past their
+    ; bottoms until it does (CSS 2.1 9.5)
+    def bfcFloats:boolean false
     ; a block formatting context whose float rows take no room in its flow
     ; (float-holder: true): it is as tall as its floats reach
     def floatHolder:boolean false
@@ -209,6 +213,7 @@ class EVGCssExtra {
         }
         if (name == "beside-floats") {
             besideFloats = (value == "true")
+            bfcFloats = (value == "bfc")
             return
         }
         if (name == "pct-auto") {
@@ -376,6 +381,7 @@ class EVGCssExtra {
         c.clearFloats = clearFloats
         c.clearSide = clearSide
         c.besideFloats = besideFloats
+        c.bfcFloats = bfcFloats
         c.floatHolder = floatHolder
         c.pctAuto = pctAuto
         c.containW = containW
