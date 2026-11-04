@@ -49,6 +49,8 @@ class EVGLayoutFull {
     ; whose parents are not
     ; sticky boxes were laid out in this pass (finishElement saw one)
     def sawSticky:boolean false
+    ; (laneTracks: an auto-fill count that must reach the room, a min-width)
+    def laneAtLeast:boolean false
 
     ; a sticky box keeps its insets from its scrollport's edges, the
     ; nearest scroll container's padding box (the root's when none), at
@@ -3023,12 +3025,26 @@ class EVGLayoutFull {
         def laneGap:double colGapPx
         def flowGap:double rowGapPx
         def laneRoom:double innerWidth
+        def rowsAtLeast:boolean false
         def spec:string parent.gridTemplateColumns
         if rowDir {
             laneGap = rowGapPx
             flowGap = colGapPx
             laneRoom = innerHeight
             spec = parent.gridTemplateRows
+            ; (an indefinite height: the lanes fill min-height, which the
+            ; box grows to anyway)
+            if (parent.hasDefiniteHeight == false) {
+                def lvc:double (parent.box.getVerticalChrome())
+                if (parent.maxHeight.isSet && ((parent.maxHeight.pixels - lvc) > laneRoom)) {
+                    laneRoom = (parent.maxHeight.pixels - lvc)
+                }
+                if (parent.minHeight.isSet && ((parent.minHeight.pixels - lvc) > laneRoom)) {
+                    laneRoom = (parent.minHeight.pixels - lvc)
+                    ; (a min alone, not a percentage: as many as reach it)
+                    rowsAtLeast = (((parent.maxHeight.isSet && (parent.maxHeight.pixels > 0.0)) == false) && ((parent.minHeight.isPercent()) == false))
+                }
+            }
         }
         def tol:double ((EVGLayoutFull.cx(parent)).laneTol)
         if (tol < 0.0) {
@@ -3052,7 +3068,9 @@ class EVGLayoutFull {
             i = (i + 1)
         }
         def itemCount:int (array_length items)
+        laneAtLeast = rowsAtLeast
         def lanes:EVGGridTemplate (this.laneTracks(lay parent rowDir spec laneRoom laneGap items starts spans))
+        laneAtLeast = false
         def laneCount:int (lanes.count())
         if (laneCount < 1) {
             return 0.0
@@ -3285,7 +3303,21 @@ class EVGLayoutFull {
         }
         if ((strlen spec) > 0) {
             spec = (this.intrinsicRepeat(lay parent rowDir spec laneRoom laneGap items))
-            spec = (EVGGridTemplate.resolveAutoRepeat(spec laneRoom laneGap itemCount parent.inheritedFontSize))
+            if (rowDir == false) {
+                if laneAtLeast {
+                    spec = (EVGGridTemplate.resolveAutoRepeatAtLeast(spec laneRoom laneGap itemCount parent.inheritedFontSize))
+                } {
+                    spec = (EVGGridTemplate.resolveAutoRepeat(spec laneRoom laneGap itemCount parent.inheritedFontSize))
+                }
+            } {
+                ; (down the rows: as many as fit the room gridLanes gives,
+                ; the height, else max-height, else reaching min-height)
+                if laneAtLeast {
+                    spec = (EVGGridTemplate.resolveAutoRepeatAtLeast(spec laneRoom laneGap itemCount parent.inheritedFontSize))
+                } {
+                    spec = (EVGGridTemplate.resolveAutoRepeat(spec laneRoom laneGap itemCount parent.inheritedFontSize))
+                }
+            }
         }
         def tpl:EVGGridTemplate (EVGGridTemplate.parse(spec))
         def pls:[EVGGridPlacement]
@@ -3300,6 +3332,13 @@ class EVGLayoutFull {
             pl.resolveNames(tpl)
             if (pl.span < 1) {
                 pl.span = 1
+            }
+            ; (a negative line counts from the explicit grid's end line)
+            if (pl.start < 0) {
+                pl.start = (((tpl.count()) + 2) + pl.start)
+                if (pl.start < 1) {
+                    pl.start = 1
+                }
             }
             def reach:int pl.span
             if (pl.start >= 1) {
@@ -3460,7 +3499,22 @@ class EVGLayoutFull {
         def starts:[int]
         def spans:[int]
         if (rowDir == false) {
-            def lanes:EVGGridTemplate (this.laneTracks(lay el false el.gridTemplateColumns 0.0 cg items starts spans))
+            ; (repeat(auto-fill) without a definite width: as many as
+            ; max-width holds, else as reach min-width)
+            def iroom:double 0.0
+            if (el.maxWidth.isSet && (el.maxWidth.pixels > 0.0)) {
+                iroom = (el.maxWidth.pixels - chrome)
+            } {
+                if (el.minWidth.isSet && (el.minWidth.pixels > 0.0)) {
+                    iroom = (el.minWidth.pixels - chrome)
+                    laneAtLeast = true
+                }
+            }
+            if (iroom < 0.0) {
+                iroom = 0.0
+            }
+            def lanes:EVGGridTemplate (this.laneTracks(lay el false el.gridTemplateColumns iroom cg items starts spans))
+            laneAtLeast = false
             if ((lanes.count()) < 1) {
                 return chrome
             }
