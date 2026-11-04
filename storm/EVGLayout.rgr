@@ -535,6 +535,13 @@ class EVGLayout {
                 if (element.fitRoom >= 0.0) {
                     width = element.fitRoom
                 }
+                ; (fit-content(<length-percentage>): that length is the room)
+                if (element.width.fitArg >= 0.0) {
+                    width = element.width.fitArg
+                    if element.width.fitArgPct {
+                        width = ((parentWidth * element.width.fitArg) / 100.0)
+                    }
+                }
                 if (width > mxW) {
                     width = mxW
                 }
@@ -7072,6 +7079,21 @@ class EVGLayout {
     ; a width clamped by min-width / max-width of min-content, max-content
     ; or fit-content, from what the box holds (CSS Sizing 3, 3.2); room is
     ; what fit-content fits into when the box is not in a flex flow
+    ; fit-content(<length-percentage>) of a box whose content sizes are mn
+    ; and mx: the length (a percentage of room) clamped between them
+    sfn fitOf:double (arg:double pct:boolean room:double mn:double mx:double) {
+        def f:double arg
+        if pct {
+            f = ((room * arg) / 100.0)
+        }
+        if (f > mx) {
+            f = mx
+        }
+        if (f < mn) {
+            f = mn
+        }
+        return f
+    }
     fn keywordWidth:double (element:EVGElement w:double room:double) {
         def width:double w
         def kxT:int element.maxWidth.unitType
@@ -7101,6 +7123,9 @@ class EVGLayout {
             }
             if kMax {
                 def capW:double kFit
+                if (element.maxWidth.fitArg >= 0.0) {
+                    capW = (EVGLayout.fitOf(element.maxWidth.fitArg element.maxWidth.fitArgPct room kMn kMx))
+                }
                 if (kxT == 7) {
                     capW = kMn
                 }
@@ -7113,6 +7138,9 @@ class EVGLayout {
             }
             if kMin {
                 def floorW:double kFit
+                if (element.minWidth.fitArg >= 0.0) {
+                    floorW = (EVGLayout.fitOf(element.minWidth.fitArg element.minWidth.fitArgPct room kMn kMx))
+                }
                 if (knT == 7) {
                     floorW = kMn
                 }
@@ -7182,6 +7210,9 @@ class EVGLayout {
                 return mxW
             }
             def fw:double maxInnerWidth
+            if (child.width.fitArg >= 0.0) {
+                fw = (EVGLayout.fitOf(child.width.fitArg child.width.fitArgPct maxInnerWidth mnW mxW))
+            }
             if (fw > mxW) {
                 fw = mxW
             }
