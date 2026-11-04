@@ -5049,7 +5049,7 @@ class EVGLayoutFull {
                 ; not its: its static place is the grid's content box,
                 ; CSS Grid 9.2)
                 def ocx:EVGCssExtra (EVGLayoutFull.cx(c))
-                if (ocx.cbOuterX || (ocx.cbOuterY || ocx.cbOuterSize)) {
+                if (ocx.cbOuterX || (ocx.cbOuterY || (ocx.cbOuterSize || ocx.cbOuterStatic))) {
                     ax = 0.0
                     ay = 0.0
                     aw = innerWidth
