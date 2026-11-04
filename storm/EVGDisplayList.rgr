@@ -3475,6 +3475,12 @@ class EVGDisplayList {
         ; `fill` and never as `background-color`, so nothing noticed until a
         ; gradient could be on both.
         def paintsItsBox:boolean ((el.drawsPath()) == false)
+        ; (an svg element with its document is a box like any other: a CSS
+        ; background-color paints its box under the picture; the
+        ; document's own paint is in its items, never in backgroundColor)
+        if ((strlen el.svgSource) > 0) {
+            paintsItsBox = true
+        }
         if ((bgSet || gradOk) && paintsItsBox) {
             def c (new EVGDrawCmd())
             c.kind = 0
