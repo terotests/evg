@@ -1894,6 +1894,9 @@ class EVGLayout {
         ; resolving a unit nobody reads showed up as a few per cent.
         def crossGapPx:double 0.0
         def canWrap:boolean ((isColumn == false) && (parent.flexWrap != "nowrap"))
+        ; (flex-wrap: balance: how many items each line takes, decided
+        ; before the items grow; empty when lines wrap where they fill)
+        def quota:[int]
         if (canWrap && crossGapUnit.isSet) {
             crossGapUnit.rootFontSize = parent.rootFontSize
             if isColumn {
@@ -2007,9 +2010,12 @@ class EVGLayout {
             ; free space was the whole row's: tiles written `flex: 1 1 100px`
             ; four to a 260px panel stayed 100px wide, two to a line, with a
             ; third of each line empty.
+            if (canWrap && parent.flexBalance) {
+                quota = (this.balanceQuota(parent innerWidth gapPx))
+            }
             def grewLines:boolean false
             if (canWrap && (totalFlex > 0.0)) {
-                grewLines = (this.growWrappedLines(parent innerWidth gapPx))
+                grewLines = (this.growWrappedLines(parent innerWidth gapPx quota))
             }
             if ((totalFlex > 0.0) && (grewLines == false)) {
                 def frozen:[boolean]
@@ -2557,6 +2563,8 @@ class EVGLayout {
             }
         }
 
+        ; (the balanced line being filled)
+        def lineAt:int 0
         def i:int 0
         while (i < childCount) {
             def child:EVGElement (parent.getChild(i))
@@ -2679,7 +2687,15 @@ class EVGLayout {
                 def availableWidth:double (((startX + innerWidth) - currentX) + 0.01)
                 ; (an item that takes no room, a line break, stays on the
                 ; line however full it is)
-                if ((((childTotalWidth > availableWidth) && ((array_length rowElements) > 0)) && (parent.flexWrap != "nowrap")) && (childTotalWidth > 0.0)) {
+                def wrapNow:boolean ((((childTotalWidth > availableWidth) && ((array_length rowElements) > 0)) && (parent.flexWrap != "nowrap")) && (childTotalWidth > 0.0))
+                if ((array_length quota) > 0) {
+                    wrapNow = false
+                    if (((array_length rowElements) > 0) && (lineAt < (array_length quota))) {
+                        wrapNow = ((array_length rowElements) >= (itemAt quota lineAt))
+                    }
+                }
+                if wrapNow {
+                    lineAt = (lineAt + 1)
                     ; Wrap to next row
                     rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
                     this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
@@ -2792,7 +2808,7 @@ class EVGLayout {
     ; size (its basis, else its width, else its content's), and every
     ; growing item's size in its own line. False, and nothing set, when the
     ; items make one line: the shared pass is that line's already.
-    fn growWrappedLines:boolean (parent:EVGElement innerWidth:double gapPx:double) {
+    fn growWrappedLines:boolean (parent:EVGElement innerWidth:double gapPx:double quota:[int]) {
         def items:[EVGElement]
         def bases:[double]
         def hyp:[double]
@@ -2833,10 +2849,30 @@ class EVGLayout {
         def starts:[int]
         def used:double 0.0
         def k:int 0
+        ; (balanced: the lines balanceQuota split the items into)
+        def qa:int 0
+        def qi:int 0
+        def qn:int 0
+        if ((array_length quota) > 0) {
+            qn = (itemAt quota 0)
+        }
         while (k < count) {
             def c:EVGElement (itemAt items k)
             def outer:double (((itemAt hyp k) + c.box.marginLeftPx) + c.box.marginRightPx)
-            if ((k == 0) || (((used + gapPx) + outer) > (innerWidth + 0.01))) {
+            def brk:boolean ((k == 0) || (((used + gapPx) + outer) > (innerWidth + 0.01)))
+            if ((array_length quota) > 0) {
+                brk = (k == 0)
+                if ((k > 0) && ((k - qa) >= qn)) {
+                    brk = true
+                    qa = k
+                    qi = (qi + 1)
+                    qn = 0
+                    if (qi < (array_length quota)) {
+                        qn = (itemAt quota qi)
+                    }
+                }
+            }
+            if brk {
                 push starts k
                 used = outer
             } {
@@ -2950,6 +2986,156 @@ class EVGLayout {
             li = (li + 1)
         }
         return true
+    }
+
+    ; flex-wrap: balance (CSS Flexbox 2, 9.7): how many items each line
+    ; takes. As many lines as wrapping makes, no fewer than flex-line-count
+    ; and no more than the items; the items split in order so that the sum
+    ; of the lines' squared free space is least, each line fitting unless
+    ; it is one item; of equal splits the one with the most items on the
+    ; first line, then on the second, and so on. Empty when they make one
+    ; line, or a forced line break decides the lines.
+    fn balanceQuota:[int] (parent:EVGElement innerWidth:double gapPx:double) {
+        def out:[int]
+        def sz:[double]
+        def n:int (parent.getChildCount())
+        def j:int 0
+        while (j < n) {
+            def c:EVGElement (parent.getChild(j))
+            if c.lineBreak {
+                return out
+            }
+            if (c.isAbsolute == false) {
+                def b:double 0.0
+                if c.flexBasis.isSet {
+                    b = c.flexBasis.pixels
+                } {
+                    if c.width.isSet {
+                        b = c.width.pixels
+                    } {
+                        b = (this.estimateChildWidth(c ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx) true))
+                    }
+                }
+                def hi:double -1.0
+                if c.maxWidth.isSet {
+                    hi = c.maxWidth.pixels
+                }
+                def hb:double (EVGLayout.clampSize(b (this.clampMain(c 0.0)) hi))
+                push sz ((hb + c.box.marginLeftPx) + c.box.marginRightPx)
+            }
+            j = (j + 1)
+        }
+        def count:int (array_length sz)
+        def lines:int 0
+        def used:double 0.0
+        def k:int 0
+        while (k < count) {
+            if ((k == 0) || (((used + gapPx) + (itemAt sz k)) > (innerWidth + 0.01))) {
+                lines = (lines + 1)
+                used = (itemAt sz k)
+            } {
+                used = ((used + gapPx) + (itemAt sz k))
+            }
+            k = (k + 1)
+        }
+        if (lines < parent.flexLineCount) {
+            lines = parent.flexLineCount
+        }
+        if (lines > count) {
+            lines = count
+        }
+        if (lines < 2) {
+            return out
+        }
+        return (EVGLayout.balanceSplit(sz innerWidth gapPx lines))
+    }
+
+    ; items of outer sizes sz split in order into `lines` lines in `room`,
+    ; the sum of the lines' squared free space least (each line fitting
+    ; unless it is one item), of equal splits the one with the most items
+    ; on the first line, then the second...: how many items each line takes
+    sfn balanceSplit:[int] (sz:[double] room:double gapPx:double lines:int) {
+        def out:[int]
+        def innerWidth:double room
+        def count:int (array_length sz)
+        ; best[l * (count + 1) + i]: the least error of items i.. in l lines
+        def w:int (count + 1)
+        def big:double 1000000000000000000000000000000.0
+        def best:[double]
+        def bi:int 0
+        while (bi < ((lines + 1) * w)) {
+            push best big
+            bi = (bi + 1)
+        }
+        set best count 0.0
+        def l:int 1
+        while (l <= lines) {
+            def i:int (count - 1)
+            while (i >= 0) {
+                def len:double 0.0
+                def e:int (i + 1)
+                def go:boolean true
+                while (go && (e <= count)) {
+                    if (e == (i + 1)) {
+                        len = (itemAt sz i)
+                    } {
+                        len = ((len + gapPx) + (itemAt sz (e - 1)))
+                    }
+                    if (((e - i) > 1) && (len > (innerWidth + 0.01))) {
+                        go = false
+                    } {
+                        def rest:double (itemAt best (((l - 1) * w) + e))
+                        if (rest < big) {
+                            def f:double (innerWidth - len)
+                            def err:double ((f * f) + rest)
+                            if (err < (itemAt best ((l * w) + i))) {
+                                set best ((l * w) + i) err
+                            }
+                        }
+                        e = (e + 1)
+                    }
+                }
+                i = (i - 1)
+            }
+            l = (l + 1)
+        }
+        if ((itemAt best (lines * w)) >= big) {
+            return out
+        }
+        ; (the split, line by line: the longest first line of least error)
+        def at:int 0
+        l = lines
+        while (l >= 1) {
+            def want:double (itemAt best ((l * w) + at))
+            def tol:double (0.000001 + (want * 0.000000001))
+            def len2:double 0.0
+            def pick:int (at + 1)
+            def e2:int (at + 1)
+            def go2:boolean true
+            while (go2 && (e2 <= count)) {
+                if (e2 == (at + 1)) {
+                    len2 = (itemAt sz at)
+                } {
+                    len2 = ((len2 + gapPx) + (itemAt sz (e2 - 1)))
+                }
+                if (((e2 - at) > 1) && (len2 > (innerWidth + 0.01))) {
+                    go2 = false
+                } {
+                    def rest2:double (itemAt best (((l - 1) * w) + e2))
+                    if (rest2 < big) {
+                        def f2:double (innerWidth - len2)
+                        if ((((f2 * f2) + rest2) - want) <= tol) {
+                            pick = e2
+                        }
+                    }
+                    e2 = (e2 + 1)
+                }
+            }
+            push out (pick - at)
+            at = pick
+            l = (l - 1)
+        }
+        return out
     }
 
     ; Remember a finished line so align-content can move it later.
@@ -5199,6 +5385,7 @@ class EVGLayout {
 
         def total:double 0.0
         def widest:double 0.0
+        def rowWs:[double]
         def counted:int 0
         ; (a column that wraps in a definite height is, at its widest, its
         ; lines side by side)
@@ -5330,6 +5517,9 @@ class EVGLayout {
                 if (w > widest) {
                     widest = w
                 }
+                if el.flexBalance {
+                    push rowWs w
+                }
                 if (counted > 0) {
                     total = (total + gapPx)
                 }
@@ -5345,6 +5535,37 @@ class EVGLayout {
         }
         if colLines {
             inner = (this.columnLinesWidth(el kidWs kidMains gapPx widest))
+        }
+        ; (a balanced row of at least flex-line-count lines: its longest
+        ; line once its items are balanced across them)
+        if ((((isColumn == false) && (wantMin == false)) && el.flexBalance) && ((el.flexLineCount > 1) && ((array_length rowWs) > 1))) {
+            def nl:int el.flexLineCount
+            if (nl > (array_length rowWs)) {
+                nl = (array_length rowWs)
+            }
+            def split:[int] (EVGLayout.balanceSplit(rowWs total gapPx nl))
+            if ((array_length split) > 0) {
+                def at:int 0
+                def longest:double 0.0
+                def si:int 0
+                while (si < (array_length split)) {
+                    def len:double 0.0
+                    def m:int 0
+                    while (m < (itemAt split si)) {
+                        if (m > 0) {
+                            len = (len + gapPx)
+                        }
+                        len = (len + (itemAt rowWs (at + m)))
+                        m = (m + 1)
+                    }
+                    if (len > longest) {
+                        longest = len
+                    }
+                    at = (at + (itemAt split si))
+                    si = (si + 1)
+                }
+                inner = longest
+            }
         }
         if (inner <= 0.0) {
             inner = 0.0

@@ -700,6 +700,47 @@ class EVGTimingTest {
         c.ok("the inner box is drawn once" (found == 1))
     }
 
+    ; flex-wrap: balance splits four 25px items that wrap 3 + 1 in 100px
+    ; (gap 10) as 2 + 2; flex-line-count 3 makes three lines of 2, 1, 1;
+    ; an inline-size-less balanced row is as wide as its longest line.
+    sfn checkBalancedWrap:void (c:TimingCheck) {
+        def page (new EVGElement())
+        page.setAttribute("width" "300")
+        page.setAttribute("height" "300")
+        def row (new EVGElement())
+        row.setAttribute("display" "flex")
+        row.setAttribute("flex-direction" "row")
+        row.setAttribute("flex-wrap" "balance")
+        row.setAttribute("gap" "10px")
+        row.setAttribute("width" "100")
+        def kids:[EVGElement]
+        def k:int 0
+        while (k < 4) {
+            def kid (new EVGElement())
+            kid.setAttribute("width" "25")
+            kid.setAttribute("height" "25")
+            row.addChild(kid)
+            push kids kid
+            k = (k + 1)
+        }
+        page.addChild(row)
+        def layout (new EVGLayout())
+        layout.layout(page)
+        def k1:EVGElement (itemAt kids 1)
+        def k2:EVGElement (itemAt kids 2)
+        def k3:EVGElement (itemAt kids 3)
+        c.near("the third item starts the second line" k2.calculatedX row.calculatedX)
+        c.near("on the second line" (k2.calculatedY - row.calculatedY) 35.0)
+        c.near("the second item stays on the first" (k1.calculatedY - row.calculatedY) 0.0)
+        row.setAttribute("flex-line-count" "3")
+        layout.layout(page)
+        c.near("three lines: the second item on the first" (k1.calculatedY - row.calculatedY) 0.0)
+        c.near("the third on the second" (k2.calculatedY - row.calculatedY) 35.0)
+        c.near("the fourth on the third" (k3.calculatedY - row.calculatedY) 70.0)
+        def split:[int] (EVGLayout.balanceSplit(([] _:double (100.0 30.0 30.0)) 200.0 20.0 2))
+        c.ok("a 100px item alone, then two" (((array_length split) == 2) && ((itemAt split 0) == 1)))
+    }
+
     ; A mirrored box is drawn on the other side of its origin, and comes out
     ; the right way up: a rectangle has no negative side, so the flip moves
     ; the box rather than leaving a negative height for a painter to puzzle
@@ -1431,6 +1472,7 @@ class EVGTimingTest {
         EVGTimingTest.checkMirroredBox(c)
         EVGTimingTest.checkTurnedFrame(c)
         EVGTimingTest.checkTurnedBack(c)
+        EVGTimingTest.checkBalancedWrap(c)
         EVGTimingTest.checkPathGradient(c)
         EVGTimingTest.checkShadowFromElement(c)
         EVGTimingTest.checkImageCrop(c)
