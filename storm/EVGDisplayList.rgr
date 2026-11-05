@@ -116,6 +116,9 @@ class EVGDrawCmd {
     ; empty one is a solid line, which is every stroke drawn before this.
     def strokeDash:string ""
     def strokeDashOffset:double 0.0
+    ; stroke-miterlimit: a miter join longer than this many stroke widths
+    ; is drawn beveled (SVG's default 4)
+    def strokeMiterLimit:double 4.0
     def maxWidth:double 0.0
     ; Optional 2-stop gradient for RECT (kind 0)
     def hasGrad:boolean false
@@ -1574,6 +1577,7 @@ class EVGDisplayList {
             cgs.w = w
             cgs.h = h
             cgs.thickness = (item.strokeWidth * scale)
+            this.svgStrokeStyle(cgs item scale)
             cgs.r = (avs.red())
             cgs.g = (avs.green())
             cgs.b = (avs.blue())
@@ -1606,6 +1610,7 @@ class EVGDisplayList {
             cs.w = w
             cs.h = h
             cs.thickness = (item.strokeWidth * scale)
+            this.svgStrokeStyle(cs item scale)
             cs.r = (item.strokeColor.red())
             cs.g = (item.strokeColor.green())
             cs.b = (item.strokeColor.blue())
@@ -1613,6 +1618,42 @@ class EVGDisplayList {
             this.copyRings(cs rings)
             this.addCmd(cs)
         }
+    }
+
+    ; An SVG stroke's caps, joins, miter limit and dashes on its command, the
+    ; dashes scaled to the page as its width is
+    fn svgStrokeStyle:void (c:EVGDrawCmd item:SvgVectorItem scale:double) {
+        c.strokeCap = (EVGDisplayList.capCode(item.lineCap))
+        c.strokeJoin = (EVGDisplayList.joinCode(item.lineJoin))
+        c.strokeMiterLimit = item.miterLimit
+        def k:double (item.dashScale * scale)
+        c.strokeDash = (EVGDisplayList.scaledDash(item.dashArray k))
+        if ((strlen c.strokeDash) > 0) {
+            c.strokeDashOffset = (item.dashOffset * k)
+        }
+    }
+
+    ; stroke-dasharray's lengths times k, "" when one is not a length or is
+    ; negative (SVG then draws the line solid)
+    sfn scaledDash:string (d:string k:double) {
+        def toks:[string] (VectorViewBox.splitTokens(d))
+        def out:string ""
+        def i:int 0
+        while (i < (array_length toks)) {
+            def v@(optional):double (str2double (itemAt toks i))
+            if (null? v) {
+                return ""
+            }
+            if ((unwrap v) < 0.0) {
+                return ""
+            }
+            if (i > 0) {
+                out = (out + " ")
+            }
+            out = (out + (to_string ((unwrap v) * k)))
+            i = (i + 1)
+        }
+        return out
     }
 
     ; A shape filled with a <pattern>: one command with the tile
@@ -3868,6 +3909,10 @@ class EVGDisplayList {
                     if (el.fontWeight != "normal") {
                         c4.fontWeight = el.fontWeight
                     }
+                }
+                ; (italic and oblique: the flag `addText` sets)
+                if ((el.fontStyle == "italic") || ((indexOf el.fontStyle "oblique") == 0)) {
+                    c4.textAlign = "italic"
                 }
                 c4.letterSpacing = el.letterSpacing
                 c4.r = tr

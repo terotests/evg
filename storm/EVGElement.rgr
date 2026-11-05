@@ -613,6 +613,10 @@ class EVGElement {
     def viewportY:double 0.0
     def fontFamily:string "Noto Sans"
     def fontWeight:string "normal"
+    ; CSS `font-style`: italic or oblique text is painted slanted, the
+    ; painter's own italic or a synthesized one; its advance is the upright
+    ; one's
+    def fontStyle:string "normal"
     ; Extra advance after every character, in pixels — CSS `letter-spacing`,
     ; and negative is the tracking a designer tightens a heading with.
     ; ZERO is the font's own spacing and every measurement and every painter
@@ -3465,6 +3469,7 @@ class EVGElement {
         viewportY = other.viewportY
         fontFamily = other.fontFamily
         fontWeight = other.fontWeight
+        fontStyle = other.fontStyle
         letterSpacing = other.letterSpacing
         paragraphSpacing = other.paragraphSpacing
         strokeLineCap = other.strokeLineCap
@@ -4822,6 +4827,10 @@ class EVGElement {
         }
         if ((name == "font-weight") || (name == "fontWeight")) {
             fontWeight = value
+            return
+        }
+        if ((name == "font-style") || (name == "fontStyle")) {
+            fontStyle = value
             return
         }
         if ((name == "text-align") || (name == "textAlign")) {

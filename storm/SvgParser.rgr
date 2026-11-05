@@ -172,6 +172,13 @@ class SvgVectorItem {
     def fillRule:string "nonzero"
     def dashArray:string ""
     def dashOffset:double 0.0
+    ; stroke-linecap, stroke-linejoin and stroke-miterlimit as written (SVG's
+    ; defaults when absent), and how much the shape's transform scales a
+    ; length: dashArray and dashOffset are in the shape's own units
+    def lineCap:string "butt"
+    def lineJoin:string "miter"
+    def miterLimit:double 4.0
+    def dashScale:double 1.0
     ; A gradient fill or stroke. The colour beside it stays unset, so a target
     ; that reads only colours (PDF, PNG) draws what it drew before gradients
     ; were read: no fill, no stroke. The display list paints the gradient.
@@ -249,6 +256,9 @@ class SvgStyleState {
     def fillRule:string "nonzero"
     def dashArray:string ""
     def dashOffset:double 0.0
+    def lineCap:string "butt"
+    def lineJoin:string "miter"
+    def miterLimit:double 4.0
     def fillOpacity:double 1.0
     def strokeOpacity:double 1.0
     def groupOpacity:double 1.0
@@ -278,6 +288,9 @@ class SvgStyleState {
         s.fillRule = fillRule
         s.dashArray = dashArray
         s.dashOffset = dashOffset
+        s.lineCap = lineCap
+        s.lineJoin = lineJoin
+        s.miterLimit = miterLimit
         s.fillOpacity = fillOpacity
         s.strokeOpacity = strokeOpacity
         s.groupOpacity = groupOpacity
@@ -1001,6 +1014,31 @@ class SvgParser {
             }
             return
         }
+        if (name == "stroke-linecap") {
+            if (((v == "butt") || (v == "round")) || (v == "square")) {
+                s.lineCap = v
+            }
+            return
+        }
+        if (name == "stroke-linejoin") {
+            ; SVG 2's miter-clip and arcs fall back to miter, as browsers draw them
+            if (((v == "miter") || (v == "miter-clip")) || (v == "arcs")) {
+                s.lineJoin = "miter"
+            }
+            if ((v == "round") || (v == "bevel")) {
+                s.lineJoin = v
+            }
+            return
+        }
+        if (name == "stroke-miterlimit") {
+            def ml@(optional):double (str2double v)
+            if ml {
+                if ((unwrap ml) >= 1.0) {
+                    s.miterLimit = (unwrap ml)
+                }
+            }
+            return
+        }
         if (name == "stroke-dashoffset") {
             def o@(optional):double (str2double v)
             if o {
@@ -1683,6 +1721,10 @@ class SvgParser {
         item.fillRule = s.fillRule
         item.dashArray = s.dashArray
         item.dashOffset = s.dashOffset
+        item.lineCap = s.lineCap
+        item.lineJoin = s.lineJoin
+        item.miterLimit = s.miterLimit
+        item.dashScale = (this.scaleOf((unwrap s.ctm)))
 
         if ((strlen s.fillRef) > 0) {
             if (this.isPatternId(s.fillRef)) {
