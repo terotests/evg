@@ -2949,20 +2949,45 @@ class EVGDisplayList {
                 }
                 if turns {
                     ; A command already carrying its own rotation — a sideways
-                    ; axis label inside a turned panel — adds the two angles and
-                    ; has its pivot carried round by the outer one. Its own
-                    ; centre stops being the pivot, which is right: it is being
-                    ; carried, not spun in place.
-                    c.rotate = (c.rotate + deg)
-                    if (c.hasRotOrigin == false) {
+                    ; axis label inside a turned panel, a box turned back
+                    ; inside a turned frame — is turned again as a whole: its
+                    ; pivot (its own centre when it has none) is carried round
+                    ; by the outer turn and the box moves with it, so the
+                    ; pivot keeps its place on the box, and the angles add.
+                    ; Two turns that cancel leave the box moved, not turned.
+                    if ((c.rotate == 0.0) && (c.hasRotOrigin == false)) {
+                        c.rotate = deg
                         c.rotOriginX = ox
                         c.rotOriginY = oy
                         c.hasRotOrigin = true
                     } {
-                        def rx:double (c.rotOriginX - ox)
-                        def ry:double (c.rotOriginY - oy)
-                        c.rotOriginX = (ox + ((rx * cs) - (ry * sn)))
-                        c.rotOriginY = (oy + ((rx * sn) + (ry * cs)))
+                        def pvx:double (c.x + (c.w / 2.0))
+                        def pvy:double (c.y + (c.h / 2.0))
+                        if c.hasRotOrigin {
+                            pvx = c.rotOriginX
+                            pvy = c.rotOriginY
+                        }
+                        def rx:double (pvx - ox)
+                        def ry:double (pvy - oy)
+                        def npx:double (ox + ((rx * cs) - (ry * sn)))
+                        def npy:double (oy + ((rx * sn) + (ry * cs)))
+                        c.x = (c.x + (npx - pvx))
+                        c.y = (c.y + (npy - pvy))
+                        c.rotOriginX = npx
+                        c.rotOriginY = npy
+                        c.hasRotOrigin = true
+                        def tot:double (c.rotate + deg)
+                        while (tot >= 360.0) {
+                            tot = (tot - 360.0)
+                        }
+                        while (tot < 0.0) {
+                            tot = (tot + 360.0)
+                        }
+                        if ((tot < 0.000001) || (tot > 359.999999)) {
+                            tot = 0.0
+                            c.hasRotOrigin = false
+                        }
+                        c.rotate = tot
                     }
                 }
                 if shifts {

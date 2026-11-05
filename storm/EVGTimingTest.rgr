@@ -661,6 +661,45 @@ class EVGTimingTest {
         c.ok("the box and its text are both turned" (found >= 2))
     }
 
+    ; A box turned back inside a turned box is upright again, and where the
+    ; two turns put it: a quarter turn about (50, 50) and a quarter turn back
+    ; about the inner box's own (20, 20) move a 40x40 square at (0, 0) to
+    ; (60, 0). Adding the angles while carrying only the pivot left it a
+    ; square at (0, 0), drawn where it had not been turned at all.
+    sfn checkTurnedBack:void (c:TimingCheck) {
+        def page (new EVGElement())
+        page.setAttribute("width" "200")
+        page.setAttribute("height" "200")
+        def outer (new EVGElement())
+        outer.setAttribute("width" "100")
+        outer.setAttribute("height" "100")
+        outer.setAttribute("transform" "rotate(90deg)")
+        def inner (new EVGElement())
+        inner.setAttribute("width" "40")
+        inner.setAttribute("height" "40")
+        inner.setAttribute("background-color" "rgb(10,20,30)")
+        inner.setAttribute("transform" "rotate(-90deg)")
+        outer.addChild(inner)
+        page.addChild(outer)
+        def layout (new EVGLayout())
+        layout.layout(page)
+        def dl (new EVGDisplayList())
+        dl.build(page)
+        def found:int 0
+        def i:int 0
+        while (i < (array_length dl.cmds)) {
+            def cmd:EVGDrawCmd (itemAt dl.cmds i)
+            if ((cmd.kind == 0) && (cmd.r == 10)) {
+                found = (found + 1)
+                c.near("the two turns cancel" cmd.rotate 0.0)
+                c.near("and move it across" cmd.x 60.0)
+                c.near("not down" cmd.y 0.0)
+            }
+            i = (i + 1)
+        }
+        c.ok("the inner box is drawn once" (found == 1))
+    }
+
     ; A mirrored box is drawn on the other side of its origin, and comes out
     ; the right way up: a rectangle has no negative side, so the flip moves
     ; the box rather than leaving a negative height for a painter to puzzle
@@ -1391,6 +1430,7 @@ class EVGTimingTest {
         EVGTimingTest.checkTransformScale(c)
         EVGTimingTest.checkMirroredBox(c)
         EVGTimingTest.checkTurnedFrame(c)
+        EVGTimingTest.checkTurnedBack(c)
         EVGTimingTest.checkPathGradient(c)
         EVGTimingTest.checkShadowFromElement(c)
         EVGTimingTest.checkImageCrop(c)
