@@ -728,6 +728,10 @@ class EVGElement {
     def flexWrap:string "wrap"
     ; whether flex-wrap was written (EVG's own default is wrap, CSS's nowrap)
     def flexWrapSet:boolean false
+    ; flex-wrap: balance (alone, "wrap" here, or with wrap-reverse)
+    def flexBalance:boolean false
+    ; flex-line-count: the fewest lines flex-wrap: balance splits into
+    def flexLineCount:int 1
     def gap:EVGUnit
     ; Axis-specific gaps. When unset, `gap` applies to both axes.
     def rowGap:EVGUnit
@@ -3500,6 +3504,8 @@ class EVGElement {
         alignContent = other.alignContent
         flexWrap = other.flexWrap
         flexWrapSet = other.flexWrapSet
+        flexLineCount = other.flexLineCount
+        flexBalance = other.flexBalance
         gap = other.gap
         rowGap = other.rowGap
         columnGap = other.columnGap
@@ -4656,6 +4662,24 @@ class EVGElement {
         if ((name == "flex-wrap") || (name == "flexWrap")) {
             flexWrap = value
             flexWrapSet = true
+            flexBalance = false
+            if ((indexOf value "balance") >= 0) {
+                flexBalance = true
+                flexWrap = "wrap"
+                if ((indexOf value "wrap-reverse") >= 0) {
+                    flexWrap = "wrap-reverse"
+                }
+            }
+            return
+        }
+        if (name == "flex-line-count") {
+            def lc@(optional):int (to_int value)
+            flexLineCount = 1
+            if lc {
+                if ((unwrap lc) > 1) {
+                    flexLineCount = (unwrap lc)
+                }
+            }
             return
         }
         ; `flex-grow`, WHICH WAS NOT HERE. `flex-shrink`, `flex-basis` and the
