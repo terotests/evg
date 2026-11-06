@@ -1099,10 +1099,14 @@ class EVGDisplayList {
     ; below it by a twentieth of the decorating box's font size, a
     ; line-through a third of its ascent above it, an overline on its
     ; ascent; each a tenth of its font size thick, as Chromium draws `auto`. `through` picks the line-throughs
-    ; (painted over the text) or the others (under it).
-    fn addDecorations:void (el:EVGElement line:EVGDrawCmd base:double through:boolean) {
+    ; (painted over the text) or the others (under it); the last line's go
+    ; on by textDecorationExtend.
+    fn addDecorations:void (el:EVGElement line:EVGDrawCmd base:double through:boolean last:boolean) {
         def entries:[string] (strsplit el.textDecorations ";")
         def full:double ((textEngine.measureRunSpaced(line.text line.fontFamily line.fontSize el.letterSpacing)).width)
+        if last {
+            full = (full + el.textDecorationExtend)
+        }
         for entries ent:string ei {
             def parts:[string] (strsplit (trim ent) " ")
             if ((array_length parts) >= 5) {
@@ -4056,11 +4060,11 @@ class EVGDisplayList {
                 ; it, as CSS Text Decoration 3 paints them)
                 def decoBase:double (((y + el.calculatedBaseline) + ((to_double li) * lineBox)) + paraShift)
                 if ((strlen el.textDecorations) > 0) {
-                    this.addDecorations(el c4 decoBase false)
+                    this.addDecorations(el c4 decoBase false (li == ((array_length lines) - 1)))
                 }
                 this.addCmd(c4)
                 if ((strlen el.textDecorations) > 0) {
-                    this.addDecorations(el c4 decoBase true)
+                    this.addDecorations(el c4 decoBase true (li == ((array_length lines) - 1)))
                 }
                 li = (li + 1)
             }

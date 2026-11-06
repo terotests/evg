@@ -40,6 +40,10 @@ class TdCheck {
 class EVGTextDecorationTest {
 
     sfn listOf:EVGDisplayList (deco:string text:string) {
+        return (EVGTextDecorationTest.listWith(deco text ""))
+    }
+
+    sfn listWith:EVGDisplayList (deco:string text:string extend:string) {
         def root (new EVGElement())
         root.setAttribute("width" "400px")
         root.setAttribute("height" "300px")
@@ -49,6 +53,9 @@ class EVGTextDecorationTest {
         t.setAttribute("line-height" "20px")
         t.textContent = text
         t.setAttribute("text-decorations" deco)
+        if ((strlen extend) > 0) {
+            t.setAttribute("text-decoration-extend" extend)
+        }
         root.addChild(t)
         def lay (new EVGLayout())
         lay.setPageSize(400.0 300.0)
@@ -106,6 +113,21 @@ class EVGTextDecorationTest {
         }
     }
 
+    sfn testExtend:void (c:TdCheck) {
+        print "-- on across the space to the next word"
+        def dl:EVGDisplayList (EVGTextDecorationTest.listWith("underline 20 18 0 rgb(0, 0, 255)" "ab" "5px"))
+        def under:int (EVGTextDecorationTest.find(dl 0 0 0 255 0))
+        def text:int (EVGTextDecorationTest.find(dl 3 0 0 0 0))
+        c.ok("drawn" ((under >= 0) && (text >= 0)))
+        if ((under >= 0) && (text >= 0)) {
+            def plain:EVGDisplayList (EVGTextDecorationTest.listOf("underline 20 18 0 rgb(0, 0, 255)" "ab"))
+            def pi:int (EVGTextDecorationTest.find(plain 0 0 0 255 0))
+            def pu:EVGDrawCmd (plain.at(pi))
+            def uc:EVGDrawCmd (dl.at(under))
+            c.near("5px longer" uc.w (pu.w + 5.0))
+        }
+    }
+
     sfn testNone:void (c:TdCheck) {
         print "-- no decorations: nothing more"
         def dl:EVGDisplayList (EVGTextDecorationTest.listOf("" "ab cd"))
@@ -117,6 +139,7 @@ class EVGTextDecorationTest {
         print "=== EVG text-decoration lines ==="
         EVGTextDecorationTest.testLines(c)
         EVGTextDecorationTest.testSkip(c)
+        EVGTextDecorationTest.testExtend(c)
         EVGTextDecorationTest.testNone(c)
         print ""
         print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))

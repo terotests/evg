@@ -637,6 +637,9 @@ class EVGElement {
     ; are solid boxes: skip-ink leaves nothing of it there). EMPTY draws
     ; nothing, as before.
     def textDecorations:string ""
+    ; How far the lines go on past the text's end, in px: the space to the
+    ; next word that has them too, which its host lays out as a gap
+    def textDecorationExtend:double 0.0
     ; SVG's `stroke-linecap` and `stroke-linejoin` on a stroked path.
     ; "butt" and "miter" are what the painter drew before either existed,
     ; so a caller that says nothing keeps the picture it had.
@@ -3485,6 +3488,7 @@ class EVGElement {
         letterSpacing = other.letterSpacing
         paragraphSpacing = other.paragraphSpacing
         textDecorations = other.textDecorations
+        textDecorationExtend = other.textDecorationExtend
         strokeLineCap = other.strokeLineCap
         strokeLineJoin = other.strokeLineJoin
         lineHeight = other.lineHeight
@@ -4487,6 +4491,11 @@ class EVGElement {
         }
         if ((name == "text-decorations") || (name == "textDecorations")) {
             textDecorations = value
+            return
+        }
+        if ((name == "text-decoration-extend") || (name == "textDecorationExtend")) {
+            def tdx:EVGUnit (this.unitOf(name value))
+            textDecorationExtend = tdx.pixels
             return
         }
         if ((name == "letter-spacing") || (name == "letterSpacing")) {
