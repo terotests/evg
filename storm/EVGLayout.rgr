@@ -6325,6 +6325,10 @@ class EVGLayout {
                     ftk.value = 0.0
                     ftk.hasMin = false
                     ftk.hasMax = false
+                    ; (and takes no share of the space auto tracks stretch to)
+                    ftk.autoTrack = false
+                    ftk.hasFitLimit = false
+                    ftk.minIntrinsic = 0
                     push collapsed fk
                 }
                 fk = (fk + 1)
@@ -6446,6 +6450,9 @@ class EVGLayout {
                     rctk.value = 0.0
                     rctk.hasMin = false
                     rctk.hasMax = false
+                    rctk.autoTrack = false
+                    rctk.hasFitLimit = false
+                    rctk.minIntrinsic = 0
                 }
             }
             ext.gridFrRowMin(this rows items placedRow rowSpans placedCol colSpans cols measureGap innerHeight)
