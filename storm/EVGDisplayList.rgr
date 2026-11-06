@@ -1094,6 +1094,118 @@ class EVGDisplayList {
         return none
     }
 
+    ; The `text-decoration` lines of one line of text (EVGElement
+    ; .textDecorations), from the baseline's whole pixel: an underline
+    ; below it by a twentieth of the decorating box's font size, a
+    ; line-through a third of its ascent above it, an overline on its
+    ; ascent; each a tenth of its font size thick, as Chromium draws `auto`. `through` picks the line-throughs
+    ; (painted over the text) or the others (under it); the last line's go
+    ; on by textDecorationExtend.
+    fn addDecorations:void (el:EVGElement line:EVGDrawCmd base:double through:boolean last:boolean) {
+        def entries:[string] (strsplit el.textDecorations ";")
+        def full:double ((textEngine.measureRunSpaced(line.text line.fontFamily line.fontSize el.letterSpacing)).width)
+        if last {
+            full = (full + el.textDecorationExtend)
+        }
+        for entries ent:string ei {
+            def parts:[string] (strsplit (trim ent) " ")
+            if ((array_length parts) >= 5) {
+                def kind:string (itemAt parts 0)
+                def isThrough:boolean (kind == "line-through")
+                if (isThrough == through) {
+                    def dfsO@(optional):double (to_double (itemAt parts 1))
+                    def dascO@(optional):double (to_double (itemAt parts 2))
+                    def dfs:double 16.0
+                    def dasc:double 13.0
+                    if dfsO {
+                        dfs = (unwrap dfsO)
+                    }
+                    if dascO {
+                        dasc = (unwrap dascO)
+                    }
+                    def skip:boolean ((itemAt parts 3) == "1")
+                    def cs:string ""
+                    def pi:int 4
+                    while (pi < (array_length parts)) {
+                        if (pi > 4) {
+                            cs = (cs + " ")
+                        }
+                        cs = (cs + (itemAt parts pi))
+                        pi = (pi + 1)
+                    }
+                    def col:EVGColor (EVGColor.parse(cs))
+                    def th:double (to_double (floor (dfs / 10.0)))
+                    if (th < 1.0) {
+                        th = 1.0
+                    }
+                    def top:double 0.0
+                    if (kind == "underline") {
+                        top = ((to_double (floor base)) + (to_double (0 - (floor (0.0 - (dfs / 20.0))))))
+                    }
+                    if (kind == "overline") {
+                        top = (((to_double (floor base)) - dasc) - th)
+                    }
+                    if isThrough {
+                        top = (to_double (floor ((((to_double (floor base)) - (dasc / 3.0)) - (th / 2.0)) + 0.5)))
+                    }
+                    if ((kind == "underline") || ((kind == "overline") || isThrough)) {
+                        if skip {
+                            ; (only under the spaces: runs of " " and U+00A0)
+                            def tx:string line.text
+                            def n:int (strlen tx)
+                            def i:int 0
+                            while (i < n) {
+                                def sl:int (EVGDisplayList.spaceAt(tx i))
+                                if (sl > 0) {
+                                    def j:int i
+                                    def jl:int sl
+                                    while ((j < n) && (jl > 0)) {
+                                        j = (j + jl)
+                                        if (j < n) {
+                                            jl = (EVGDisplayList.spaceAt(tx j))
+                                        }
+                                    }
+                                    def x0:double ((textEngine.measureRunSpaced((substring tx 0 i) line.fontFamily line.fontSize el.letterSpacing)).width)
+                                    def x1:double ((textEngine.measureRunSpaced((substring tx 0 j) line.fontFamily line.fontSize el.letterSpacing)).width)
+                                    this.addRect((line.x + x0) top (x1 - x0) th col)
+                                    i = j
+                                } {
+                                    i = (i + 1)
+                                }
+                            }
+                        } {
+                            this.addRect(line.x top full th col)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ; The length of a space at byte i of t: 1 for " " (and for U+00A0
+    ; where strings are UTF-16), 2 for U+00A0 in UTF-8, 0 for anything else
+    sfn spaceAt:int (t:string i:int) {
+        def c:int (charAt t i)
+        if (c == 32) {
+            return 1
+        }
+        if (c == 160) {
+            ; (not the second byte of a UTF-8 character)
+            if (i == 0) {
+                return 1
+            }
+            if ((charAt t (i - 1)) < 192) {
+                return 1
+            }
+        }
+        if ((c == 194) && ((i + 1) < (strlen t))) {
+            if ((charAt t (i + 1)) == 160) {
+                return 2
+            }
+        }
+        return 0
+    }
+
     fn addRect:void (x:double y:double w:double h:double col:EVGColor) {
         def c:EVGDrawCmd (new EVGDrawCmd)
         c.kind = 0
@@ -3944,7 +4056,16 @@ class EVGDisplayList {
                 c4.g = tg
                 c4.b = tb
                 c4.a = ta
+                ; (under- and overlines under the text, a line-through over
+                ; it, as CSS Text Decoration 3 paints them)
+                def decoBase:double (((y + el.calculatedBaseline) + ((to_double li) * lineBox)) + paraShift)
+                if ((strlen el.textDecorations) > 0) {
+                    this.addDecorations(el c4 decoBase false (li == ((array_length lines) - 1)))
+                }
                 this.addCmd(c4)
+                if ((strlen el.textDecorations) > 0) {
+                    this.addDecorations(el c4 decoBase true (li == ((array_length lines) - 1)))
+                }
                 li = (li + 1)
             }
         }

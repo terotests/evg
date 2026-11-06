@@ -1,0 +1,152 @@
+; ==============================================================================
+; EVGTextDecorationTest — CSS `text-decoration` lines on a text element
+;
+; A host resolves and propagates `text-decoration` and hands each text
+; element its lines (EVGElement.textDecorations); the display list draws
+; them as rectangles: under- and overlines before the text, a line-through
+; after it, each a tenth of the decorating box's font size thick.
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGLayout.rgr"
+Import "EVGDisplayList.rgr"
+
+class TdCheck {
+    def passed:int 0
+    def failed:int 0
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:void (name:string got:double want:double) {
+        def d:double (got - want)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        if (d > 0.01) {
+            print ("       got " + (to_string got) + " want " + (to_string want))
+        }
+        this.ok(name (d <= 0.01))
+    }
+}
+
+class EVGTextDecorationTest {
+
+    sfn listOf:EVGDisplayList (deco:string text:string) {
+        return (EVGTextDecorationTest.listWith(deco text ""))
+    }
+
+    sfn listWith:EVGDisplayList (deco:string text:string extend:string) {
+        def root (new EVGElement())
+        root.setAttribute("width" "400px")
+        root.setAttribute("height" "300px")
+        def t (EVGElement.createSpan())
+        t.id = "t"
+        t.setAttribute("font-size" "20px")
+        t.setAttribute("line-height" "20px")
+        t.textContent = text
+        t.setAttribute("text-decorations" deco)
+        if ((strlen extend) > 0) {
+            t.setAttribute("text-decoration-extend" extend)
+        }
+        root.addChild(t)
+        def lay (new EVGLayout())
+        lay.setPageSize(400.0 300.0)
+        lay.layout(root)
+        def dl (new EVGDisplayList())
+        dl.setTextEngine((lay.getTextEngine()))
+        dl.build(root)
+        return dl
+    }
+
+    ; the index of the first command of a kind and colour (-1 for none)
+    sfn find:int (dl:EVGDisplayList kind:int r:int g:int b:int from:int) {
+        def i:int from
+        while (i < (dl.count())) {
+            def c:EVGDrawCmd (dl.at(i))
+            if ((c.kind == kind) && ((c.r == r) && ((c.g == g) && (c.b == b)))) {
+                return i
+            }
+            i = (i + 1)
+        }
+        return -1
+    }
+
+    sfn testLines:void (c:TdCheck) {
+        print "-- an underline and a line-through"
+        def dl:EVGDisplayList (EVGTextDecorationTest.listOf("underline 20 18 0 rgb(0, 0, 255);line-through 20 18 0 rgb(255, 0, 0)" "ab cd"))
+        def text:int (EVGTextDecorationTest.find(dl 3 0 0 0 0))
+        def under:int (EVGTextDecorationTest.find(dl 0 0 0 255 0))
+        def through:int (EVGTextDecorationTest.find(dl 0 255 0 0 0))
+        c.ok("the text is drawn" (text >= 0))
+        c.ok("the underline is drawn before it" ((under >= 0) && (under < text)))
+        c.ok("the line-through after it" (through > text))
+        if ((text >= 0) && ((under >= 0) && (through >= 0))) {
+            def tc:EVGDrawCmd (dl.at(text))
+            def uc:EVGDrawCmd (dl.at(under))
+            def lc:EVGDrawCmd (dl.at(through))
+            c.near("a tenth of the font size thick" uc.h 2.0)
+            c.near("from where the text starts" uc.x tc.x)
+            c.ok("as wide as the text" (uc.w > 0.0))
+            c.ok("the underline below the line-through" (uc.y > lc.y))
+            c.near("the line-through as thick" lc.h 2.0)
+        }
+    }
+
+    sfn testSkip:void (c:TdCheck) {
+        print "-- an underline only under the spaces"
+        def dl:EVGDisplayList (EVGTextDecorationTest.listOf("underline 20 18 1 rgb(0, 0, 255)" "ab cd"))
+        def first:int (EVGTextDecorationTest.find(dl 0 0 0 255 0))
+        c.ok("one piece" ((first >= 0) && ((EVGTextDecorationTest.find(dl 0 0 0 255 (first + 1))) < 0)))
+        if (first >= 0) {
+            def uc:EVGDrawCmd (dl.at(first))
+            def text:int (EVGTextDecorationTest.find(dl 3 0 0 0 0))
+            def tc:EVGDrawCmd (dl.at(text))
+            c.ok("after the first word" (uc.x > tc.x))
+        }
+    }
+
+    sfn testExtend:void (c:TdCheck) {
+        print "-- on across the space to the next word"
+        def dl:EVGDisplayList (EVGTextDecorationTest.listWith("underline 20 18 0 rgb(0, 0, 255)" "ab" "5px"))
+        def under:int (EVGTextDecorationTest.find(dl 0 0 0 255 0))
+        def text:int (EVGTextDecorationTest.find(dl 3 0 0 0 0))
+        c.ok("drawn" ((under >= 0) && (text >= 0)))
+        if ((under >= 0) && (text >= 0)) {
+            def plain:EVGDisplayList (EVGTextDecorationTest.listOf("underline 20 18 0 rgb(0, 0, 255)" "ab"))
+            def pi:int (EVGTextDecorationTest.find(plain 0 0 0 255 0))
+            def pu:EVGDrawCmd (plain.at(pi))
+            def uc:EVGDrawCmd (dl.at(under))
+            c.near("5px longer" uc.w (pu.w + 5.0))
+        }
+    }
+
+    sfn testNone:void (c:TdCheck) {
+        print "-- no decorations: nothing more"
+        def dl:EVGDisplayList (EVGTextDecorationTest.listOf("" "ab cd"))
+        c.ok("no rectangle" ((EVGTextDecorationTest.find(dl 0 0 0 255 0)) < 0))
+    }
+
+    sfn main:void () {
+        def c (new TdCheck())
+        print "=== EVG text-decoration lines ==="
+        EVGTextDecorationTest.testLines(c)
+        EVGTextDecorationTest.testSkip(c)
+        EVGTextDecorationTest.testExtend(c)
+        EVGTextDecorationTest.testNone(c)
+        print ""
+        print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))
+        if (c.failed > 0) {
+            print "FAILURES"
+        } {
+            print "ALL PASS"
+        }
+    }
+}
