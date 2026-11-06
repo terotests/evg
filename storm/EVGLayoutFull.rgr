@@ -813,39 +813,66 @@ class EVGLayoutFull {
     ; a block beside the floats of the float rows before it: its lines
     ; start past the left ones and end before the right ones at its top
     ; (CSS 2.1 9.5), taken as padding for all of its content
-    sfn shiftBesideFloats:void (parent:EVGElement child:EVGElement index:int top:double) {
+    ; (a line with no room at all beside the floats at its top goes down
+    ; to where one of them ends, CSS 2.1 9.5: returns how far)
+    sfn shiftBesideFloats:double (parent:EVGElement child:EVGElement index:int top0:double) {
         def cs:double ((parent.calculatedX + parent.box.borderWidthPx) + parent.box.paddingLeftPx)
         def ce:double (cs + parent.calculatedInnerWidth)
+        def top:double top0
         def le:double -1.0
         def re:double -1.0
-        def pi:int 0
-        while (pi < index) {
-            def pc:EVGElement (parent.getChild(pi))
-            if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
-                def k:int 0
-                while (k < (pc.getChildCount())) {
-                    def f:EVGElement (pc.getChild(k))
-                    def side:string ((EVGLayoutFull.cx(f)).floatSide)
-                    def ft:double (f.calculatedY - f.box.marginTopPx)
-                    def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
-                    if ((ft <= (top + 0.01)) && (fb > (top + 0.01))) {
-                        if (side == "left") {
-                            def edge:double ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
-                            if (edge > le) {
-                                le = edge
+        def tries:int 0
+        def again:boolean true
+        while again {
+            again = false
+            le = -1.0
+            re = -1.0
+            def nextB:double -1.0
+            def pi:int 0
+            while (pi < index) {
+                def pc:EVGElement (parent.getChild(pi))
+                if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
+                    def k:int 0
+                    while (k < (pc.getChildCount())) {
+                        def f:EVGElement (pc.getChild(k))
+                        def side:string ((EVGLayoutFull.cx(f)).floatSide)
+                        def ft:double (f.calculatedY - f.box.marginTopPx)
+                        def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                        if ((ft <= (top + 0.01)) && (fb > (top + 0.01))) {
+                            if ((nextB < 0.0) || (fb < nextB)) {
+                                nextB = fb
+                            }
+                            if (side == "left") {
+                                def edge:double ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
+                                if (edge > le) {
+                                    le = edge
+                                }
+                            }
+                            if (side == "right") {
+                                def edge2:double (f.calculatedX - f.box.marginLeftPx)
+                                if ((re < 0.0) || (edge2 < re)) {
+                                    re = edge2
+                                }
                             }
                         }
-                        if (side == "right") {
-                            def edge2:double (f.calculatedX - f.box.marginLeftPx)
-                            if ((re < 0.0) || (edge2 < re)) {
-                                re = edge2
-                            }
-                        }
+                        k = (k + 1)
                     }
-                    k = (k + 1)
                 }
+                pi = (pi + 1)
             }
-            pi = (pi + 1)
+            def roomL:double cs
+            if (le > roomL) {
+                roomL = le
+            }
+            def roomR:double ce
+            if ((re >= 0.0) && (re < roomR)) {
+                roomR = re
+            }
+            if ((((roomR - roomL) < 0.5) && (nextB > top)) && (tries < 8)) {
+                top = nextB
+                tries = (tries + 1)
+                again = true
+            }
         }
         if (le >= 0.0) {
             def inL:double ((((cs + child.box.marginLeftPx) + child.box.borderWidthPx) + child.box.paddingLeftPx))
@@ -859,6 +886,7 @@ class EVGLayoutFull {
                 child.box.paddingRightPx = (child.box.paddingRightPx + (inR - re))
             }
         }
+        return (top - top0)
     }
 
     ; a box that clears (clear-floats) has its border top under the floats
@@ -866,7 +894,10 @@ class EVGLayoutFull {
     fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
         def child:EVGElement (parent.getChild(index))
         if ((EVGLayoutFull.cx(child)).besideFloats == true) {
-            EVGLayoutFull.shiftBesideFloats(parent child index (currentY + child.box.marginTopPx))
+            def down:double (EVGLayoutFull.shiftBesideFloats(parent child index (currentY + child.box.marginTopPx)))
+            if ((down > 0.0) && ((EVGLayoutFull.cx(child)).clearFloats == false)) {
+                return down
+            }
         }
         if ((EVGLayoutFull.cx(child)).bfcFloats == true) {
             return (EVGLayoutFull.placeBesideFloats(parent child index (currentY + child.box.marginTopPx) lay.curChildWidth))
