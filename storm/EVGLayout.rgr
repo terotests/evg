@@ -5061,6 +5061,15 @@ class EVGLayout {
         if el.columnGap.isSet {
             gapPx = el.columnGap.pixels
         }
+        ; (a percentage gap is nothing while the width is found; the pixels
+        ; of calc(px + %) still count, CSS Align 8.3)
+        def gapU:EVGUnit el.gap
+        if el.columnGap.isSet {
+            gapU = el.columnGap
+        }
+        if (gapU.isSet && (gapU.isPercent())) {
+            gapPx = gapU.calcPx
+        }
         ; auto-fill repeats as often as max-width holds (or min-width),
         ; with no room given once (CSS Grid 7.2.3.2)
         def fillRoom:double 0.0
