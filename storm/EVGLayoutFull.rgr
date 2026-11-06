@@ -2010,7 +2010,27 @@ class EVGLayoutFull {
     ; a column subgrid's items into the tracks it spans (sgAt..), the edges
     ; given what the subgrids around them add; a nested column subgrid
     ; passes its own items on
-    fn subgridContribute:void (lay:EVGLayout sgi:EVGElement sgAt:int sgSpan:int lead:double trail:double content:[double] minContent:[double]) {
+    fn subgridContribute:void (lay:EVGLayout sgi:EVGElement sgAt:int sgSpan:int lead:double trail:double content:[double] minContent:[double] parentGap:double) {
+        ; (a gap of its own: each inner line gives half the difference to
+        ; the items beside it, CSS Grid 2 9)
+        def ownGap:double parentGap
+        if (sgi.gap.isSet && ((sgi.gap.isPercent()) == false)) {
+            if (sgi.gap.unitType == 0) {
+                ownGap = sgi.gap.value
+            }
+            if (sgi.gap.pixels > 0.0) {
+                ownGap = sgi.gap.pixels
+            }
+        }
+        if (sgi.columnGap.isSet && ((sgi.columnGap.isPercent()) == false)) {
+            if (sgi.columnGap.unitType == 0) {
+                ownGap = sgi.columnGap.value
+            }
+            if (sgi.columnGap.pixels > 0.0) {
+                ownGap = sgi.columnGap.pixels
+            }
+        }
+        def halfG:double ((ownGap - parentGap) / 2.0)
         def sgTpl:string ""
         def st:int 0
         while (st < sgSpan) {
@@ -2028,8 +2048,8 @@ class EVGLayoutFull {
                 kp.resolveNames(tpl)
                 def ks:int kp.span
                 if ((kc >= 0) && ((kc + ks) <= sgSpan)) {
-                    def edgeL:double 0.0
-                    def edgeR:double 0.0
+                    def edgeL:double halfG
+                    def edgeR:double halfG
                     if (kc == 0) {
                         edgeL = lead
                     }
@@ -2039,9 +2059,14 @@ class EVGLayoutFull {
                     if ((ks > 1) && (sgk.gridTemplateColumns == "subgrid")) {
                         def kl:double (edgeL + (EVGLayoutFull.sideChrome(sgk true)))
                         def kr:double (edgeR + (EVGLayoutFull.sideChrome(sgk false)))
-                        this.subgridContribute(lay sgk (sgAt + kc) ks kl kr content minContent)
+                        this.subgridContribute(lay sgk (sgAt + kc) ks kl kr content minContent ownGap)
                     }
                     if (ks == 1) {
+                        ; (its padding and border in px first; one not
+                        ; resolved before is handed back unresolved, as
+                        ; intrinsicOfGrid does)
+                        def wasR:boolean sgk.unitsResolved
+                        sgk.resolveUnits(sgi.calculatedInnerWidth sgi.calculatedInnerHeight)
                         def tc:int (sgAt + kc)
                         def kw:double (((lay.intrinsicWidthOf(sgk)) + edgeL) + edgeR)
                         if ((tc < (array_length content)) && (kw > (itemAt content tc))) {
@@ -2051,10 +2076,33 @@ class EVGLayoutFull {
                         if ((tc < (array_length minContent)) && (km > (itemAt minContent tc))) {
                             set minContent tc km
                         }
+                        if ((wasR || sgk.unitsFixed) == false) {
+                            sgk.unitsResolved = false
+                        }
                     }
                 }
             }
             sc = (sc + 1)
+        }
+        ; (an edge with no item in its track still takes the subgrid's
+        ; margin, border and padding there, as an empty item, CSS Grid 2 9)
+        def eT:int sgAt
+        def eV:double lead
+        def ei:int 0
+        while (ei < 2) {
+            if (ei == 1) {
+                eT = ((sgAt + sgSpan) - 1)
+                eV = trail
+            }
+            if ((eT >= 0) && (eT < (array_length content))) {
+                if (eV > (itemAt content eT)) {
+                    set content eT eV
+                }
+                if ((eT < (array_length minContent)) && (eV > (itemAt minContent eT))) {
+                    set minContent eT eV
+                }
+            }
+            ei = (ei + 1)
         }
     }
 
@@ -2112,7 +2160,7 @@ class EVGLayoutFull {
             if (((sgi.gridTemplateColumns == "subgrid") && (sgSpan > 1)) && ((sgAt + sgSpan) <= nc)) {
                 def lead:double (EVGLayoutFull.sideChrome(sgi true))
                 def trail:double (EVGLayoutFull.sideChrome(sgi false))
-                this.subgridContribute(lay sgi sgAt sgSpan lead trail content minContent)
+                this.subgridContribute(lay sgi sgAt sgSpan lead trail content minContent gap)
                 push subSkip 1
             } {
                 push subSkip 0
@@ -3307,8 +3355,34 @@ class EVGLayoutFull {
                 }
                 lu = (lu + 1)
             }
-            def lfree:double ((total - (itemAt placedAt la)) - (itemAt placedOuter la))
-            if (isLast && (lfree > 0.5)) {
+            ; (one with an item after it in its lanes has the room up to
+            ; that item, the last the room to the end of the lanes)
+            def lpos:double (itemAt placedAt la)
+            def lnext:double -1.0
+            def lj:int 0
+            while (lj < itemCount) {
+                def jl:int (itemAt placedLane lj)
+                def jsp:int (itemAt spans lj)
+                if (((lj != la) && ((itemAt placedAt lj) > (lpos + 0.01))) && ((jl < (lln + lsp)) && ((jl + jsp) > lln))) {
+                    if ((lnext < 0.0) || ((itemAt placedAt lj) < lnext)) {
+                        lnext = (itemAt placedAt lj)
+                    }
+                }
+                lj = (lj + 1)
+            }
+            def lend:double total
+            if (((rowDir == false) && parent.hasDefiniteHeight) && (innerHeight > lend)) {
+                lend = innerHeight
+            }
+            if (rowDir && (innerWidth > lend)) {
+                lend = innerWidth
+            }
+            if (lnext >= 0.0) {
+                isLast = false
+                lend = (lnext - flowGap)
+            }
+            def lfree:double ((lend - lpos) - (itemAt placedOuter la))
+            if (lfree > 0.5) {
                 def al:string lel.alignSelf
                 if (((strlen al) == 0) || (al == "auto")) {
                     al = parent.alignItems
@@ -3385,6 +3459,70 @@ class EVGLayoutFull {
                 }
                 f = (f + 1)
             }
+        }
+        ; (down columns: the first baseline is the topmost item's, the
+        ; leftmost of those, the last the item starting lowest, the
+        ; rightmost of those, as a multi-column flow gives them)
+        if ((rowDir == false) && (itemCount > 0)) {
+            def fI:int -1
+            def lI:int -1
+            def bq:int 0
+            while (bq < itemCount) {
+                def be:EVGElement (itemAt items bq)
+                def bt:double (be.calculatedY - be.box.marginTopPx)
+                if (fI < 0) {
+                    fI = bq
+                    lI = bq
+                } {
+                    def fe2:EVGElement (itemAt items fI)
+                    def ft:double (fe2.calculatedY - fe2.box.marginTopPx)
+                    if ((bt < (ft - 0.01)) || ((bt < (ft + 0.01)) && (be.calculatedX < fe2.calculatedX))) {
+                        fI = bq
+                    }
+                    def le2:EVGElement (itemAt items lI)
+                    def lt:double (le2.calculatedY - le2.box.marginTopPx)
+                    if ((bt > (lt + 0.01)) || ((bt > (lt - 0.01)) && (be.calculatedX > le2.calculatedX))) {
+                        lI = bq
+                    }
+                }
+                bq = (bq + 1)
+            }
+            def wasSB:boolean lay.synthBorder
+            lay.synthBorder = true
+            def fel:EVGElement (itemAt items fI)
+            parent.calculatedBaseline = (((fel.calculatedY - fel.box.marginTopPx) - parent.calculatedY) + (lay.baselineOffsetOf(fel)))
+            parent.calculatedDescent = 0.0
+            parent.hasBaseline = true
+            lay.synthBorder = wasSB
+            ; (an item with no baseline of its own is passed over for the
+            ; next one up that has one)
+            def lB:int -1
+            def bq2:int 0
+            while (bq2 < itemCount) {
+                def be3:EVGElement (itemAt items bq2)
+                if ((this.lastBaselineOffsetOf(lay be3)) >= 0.0) {
+                    def bt3:double (be3.calculatedY - be3.box.marginTopPx)
+                    if (lB < 0) {
+                        lB = bq2
+                    } {
+                        def lb3:EVGElement (itemAt items lB)
+                        def lt3:double (lb3.calculatedY - lb3.box.marginTopPx)
+                        if ((bt3 > (lt3 + 0.01)) || ((bt3 > (lt3 - 0.01)) && (be3.calculatedX > lb3.calculatedX))) {
+                            lB = bq2
+                        }
+                    }
+                }
+                bq2 = (bq2 + 1)
+            }
+            if (lB >= 0) {
+                lI = lB
+            }
+            def lel2:EVGElement (itemAt items lI)
+            def lkb:double (this.lastBaselineOffsetOf(lay lel2))
+            if (lkb < 0.0) {
+                lkb = (lel2.box.marginTopPx + lel2.calculatedHeight)
+            }
+            parent.calculatedLastBaseline = (((lel2.calculatedY - lel2.box.marginTopPx) - parent.calculatedY) + lkb)
         }
         def result:double total
         if rowDir {
@@ -3522,8 +3660,24 @@ class EVGLayoutFull {
                         big = (this.laneItemHeight(lay it2))
                         small = big
                     } {
+                        ; (its lengths in px first, handed back unresolved
+                        ; when they were, as intrinsicOfGrid does)
+                        def wasR2:boolean it2.unitsResolved
+                        it2.resolveUnits(parent.calculatedInnerWidth parent.calculatedInnerHeight)
                         big = (lay.intrinsicWidthOf(it2))
                         small = (lay.minIntrinsicWidthOf(it2))
+                        if (it2.minWidth.isSet && ((it2.minWidth.isPercent()) == false)) {
+                            def mwo:double ((it2.minWidth.pixels + it2.box.marginLeftPx) + it2.box.marginRightPx)
+                            if (mwo > big) {
+                                big = mwo
+                            }
+                            if (mwo > small) {
+                                small = mwo
+                            }
+                        }
+                        if ((wasR2 || it2.unitsFixed) == false) {
+                            it2.unitsResolved = false
+                        }
                     }
                     def a:int 0
                     while (a < laneCount) {
@@ -3540,15 +3694,88 @@ class EVGLayoutFull {
                 }
                 m = (m + 1)
             }
+            ; (placed items across several columns, and column subgrids'
+            ; items, size the columns as in a grid, CSS Grid 3 and 12.5.3)
+            if (rowDir == false) {
+                def spItems:[EVGElement]
+                def spAt:[int]
+                def spN:[int]
+                def anySpan:boolean false
+                def m2:int 0
+                while (m2 < itemCount) {
+                    if ((itemAt starts m2) >= 0) {
+                        push spItems (itemAt items m2)
+                        push spAt (itemAt starts m2)
+                        push spN (itemAt spans m2)
+                        if ((itemAt spans m2) > 1) {
+                            anySpan = true
+                        }
+                    }
+                    m2 = (m2 + 1)
+                }
+                if anySpan {
+                    this.gridSpanContent(lay lanes spItems spAt spN content minContent laneGap)
+                }
+            } {
+                ; (a placed row subgrid's rows size the lanes it spans, its
+                ; margin, border and padding added at its edges and half its
+                ; own gap's difference at the inner lines, CSS Grid 2 9)
+                def m3:int 0
+                while (m3 < itemCount) {
+                    def rsg:EVGElement (itemAt items m3)
+                    def rAt:int (itemAt starts m3)
+                    def rN:int (itemAt spans m3)
+                    if (((rAt >= 0) && (rN > 1)) && (rsg.gridTemplateRows == "subgrid")) {
+                        clear rsg.subgridRowSizes
+                        this.laneItemHeight(lay rsg)
+                        def rOwn:double laneGap
+                        if rsg.gap.isSet {
+                            rOwn = rsg.gap.pixels
+                        }
+                        if rsg.rowGap.isSet {
+                            rOwn = rsg.rowGap.pixels
+                        }
+                        def rHalf:double ((rOwn - laneGap) / 2.0)
+                        def rk:int 0
+                        while ((rk < rN) && (rk < (array_length rsg.computedRowSizes))) {
+                            def rh:double (itemAt rsg.computedRowSizes rk)
+                            if (rk == 0) {
+                                rh = (((rh + rsg.box.marginTopPx) + rsg.box.borderWidthPx) + rsg.box.paddingTopPx)
+                            } {
+                                rh = (rh + rHalf)
+                            }
+                            if (rk == (rN - 1)) {
+                                rh = (((rh + rsg.box.marginBottomPx) + rsg.box.borderWidthPx) + rsg.box.paddingBottomPx)
+                            } {
+                                rh = (rh + rHalf)
+                            }
+                            if (rh > (itemAt content (rAt + rk))) {
+                                set content (rAt + rk) rh
+                            }
+                            if (rh > (itemAt minContent (rAt + rk))) {
+                                set minContent (rAt + rk) rh
+                            }
+                            rk = (rk + 1)
+                        }
+                    }
+                    m3 = (m3 + 1)
+                }
+            }
         }
         def gapTotal:double ((to_double (laneCount - 1)) * laneGap)
         def room:double (laneRoom - gapTotal)
         if (room < 0.0) {
             room = 0.0
         }
-        lanes.stretchAutos = true
+        ; (auto lanes stretch unless content alignment says otherwise,
+        ; as in a grid: CSS Grid 12.8)
+        def jcL:string parent.justifyContent
         if rowDir {
-            lanes.stretchAutos = parent.hasDefiniteHeight
+            jcL = parent.alignContent
+        }
+        lanes.stretchAutos = (((strlen jcL) == 0) || ((jcL == "normal") || ((jcL == "stretch") || (jcL == "flex-start"))))
+        if rowDir {
+            lanes.stretchAutos = (lanes.stretchAutos && parent.hasDefiniteHeight)
         }
         lanes.percentOf = laneRoom
         lanes.resolveWithContent(room content minContent)
@@ -3721,7 +3948,15 @@ class EVGLayoutFull {
         for items it:EVGElement ii {
             def v:double 0.0
             if rowDir {
+                ; (a percentage height of the lanes being sized is auto)
+                def pcH:boolean (it.height.isSet && (it.height.isPercent()))
+                if pcH {
+                    it.height.isSet = false
+                }
                 v = (this.laneItemHeight(lay it))
+                if pcH {
+                    it.height.isSet = true
+                }
             } {
                 if wantMin {
                     v = (lay.minIntrinsicWidthOf(it))
@@ -3733,10 +3968,13 @@ class EVGLayoutFull {
             if rowDir {
                 spx = (EVGGridPlacement.parse(it.gridRow))
             }
-            if (spx.span <= 1) {
-                if (v > size) {
-                    size = v
-                }
+            ; (a spanning item's share: its size less the gaps it
+            ; crosses, split evenly over the tracks it spans)
+            if (spx.span > 1) {
+                v = ((v - ((to_double (spx.span - 1)) * gap)) / (to_double spx.span))
+            }
+            if (v > size) {
+                size = v
             }
         }
         if (size <= 0.0) {

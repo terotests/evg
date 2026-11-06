@@ -995,6 +995,15 @@ class EVGLayout {
                     descR = (to_double (to_int (descentAbs + 0.5)))
                 }
                 def leading:double ((lineSpacing - (ascR + descR)) / 2.0)
+                ; (and its half-leading above is floored to the pixel, the
+                ; odd pixel going below, as browsers split it)
+                if (ext.pixelMetrics()) {
+                    def flr:double (to_double (to_int leading))
+                    if (flr > leading) {
+                        flr = (flr - 1.0)
+                    }
+                    leading = flr
+                }
                 ; `textShiftY` is written below, once the height is final —
                 ; it is a share of the slack and there is no slack until then
                 ; — so the baseline is completed there as well.
@@ -6214,6 +6223,26 @@ class EVGLayout {
             k = (k + 1)
         }
         pass = (pass + 1)
+        }
+        ; (a row subgrid has no implicit rows: an item placed past its
+        ; tracks is clamped into the last ones, CSS Grid 2 9)
+        if ((parent.gridTemplateRows == "subgrid") && ((array_length parent.subgridRowSizes) > 0)) {
+            def sgN:int (array_length parent.subgridRowSizes)
+            def sk:int 0
+            while (sk < itemCount) {
+                def srs:int (itemAt rowSpans sk)
+                if (srs > sgN) {
+                    srs = sgN
+                    set rowSpans sk srs
+                }
+                if (((itemAt placedRow sk) + srs) > sgN) {
+                    set placedRow sk (sgN - srs)
+                }
+                sk = (sk + 1)
+            }
+            if (rowsUsed > sgN) {
+                rowsUsed = sgN
+            }
         }
 
         ; --- column sizing ---------------------------------------------------
