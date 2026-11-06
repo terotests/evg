@@ -336,6 +336,14 @@ function ringsPath(c, close) {
  * Three values are needed to say "unset" rather than two, because (0, 0) is a
  * legal pivot and cannot be told apart from "none" by its coordinates.
  */
+// A square-cornered box that is not turned is drawn on whole pixels, its
+// edges where the pixel centres inside it end, as Chromium snaps a box's
+// background and borders to device pixels: no half-covered pixel row at a
+// fractional edge.
+function crisp(c, r) {
+  return !c.rot && !(r[0] || r[1] || r[2] || r[3]) ? ` shape-rendering="crispEdges"` : "";
+}
+
 function rotAttr(c) {
   if (!c.rot) return "";
   let cx, cy;
@@ -488,7 +496,7 @@ export function renderDisplayList(target, doc, opts = {}) {
             : `<path d="${roundedPath(sx, sy, c.w, c.h, r)}" fill="${rgba(c.sh.c)}"${attrs}${rotAttr(c)}/>`);
         }
         body.push(uniform(r)
-          ? `<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}"${r[0] ? ` rx="${n(r[0])}"` : ""} fill="${fill}"${rotAttr(c)}/>`
+          ? `<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}"${r[0] ? ` rx="${n(r[0])}"` : ""} fill="${fill}"${crisp(c, r)}${rotAttr(c)}/>`
           : `<path d="${roundedPath(c.x, c.y, c.w, c.h, r)}" fill="${fill}"${rotAttr(c)}/>`);
         drawn += 1;
         break;
@@ -505,7 +513,7 @@ export function renderDisplayList(target, doc, opts = {}) {
         const r = radiiOf(c).map((v) => Math.max(0, v - t / 2));
         const x = c.x + t / 2, y = c.y + t / 2, w = c.w - t, h = c.h - t;
         body.push(uniform(r)
-          ? `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}"${r[0] ? ` rx="${n(r[0])}"` : ""} fill="none" stroke="${rgba(c.c)}" stroke-width="${n(t)}"${rotAttr(c)}/>`
+          ? `<rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}"${r[0] ? ` rx="${n(r[0])}"` : ""} fill="none" stroke="${rgba(c.c)}" stroke-width="${n(t)}"${crisp(c, r)}${rotAttr(c)}/>`
           : `<path d="${roundedPath(x, y, w, h, r)}" fill="none" stroke="${rgba(c.c)}" stroke-width="${n(t)}"${rotAttr(c)}/>`);
         drawn += 1;
         break;
