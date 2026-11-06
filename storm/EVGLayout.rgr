@@ -6235,11 +6235,21 @@ class EVGLayout {
                     def col2:int (itemAt placedCol ic)
                     if (col2 < colCount) {
                         def it:EVGElement (itemAt items ic)
-                        def w2:double (this.intrinsicWidthOf(it))
+                        ; (percentage margins resolve against the grid area,
+                        ; which this sizing is finding: they contribute
+                        ; nothing to it, CSS Grid 6.2 and CSS Box 3)
+                        def pctM:double 0.0
+                        if (it.box.marginLeft.isPercent()) {
+                            pctM = (pctM + it.box.marginLeftPx)
+                        }
+                        if (it.box.marginRight.isPercent()) {
+                            pctM = (pctM + it.box.marginRightPx)
+                        }
+                        def w2:double ((this.intrinsicWidthOf(it)) - pctM)
                         if (w2 > (itemAt colContent col2)) {
                             set colContent col2 w2
                         }
-                        def m2:double (this.minIntrinsicWidthOf(it))
+                        def m2:double ((this.minIntrinsicWidthOf(it)) - pctM)
                         ; (in an auto track an item of a min-width of its
                         ; own counts that, not its content: its minimum
                         ; contribution, CSS Grid 6.6 and 12.5)
@@ -6268,7 +6278,7 @@ class EVGLayout {
                             if ((it.box.marginLeft.isPercent()) || (it.box.marginRight.isPercent())) {
                                 dmOut = 0.0
                             }
-                            def dmBox:double (m2 - (it.box.marginLeftPx + it.box.marginRightPx))
+                            def dmBox:double ((m2 + pctM) - (it.box.marginLeftPx + it.box.marginRightPx))
                             if (dmBox > (dmTk.value - dmOut)) {
                                 dmBox = (dmTk.value - dmOut)
                             }
@@ -6280,10 +6290,10 @@ class EVGLayout {
                                 dmBox = it.minWidth.pixels
                             }
                             if ((it.minWidth.isSet == false) && (it.minWidth.unitType == 7)) {
-                                dmBox = (m2 - dmOut)
+                                dmBox = ((m2 + pctM) - dmOut)
                             }
                             if ((it.minWidth.isSet == false) && ((it.minWidth.unitType == 8) || (it.minWidth.unitType == 6))) {
-                                dmBox = (w2 - dmOut)
+                                dmBox = ((w2 + pctM) - dmOut)
                             }
                             def dmCh:double (it.box.getHorizontalChrome())
                             if ((it.box.paddingLeft.isPercent()) || (it.box.paddingRight.isPercent())) {
