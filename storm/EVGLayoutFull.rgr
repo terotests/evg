@@ -3297,7 +3297,9 @@ class EVGLayoutFull {
                         push fits (this.laneFit(run holeA holeB holeL fl sp2 need))
                         fl = (fl + 1)
                     }
-                    lane = (this.chooseFit(fits cursor tol))
+                    ; (the first lane within flow-tolerance of the earliest
+                    ; opening, counted from the first lane)
+                    lane = (this.chooseFit(fits 0 tol))
                     cursor = (lane + sp2)
                     if (cursor >= laneCount) {
                         cursor = 0
