@@ -124,6 +124,7 @@ const RGR_SUITES = [
   "EVGEffectTest.rgr",
   "EVGRelayoutTest.rgr",
   "EVGTextOverflowTest.rgr",
+  "EVGTextDecorationTest.rgr",
 ];
 
 function rangerRequired() {
