@@ -822,6 +822,8 @@ class EVGLayoutFull {
         def le:double -1.0
         def re:double -1.0
         def tries:int 0
+        ; (a box with no lines, an empty one, overlaps the floats)
+        def hasLines:boolean (((child.getChildCount()) > 0) || ((strlen child.textContent) > 0))
         def again:boolean true
         while again {
             again = false
@@ -868,7 +870,7 @@ class EVGLayoutFull {
             if ((re >= 0.0) && (re < roomR)) {
                 roomR = re
             }
-            if ((((roomR - roomL) < 0.5) && (nextB > top)) && (tries < 8)) {
+            if (((((roomR - roomL) < 0.5) && (nextB > top)) && (tries < 8)) && hasLines) {
                 top = nextB
                 tries = (tries + 1)
                 again = true
