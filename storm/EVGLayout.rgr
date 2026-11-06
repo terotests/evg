@@ -5400,7 +5400,9 @@ class EVGLayout {
             ; `isAbsolute`, so a rail the sheet had folded away still claimed
             ; its icons' width from the row and the page beside it came up
             ; 32px short.
-            if (kid.isAbsolute || (kid.isHidden())) {
+            ; (a kid not resolved yet has no `isAbsolute`: its position
+            ; says it, so an absolute grandchild is out of flow as well)
+            if ((kid.isAbsolute || ((kid.position == "absolute") || (kid.position == "fixed"))) || (kid.isHidden())) {
             } {
                 ; RESOLVE THE KID FIRST. Its padding and border live in
                 ; `kid.box` as pixels, and `resolveUnits` is what puts them
