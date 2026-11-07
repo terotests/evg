@@ -1660,6 +1660,18 @@ class EVGLayout {
             if ((c.clipsContent()) == false) {
                 ; (the measure is of the margin box, the size is not)
                 def autoMin:double (((this.minIntrinsicWidthOf(c)) - c.box.marginLeftPx) - c.box.marginRightPx)
+                ; (with a set width, the smaller of it and the content's own
+                ; minimum, CSS Flexbox 4.5: an empty box can shrink to 0)
+                if (c.width.isSet && (((c.width.isPercent()) == false) && ((c.getChildCount()) == 0))) {
+                    if ((strlen c.textContent) == 0) {
+                        if (((strlen c.src) == 0) && ((c.tagName != "svg") && (c.tagName != "canvas"))) {
+                            def chW:double (c.box.getHorizontalChrome())
+                            if (chW < autoMin) {
+                                autoMin = chW
+                            }
+                        }
+                    }
+                }
                 ; (and no more than its max-width, CSS Flexbox 4.5)
                 if (c.maxWidth.isSet && (autoMin > c.maxWidth.pixels)) {
                     autoMin = c.maxWidth.pixels
@@ -4091,7 +4103,13 @@ class EVGLayout {
             if ((element.minWidth.isSet && ((element.minWidth.isPercent()) == false)) && (element.minWidth.pixels > spanW)) {
                 spanW = element.minWidth.pixels
             }
-            if (spanW > 0.0) {
+            ; (insets wider than the containing block leave no content
+            ; width, CSS 2.1 10.3.7: only the box's own padding and border)
+            def chW:double (element.box.getHorizontalChrome())
+            if ((spanW < chW) && (parentWidth > 0.0)) {
+                spanW = chW
+            }
+            if ((spanW > 0.0) || (parentWidth > 0.0)) {
                 element.calculatedWidth = spanW
                 element.calculatedInnerWidth = (element.box.getInnerWidth(spanW))
             }
@@ -4137,6 +4155,10 @@ class EVGLayout {
                         }
                     }
                     element.calculatedX = parentWidth - element.right.pixels - width - element.box.marginRightPx
+                } {
+                    ; (no inset across: its static place, which the caller
+                    ; moves it to; not where a layout before this one left it)
+                    element.calculatedX = element.box.marginLeftPx
                 }
             }
         }

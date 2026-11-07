@@ -93,6 +93,9 @@ class EVGCssExtra {
     def clearFloats:boolean false
     ; (left or right: only those floats; true: both)
     def clearSide:string ""
+    ; (clear-margin: the top margin of a box that clears, taken in by any
+    ; clearance and kept when there is none)
+    def clearMargin:double 0.0
     ; a block in the flow right after floats (beside-floats: true): its
     ; content is moved past the floats beside its top
     def besideFloats:boolean false
@@ -116,6 +119,10 @@ class EVGCssExtra {
     ; it, the nearest ones: drawn after them and not moved by their scroll
     ; (escape-clip: n)
     def escapeClip:int 0
+    ; an atomic inline (inline-block, inline-table): painted with the
+    ; inline content of its stacking context, after the block backgrounds
+    ; (inline-atomic: true)
+    def inlineAtomic:boolean false
     def stickyLeft:double -1.0
     def stickyBottom:double -1.0
     def stickyRight:double -1.0
@@ -161,7 +168,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "escape-clip") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || ((name == "contain-w") || ((name == "grid-lanes") || (name == "lanes-tolerance"))))))))))))))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "inline-atomic") || ((name == "clear-margin") || ((name == "escape-clip") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || ((name == "contain-w") || ((name == "grid-lanes") || (name == "lanes-tolerance"))))))))))))))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -220,6 +227,10 @@ class EVGCssExtra {
             floatRow = (value == "true")
             return
         }
+        if (name == "clear-margin") {
+            clearMargin = (?? (to_double value) 0.0)
+            return
+        }
         if (name == "clear-floats") {
             clearFloats = ((value == "true") || ((value == "left") || (value == "right")))
             clearSide = value
@@ -241,6 +252,10 @@ class EVGCssExtra {
         }
         if (name == "float-holder") {
             floatHolder = (value == "true")
+            return
+        }
+        if (name == "inline-atomic") {
+            inlineAtomic = (value == "true")
             return
         }
         if (name == "escape-clip") {
@@ -407,6 +422,7 @@ class EVGCssExtra {
         c.floatSide = floatSide
         c.clearFloats = clearFloats
         c.clearSide = clearSide
+        c.clearMargin = clearMargin
         c.besideFloats = besideFloats
         c.bfcFloats = bfcFloats
         c.floatHolder = floatHolder
@@ -414,6 +430,7 @@ class EVGCssExtra {
         c.containW = containW
         c.stickyTop = stickyTop
         c.escapeClip = escapeClip
+        c.inlineAtomic = inlineAtomic
         c.stickyLeft = stickyLeft
         c.stickyBottom = stickyBottom
         c.stickyRight = stickyRight

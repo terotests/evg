@@ -338,6 +338,11 @@ class EVGDisplayList {
     ; that many open ones
     def openClips:int 0
     def escEls:[EVGElement]
+    ; atomic inlines waiting for the inline step of their stacking context
+    ; (CSS 2.1 Appendix E): drawn where `walkOpaque` of a box that paints
+    ; as a unit (the root, a positioned or late box, a clip, a fade, a
+    ; transform, an atomic inline itself) has drawn its in-flow children
+    def inlEls:[EVGElement]
     def escLevel:[int]
     ; The same engine layout measured with. A paragraph is emitted one command
     ; per LINE, broken exactly where layout broke it — a backend that got the
@@ -584,6 +589,46 @@ class EVGDisplayList {
         tl.h = th
         c.tile = tl
         this.addCmd(c)
+    }
+
+    sfn inlineLate:boolean (kid:EVGElement) {
+        if (null? kid.css) {
+            return false
+        }
+        def kx:EVGCssExtra (unwrap kid.css)
+        return kx.inlineAtomic
+    }
+
+    ; Does this box draw its atomic inlines itself (see `inlEls`)?
+    fn paintsAsUnit:boolean (el:EVGElement clips:boolean) {
+        if (clips || ((el.opacity < 1.0) || (el.hasTransform()))) {
+            return true
+        }
+        if ((el.keepLayout && fragments) || (EVGDisplayList.paintsLate(el))) {
+            return true
+        }
+        return ((EVGDisplayList.inlineLate(el)) || (el.isSurface()))
+    }
+
+    ; draw the atomic inlines waiting from `from` on, in tree order
+    fn walkInline:void (from:int) {
+        if ((array_length inlEls) <= from) {
+            return
+        }
+        def now:[EVGElement]
+        def k:int from
+        while (k < (array_length inlEls)) {
+            push now (itemAt inlEls k)
+            k = (k + 1)
+        }
+        while ((array_length inlEls) > from) {
+            removeLast inlEls
+        }
+        k = 0
+        while (k < (array_length now)) {
+            this.walk((itemAt now k))
+            k = (k + 1)
+        }
     }
 
     sfn paintsLate:boolean (kid:EVGElement) {
@@ -2958,13 +3003,16 @@ class EVGDisplayList {
         openClips = 0
         clear escEls
         clear escLevel
+        clear inlEls
         this.walk(root)
+        this.walkInline(0)
         def i:int 0
         while (i < (array_length deferredOverlays)) {
             ; Outside every clip: a surface is placed against the page, not
             ; against whatever it was written inside.
             cullOn = false
             this.walk((itemAt deferredOverlays i))
+            this.walkInline(0)
             i = (i + 1)
         }
         cullOn = false
@@ -4013,6 +4061,12 @@ class EVGDisplayList {
                 c3.cropY = el.imageViewBoxY
                 c3.cropW = el.imageViewBoxW
                 c3.cropH = el.imageViewBoxH
+            } {
+                ; (object-fit: fill stretches the whole picture over the box:
+                ; the whole of it as the window)
+                if (el.objectFit == "fill") {
+                    c3.hasCrop = true
+                }
             }
             this.addCmd(c3)
         }
@@ -4260,6 +4314,7 @@ class EVGDisplayList {
         }
         def i:int 0
         def late:[EVGElement]
+        def inlFrom:int (array_length inlEls)
         while (i < (el.getChildCount())) {
             def kid:EVGElement (el.getChild(i))
             ; (a box out of the clips around it is drawn when they close)
@@ -4280,11 +4335,21 @@ class EVGDisplayList {
                 if (EVGDisplayList.paintsLate(kid)) {
                     push late kid
                 } {
-                    this.walk(kid)
+                    if (EVGDisplayList.inlineLate(kid)) {
+                        push inlEls kid
+                    } {
+                        this.walk(kid)
+                    }
                 }
             }
             }
             i = (i + 1)
+        }
+        ; (the atomic inlines of a box that paints as a unit: after its
+        ; block backgrounds, before its positioned boxes)
+        ; (and before positioned boxes drawn here, which are over them)
+        if ((this.paintsAsUnit(el clips)) || ((array_length late) > 0)) {
+            this.walkInline(inlFrom)
         }
         ; (CSS positioned boxes: after the in-flow ones, in tree order)
         def li2:int 0
