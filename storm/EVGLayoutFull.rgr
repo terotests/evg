@@ -907,7 +907,16 @@ class EVGLayoutFull {
             if ((re >= 0.0) && (re < roomR)) {
                 roomR = re
             }
-            if (((((roomR - roomL) < 0.5) && (nextB > top)) && (tries < 8)) && hasLines) {
+            ; (nor does a line whose first atomic inline is wider than the
+            ; room there, CSS 2.1 9.5)
+            def needW:double 0.5
+            if ((EVGLayoutFull.cx(child)).heightThrough) {
+                needW = (EVGLayoutFull.firstAtomicWidth(child (ce - cs)))
+                if (needW < 0.5) {
+                    needW = 0.5
+                }
+            }
+            if (((((roomR - roomL) < needW) && (nextB > top)) && (tries < 8)) && hasLines) {
                 top = nextB
                 tries = (tries + 1)
                 again = true
@@ -926,6 +935,31 @@ class EVGLayoutFull {
             }
         }
         return (top - top0)
+    }
+
+    ; the width the first sized box of a line takes (-1 for none):
+    ; a length, or a percentage of the line's containing block
+    sfn firstAtomicWidth:double (line:EVGElement full:double) {
+        def k:int 0
+        while (k < (line.getChildCount())) {
+            def it:EVGElement (line.getChild(k))
+            ; (the line's strut, width 0, is passed over)
+            def strut:boolean (((it.width.isSet) && (it.width.unitType == 0)) && (it.width.value == 0.0))
+            if (((it.isAbsolute == false) && (it.width.isSet)) && (strut == false)) {
+                if (it.width.unitType == 0) {
+                    return it.width.value
+                }
+                if (it.width.unitType == 1) {
+                    return ((it.width.value * full) / 100.0)
+                }
+                return -1.0
+            }
+            if ((strut == false) && (((strlen it.textContent) > 0) || ((it.getChildCount()) > 0))) {
+                return -1.0
+            }
+            k = (k + 1)
+        }
+        return -1.0
     }
 
     ; a box that clears (clear-floats) has its border top under the floats
@@ -959,6 +993,37 @@ class EVGLayoutFull {
             pi = (pi + 1)
         }
         def top:double (currentY + child.box.marginTopPx)
+        ; (a top margin that reaches past the floats keeps the box there,
+        ; with no clearance, CSS 2.1 9.5.2)
+        ; (the margin collapses with the bottom margin of the box before it,
+        ; which the line it starts on already holds)
+        if (cxc.clearMargin > 0.0) {
+            def pm:double 0.0
+            ; (with no box before it the margin adjoins the parent's: its
+            ; floats are where the clearance is measured from)
+            def seen:boolean false
+            def qi:int (index - 1)
+            while (qi >= 0) {
+                def qc:EVGElement (parent.getChild(qi))
+                def qrow:boolean ((!null? qc.css) && ((EVGLayoutFull.cx(qc)).floatRow))
+                if ((qc.isAbsolute == false) && (qrow == false)) {
+                    pm = qc.box.marginBottomPx
+                    seen = true
+                    qi = -1
+                }
+                qi = (qi - 1)
+            }
+            if (pm < 0.0) {
+                pm = 0.0
+            }
+            def add:double (cxc.clearMargin - pm)
+            if (add < 0.0) {
+                add = 0.0
+            }
+            if (seen && ((top + add) >= fb)) {
+                return add
+            }
+        }
         if (fb > top) {
             return (fb - top)
         }
