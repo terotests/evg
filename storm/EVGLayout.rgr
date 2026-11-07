@@ -599,7 +599,7 @@ class EVGLayout {
                         ; (an empty box fits to nothing but its edges)
                         ; (and so does one with only empty boxes in it)
                         def emptyBox:boolean (EVGLayout.emptyTree(element))
-                        if ((emptyBox && (element.display == "flex")) && ((element.minWidth.isSet == false) || (((element.minWidth.pixels <= 0.0) && ((element.minWidth.isPercent()) == false)) && ((element.getChildCount()) > 0)))) {
+                        if (((emptyBox && (element.display == "flex")) && ((element.aspectRatio <= 0.0) || (element.minHeight.isSet == false))) && ((element.minWidth.isSet == false) || (((element.minWidth.pixels <= 0.0) && ((element.minWidth.isPercent()) == false)) && ((element.getChildCount()) > 0)))) {
                             width = ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
                         }
                         if (intrinsic > 0.0) {
@@ -4983,6 +4983,32 @@ class EVGLayout {
                     outer = arW
                 }
             }
+            ; (an auto height's min-height and max-height go over to the
+            ; width through the ratio, CSS Sizing 4, 5.2)
+            if ((el.aspectRatio > 0.0) && (el.height.isSet == false)) {
+                def trEX:double ((el.box.paddingLeftPx + el.box.paddingRightPx) + (el.box.borderWidthPx * 2.0))
+                def trEY:double ((el.box.paddingTopPx + el.box.paddingBottomPx) + (el.box.borderWidthPx * 2.0))
+                if (el.maxHeight.isSet && ((el.maxHeight.isPercent()) == false)) {
+                    def trMxIn:double (el.maxHeight.pixels - trEY)
+                    if (trMxIn < 0.0) {
+                        trMxIn = 0.0
+                    }
+                    def trMx:double ((trMxIn * el.aspectRatio) + trEX)
+                    if (trMx < outer) {
+                        outer = trMx
+                    }
+                }
+                if (el.minHeight.isSet && ((el.minHeight.isPercent()) == false)) {
+                    def trMnIn:double (el.minHeight.pixels - trEY)
+                    if (trMnIn < 0.0) {
+                        trMnIn = 0.0
+                    }
+                    def trMn:double ((trMnIn * el.aspectRatio) + trEX)
+                    if (trMn > outer) {
+                        outer = trMn
+                    }
+                }
+            }
             ; (max-width: min-content holds a measure at most the min-content
             ; one, then min-width: max-content at least the max-content one)
             def kwMeasure:boolean ((measuringKeyword == false) && (((el.minWidth.isSet == false) && (el.minWidth.unitType == 8)) || ((el.maxWidth.isSet == false) && (el.maxWidth.unitType == 7))))
@@ -5796,6 +5822,138 @@ class EVGLayout {
         }
     }
 
+    ; the template a subgrid lays out with: the sizes its enclosing grid
+    ; hands it and, on each line, the names that grid's line has and the
+    ; ones the subgrid declares itself ("" when there are none)
+    ; the column template placement reads: a subgrid's is the one its
+    ; enclosing grid handed it, with the line names
+    sfn colTemplateOf:string (el:EVGElement) {
+        if ((el.gridTemplateColumns == "subgrid") && ((strlen el.subgridColumnSpec) > 0)) {
+            return el.subgridColumnSpec
+        }
+        return el.gridTemplateColumns
+    }
+
+    ; a subgrid's line name list, "[a] repeat(2, [b]) repeat(auto-fill,
+    ; [c])", as one "[...]" per line: the auto-fill repeats as many times as
+    ; the lines left over hold, CSS Grid 2 9
+    sfn subgridNameList:[string] (own:string lines:int) {
+        def head:[string]
+        def fill:[string]
+        def tail:[string]
+        def hasFill:boolean false
+        def toks:[string] (EVGGridTemplate.tokenize(own))
+        def i:int 0
+        while (i < (array_length toks)) {
+            def t:string (itemAt toks i)
+            if (((strlen t) > 8) && ((substring t 0 7) == "repeat(")) {
+                def inner:string (substring t 7 ((strlen t) - 1))
+                def cm:int (indexOf inner ",")
+                if (cm > 0) {
+                    def cnt:string (trim (substring inner 0 cm))
+                    def grp:[string] (EVGGridTemplate.tokenize((trim (substring inner (cm + 1) (strlen inner)))))
+                    if (cnt == "auto-fill") {
+                        if (hasFill == false) {
+                            hasFill = true
+                            fill = grp
+                        }
+                    } {
+                        def n:int (EVGGridPlacement.lineNumber(cnt))
+                        def r:int 0
+                        while ((r < n) && (r < 10000)) {
+                            def g:int 0
+                            while (g < (array_length grp)) {
+                                if hasFill {
+                                    push tail (itemAt grp g)
+                                } {
+                                    push head (itemAt grp g)
+                                }
+                                g = (g + 1)
+                            }
+                            r = (r + 1)
+                        }
+                    }
+                }
+            } {
+                if hasFill {
+                    push tail t
+                } {
+                    push head t
+                }
+            }
+            i = (i + 1)
+        }
+        def out:[string]
+        def h:int 0
+        while (h < (array_length head)) {
+            push out (itemAt head h)
+            h = (h + 1)
+        }
+        if (hasFill && ((array_length fill) > 0)) {
+            def left:int ((lines - (array_length head)) - (array_length tail))
+            def reps:int 0
+            while ((((reps + 1) * (array_length fill)) <= left)) {
+                reps = (reps + 1)
+            }
+            def q:int 0
+            while (q < reps) {
+                def f:int 0
+                while (f < (array_length fill)) {
+                    push out (itemAt fill f)
+                    f = (f + 1)
+                }
+                q = (q + 1)
+            }
+        }
+        def k:int 0
+        while (k < (array_length tail)) {
+            push out (itemAt tail k)
+            k = (k + 1)
+        }
+        return out
+    }
+
+    sfn subgridSpec:string (tpl:EVGGridTemplate from:int span:int sizes:[double] own:string) {
+        def ownToks:[string] (EVGLayout.subgridNameList(own (span + 1)))
+        def spec:string ""
+        def named:boolean false
+        def k:int 0
+        while (k <= span) {
+            def nm:string ""
+            def line:int ((from + 1) + k)
+            def i:int 0
+            while (i < (array_length tpl.allNames)) {
+                if ((itemAt tpl.allLines i) == line) {
+                    nm = (nm + " " + (itemAt tpl.allNames i))
+                }
+                i = (i + 1)
+            }
+            if (k < (array_length ownToks)) {
+                def ot:string (itemAt ownToks k)
+                if (((strlen ot) >= 2) && ((charAt ot 0) == 91)) {
+                    nm = (nm + " " + (substring ot 1 ((strlen ot) - 1)))
+                }
+            }
+            nm = (trim nm)
+            if ((strlen nm) > 0) {
+                spec = (spec + "[" + nm + "] ")
+                named = true
+            }
+            if (k < span) {
+                if (k < (array_length sizes)) {
+                    spec = (spec + (to_string (itemAt sizes k)) + "px ")
+                } {
+                    spec = (spec + "auto ")
+                }
+            }
+            k = (k + 1)
+        }
+        if (named == false) {
+            return ""
+        }
+        return (trim spec)
+    }
+
     fn gridGaps:[double] (parent:EVGElement innerWidth:double innerHeight:double) {
         def colGapPx:double 0.0
         def rowGapPx:double 0.0
@@ -5814,6 +5972,13 @@ class EVGLayout {
             parent.rowGap.rootFontSize = parent.rootFontSize
             parent.rowGap.resolve(innerHeight parent.inheritedFontSize)
             rowGapPx = parent.rowGap.pixels
+        }
+        ; (a subgrid's normal gap is its enclosing grid's, CSS Grid 2 9)
+        if ((parent.gridTemplateColumns == "subgrid") && ((parent.subgridColumnGap >= 0.0) && ((parent.gap.isSet == false) && (parent.columnGap.isSet == false)))) {
+            colGapPx = parent.subgridColumnGap
+        }
+        if ((parent.gridTemplateRows == "subgrid") && ((parent.subgridRowGap >= 0.0) && ((parent.gap.isSet == false) && (parent.rowGap.isSet == false)))) {
+            rowGapPx = parent.subgridRowGap
         }
         def out:[double]
         push out colGapPx
@@ -5860,14 +6025,17 @@ class EVGLayout {
                     sg = (sg + 1)
                 }
                 colSpec = sgSpec
+                if ((strlen parent.subgridColumnSpec) > 0) {
+                    colSpec = parent.subgridColumnSpec
+                }
             } {
                 ; During an enclosing grid's content-measuring pass the sizes
                 ; do not exist yet, and falling back is correct rather than
                 ; wrong — subgridPending is what tells that apart from having
                 ; no enclosing grid at all.
                 if (parent.subgridPending == false) {
-                    this.warn("grid-template-columns: subgrid has no enclosing grid to inherit tracks from; falling back to 1fr")
-                    colSpec = "1fr"
+                    this.warn("grid-template-columns: subgrid has no enclosing grid to inherit tracks from; it has none")
+                    colSpec = ""
                 } {
                     ; (while measured, an auto track per column it spans: its
                     ; items side by side as they will be, not stacked)
@@ -5884,6 +6052,15 @@ class EVGLayout {
                     while (sgx < sgn) {
                         colSpec = (colSpec + " auto")
                         sgx = (sgx + 1)
+                    }
+                    ; (and the line names it declares itself)
+                    if ((strlen parent.subgridOwnColumnNames) > 0) {
+                        def noSizes:[double]
+                        def ms:string (EVGLayout.subgridSpec((EVGGridTemplate.parse("")) 0 sgn noSizes parent.subgridOwnColumnNames))
+                        if ((strlen ms) > 0) {
+                            colSpec = ms
+                            parent.subgridColumnSpec = ms
+                        }
                     }
                 }
             }
@@ -6671,6 +6848,9 @@ class EVGLayout {
                     if pctHMin {
                         it.minHeight.isSet = false
                     }
+                    if isRowSubgrid {
+                        it.subgridRowGap = rowGapPx
+                    }
                     this.layoutElement(it 0.0 0.0 avail 0.0)
                     if pctH {
                         it.height.isSet = true
@@ -6679,10 +6859,26 @@ class EVGLayout {
                         it.minHeight.isSet = true
                     }
                     if isRowSubgrid {
+                        ; (its rows want its own gap's half difference at
+                        ; each inner line and its margin, border and padding
+                        ; at its edges, CSS Grid 2 9)
+                        def mHalf:double (((itemAt (this.gridGaps(it avail 0.0)) 1) - rowGapPx) / 2.0)
                         def sub:int 0
                         while (sub < rspanM) {
                             if (sub < (array_length it.computedRowSizes)) {
                                 def sh:double (itemAt it.computedRowSizes sub)
+                                if (sub > 0) {
+                                    sh = (sh + mHalf)
+                                }
+                                if (sub < (rspanM - 1)) {
+                                    sh = (sh + mHalf)
+                                }
+                                if (sub == 0) {
+                                    sh = (((sh + it.box.marginTopPx) + it.box.borderWidthPx) + it.box.paddingTopPx)
+                                }
+                                if (sub == (rspanM - 1)) {
+                                    sh = (((sh + it.box.marginBottomPx) + it.box.borderWidthPx) + it.box.paddingBottomPx)
+                                }
                                 if (sh > (itemAt rowSizes (ri + sub))) {
                                     set rowSizes (ri + sub) sh
                                 }
@@ -7022,6 +7218,11 @@ class EVGLayout {
             ; known later, which is the only reason columns landed first.
             if (el.gridTemplateColumns == "subgrid") {
                 clear el.subgridColumnSizes
+                el.subgridColumnGap = colGapPx
+                ; (a gap of its own: each inner line moves half the
+                ; difference into the tracks on both sides of it)
+                def sgOwn:double (itemAt (this.gridGaps(el boxW boxH)) 0)
+                def sgHalf:double ((sgOwn - colGapPx) / 2.0)
                 def sgi:int 0
                 while (sgi < cSpan) {
                     def tk:EVGGridTrack (cols.trackAt(cIdx + sgi))
@@ -7030,6 +7231,12 @@ class EVGLayout {
                     def tkw:double tk.sizePx
                     if (sgi == 0) {
                         tkw = (((tkw - el.box.marginLeftPx) - el.box.borderWidthPx) - el.box.paddingLeftPx)
+                    }
+                    if (sgi > 0) {
+                        tkw = (tkw - sgHalf)
+                    }
+                    if (sgi < (cSpan - 1)) {
+                        tkw = (tkw - sgHalf)
                     }
                     if (sgi == (cSpan - 1)) {
                         tkw = (((tkw - el.box.marginRightPx) - el.box.borderWidthPx) - el.box.paddingRightPx)
@@ -7040,14 +7247,36 @@ class EVGLayout {
                     push el.subgridColumnSizes tkw
                     sgi = (sgi + 1)
                 }
+                ; (with the names of the lines it spans, its enclosing
+                ; grid's and its own, CSS Grid 2 9)
+                el.subgridColumnSpec = (EVGLayout.subgridSpec(cols cIdx cSpan el.subgridColumnSizes el.subgridOwnColumnNames))
             }
             if (el.gridTemplateRows == "subgrid") {
                 clear el.subgridRowSizes
+                el.subgridRowGap = rowGapPx
+                def sgOwnR:double (itemAt (this.gridGaps(el boxW boxH)) 1)
+                def sgHalfR:double ((sgOwnR - rowGapPx) / 2.0)
                 def sgj:int 0
                 while (sgj < rSpan) {
                     def rIdx2:int (rIdx + sgj)
                     if (rIdx2 < (array_length rowSizes)) {
-                        push el.subgridRowSizes (itemAt rowSizes rIdx2)
+                        def rkw:double (itemAt rowSizes rIdx2)
+                        if (sgj > 0) {
+                            rkw = (rkw - sgHalfR)
+                        }
+                        if (sgj < (rSpan - 1)) {
+                            rkw = (rkw - sgHalfR)
+                        }
+                        if (sgj == 0) {
+                            rkw = (((rkw - el.box.marginTopPx) - el.box.borderWidthPx) - el.box.paddingTopPx)
+                        }
+                        if (sgj == (rSpan - 1)) {
+                            rkw = (((rkw - el.box.marginBottomPx) - el.box.borderWidthPx) - el.box.paddingBottomPx)
+                        }
+                        if (rkw < 0.0) {
+                            rkw = 0.0
+                        }
+                        push el.subgridRowSizes rkw
                     }
                     sgj = (sgj + 1)
                 }
@@ -7533,7 +7762,7 @@ class EVGLayout {
             ; (an empty box, or one with only empty boxes in it, is as wide
             ; as its padding and border; an empty grid is as wide as its
             ; tracks)
-            if ((child.display == "flex") && (EVGLayout.emptyTree(child))) {
+            if (((child.display == "flex") && (EVGLayout.emptyTree(child))) && ((child.aspectRatio <= 0.0) || (child.minHeight.isSet == false))) {
                 return ((child.box.paddingLeftPx + child.box.paddingRightPx) + (child.box.borderWidthPx * 2.0))
             }
             ; (the intrinsic width is the margin box's, the width the

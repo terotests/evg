@@ -761,6 +761,15 @@ class EVGElement {
     ; the only thing that knows its own tracks.
     def subgridColumnSizes:[double]
     def subgridRowSizes:[double]
+    ; the enclosing grid's column and row gaps, which a subgrid's own
+    ; `normal` gap is (CSS Grid 2 9; -1 when not a subgrid)
+    def subgridColumnGap:double -1.0
+    ; the column line names a subgrid declares after the keyword
+    ; ("subgrid [a] []") and the template its enclosing grid hands it,
+    ; names and all
+    def subgridOwnColumnNames:string ""
+    def subgridColumnSpec:string ""
+    def subgridRowGap:double -1.0
     ; The row heights this element's own grid worked out, left behind for an
     ; enclosing grid to read. A row subgrid always spans several of its
     ; parent's rows, and with subgrid it is the GRANDCHILDREN that have to size
@@ -3546,6 +3555,10 @@ class EVGElement {
         gridTemplateRows = other.gridTemplateRows
         subgridColumnSizes = other.subgridColumnSizes
         subgridRowSizes = other.subgridRowSizes
+        subgridColumnGap = other.subgridColumnGap
+        subgridOwnColumnNames = other.subgridOwnColumnNames
+        subgridColumnSpec = other.subgridColumnSpec
+        subgridRowGap = other.subgridRowGap
         computedRowSizes = other.computedRowSizes
         subgridPending = other.subgridPending
         gridTemplateAreas = other.gridTemplateAreas
@@ -4810,6 +4823,12 @@ class EVGElement {
         }
         if ((name == "grid-template-columns") || (name == "gridTemplateColumns")) {
             gridTemplateColumns = value
+            subgridOwnColumnNames = ""
+            def tvc:string (trim value)
+            if (((strlen tvc) > 8) && ((substring tvc 0 8) == "subgrid ")) {
+                gridTemplateColumns = "subgrid"
+                subgridOwnColumnNames = (trim (substring tvc 8 (strlen tvc)))
+            }
             return
         }
         if ((name == "grid-template-rows") || (name == "gridTemplateRows")) {

@@ -1722,7 +1722,7 @@ class EVGLayoutFull {
     ; the column flow's placements (CSS Grid 8.5) of `kids` into cs and
     ; rs, from their lines there (-1 auto) and spans
     fn columnFlowPlace:void (parent:EVGElement kids:[EVGElement] cs:[int] csp:[int] rs:[int] rsp:[int]) {
-        def colTpl:EVGGridTemplate (EVGGridTemplate.parse(parent.gridTemplateColumns))
+        def colTpl:EVGGridTemplate (EVGGridTemplate.parse((EVGLayout.colTemplateOf(parent))))
         def rowSpec:string parent.gridTemplateRows
         if ((rowSpec == "none") || (rowSpec == "subgrid")) {
             rowSpec = ""
@@ -3183,6 +3183,41 @@ class EVGLayoutFull {
     }
 
     ; the placement moved `lead` tracks on, as two line numbers
+    ; "s / e" held within lines 1..last, still a track wide
+    sfn clampedPlacement:string (spec:string last:int) {
+        def sl:int (indexOf spec "/")
+        if (sl < 0) {
+            return spec
+        }
+        def a:string (trim (substring spec 0 sl))
+        def b:string (trim (substring spec (sl + 1) (strlen spec)))
+        if (((EVGGridPlacement.isNumericToken(a)) == false) || ((EVGGridPlacement.isNumericToken(b)) == false)) {
+            return spec
+        }
+        def s:int (EVGGridPlacement.lineNumber(a))
+        def e:int (EVGGridPlacement.lineNumber(b))
+        if (s < 1) {
+            s = 1
+        }
+        if (e > last) {
+            e = last
+        }
+        if (s > last) {
+            s = last
+        }
+        if (e < 1) {
+            e = 1
+        }
+        if (s == e) {
+            if (e < last) {
+                e = (e + 1)
+            } {
+                s = (s - 1)
+            }
+        }
+        return (((to_string s) + " / ") + (to_string e))
+    }
+
     sfn shiftedPlacement:string (spec:string tplSpec:string areas:string isRow:boolean lead:int) {
         def r:[int] (EVGLayoutFull.rawLines(spec tplSpec areas isRow))
         if ((array_length r) == 0) {
@@ -4417,11 +4452,20 @@ class EVGLayoutFull {
     fn gridLeadingLines:double (lay:EVGLayout parent:EVGElement) {
         def cTpl:string parent.gridTemplateColumns
         def rTpl:string parent.gridTemplateRows
-        if ((cTpl == "subgrid") || (rTpl == "subgrid")) {
+        ; (a column subgrid's lines are the ones its enclosing grid handed
+        ; it, names and all; it has none before them, CSS Grid 2 9)
+        def subC:boolean ((cTpl == "subgrid") && ((strlen parent.subgridColumnSpec) > 0))
+        if (rTpl == "subgrid") {
+            return -1.0
+        }
+        if ((cTpl == "subgrid") && (subC == false)) {
             return -1.0
         }
         ; (lines are counted on the auto repeats as the core expands them)
         def cLines:string cTpl
+        if subC {
+            cLines = parent.subgridColumnSpec
+        }
         def rLines:string rTpl
         if (((indexOf cTpl "auto-f") >= 0) || ((indexOf rTpl "auto-f") >= 0)) {
             def gaps:[double] (lay.gridGaps(parent parent.calculatedInnerWidth parent.calculatedInnerHeight))
@@ -4431,6 +4475,9 @@ class EVGLayoutFull {
             }
         }
         def nc:int ((EVGGridTemplate.parse(cTpl)).count())
+        if subC {
+            nc = ((EVGGridTemplate.parse(cLines)).count())
+        }
         if ((strlen cTpl) == 0) {
             nc = 0
         }
@@ -4465,6 +4512,9 @@ class EVGLayoutFull {
             i = (i + 1)
         }
         def leadC:int (1 - minC)
+        if subC {
+            leadC = 0
+        }
         def leadR:int (1 - minR)
         ; (lines counted from the end, or the nth of a name, are of the
         ; explicit grid, which the core no longer tells from the implicit
@@ -4501,6 +4551,11 @@ class EVGLayoutFull {
             if ((c.hasAbsolutePosition()) == false) {
                 if ((leadC > 0) || needC) {
                     c.gridColumn = (EVGLayoutFull.shiftedPlacement(c.gridColumn cLines parent.gridTemplateAreas false leadC))
+                    ; (a subgrid has no implicit lines: a placement is held
+                    ; to its own, CSS Grid 2 9)
+                    if subC {
+                        c.gridColumn = (EVGLayoutFull.clampedPlacement(c.gridColumn (nc + 1)))
+                    }
                 }
                 if ((leadR > 0) || needR) {
                     c.gridRow = (EVGLayoutFull.shiftedPlacement(c.gridRow rLines parent.gridTemplateAreas true leadR))
@@ -4637,7 +4692,7 @@ class EVGLayoutFull {
                             pp.start = (pp.start + (1 - minL))
                         }
                     } {
-                        pp.resolveNames((EVGGridTemplate.parse(parent.gridTemplateColumns)))
+                        pp.resolveNames((EVGGridTemplate.parse((EVGLayout.colTemplateOf(parent)))))
                     }
                 } {
                     ; (a plain line moves on past the leading tracks)
