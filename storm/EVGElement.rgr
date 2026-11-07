@@ -1840,14 +1840,34 @@ class EVGElement {
     ; a fixed box is not content, it is furniture over the viewport, and the
     ; whole point of the mode is that the page slides under it.
     fn moveSubtreeUnfixed:void (dx:double dy:double) {
+        this.moveUnfixedIn(dx dy 1)
+    }
+
+    ; How many clips around it, the nearest ones, an absolute or fixed box
+    ; is out of (EVGCssExtra escape-clip), 0 for any other.
+    fn escapeClips:int () {
+        if (null? css) {
+            return 0
+        }
+        def x:EVGCssExtra (unwrap css)
+        return x.escapeClip
+    }
+
+    ; (`depth`: the clips from the scrolled one down to here, which a box
+    ; out of that many is not moved by)
+    fn moveUnfixedIn:void (dx:double dy:double depth:int) {
         this.moveSelf(dx dy)
+        def inner:int depth
+        if (this.clipsContent()) {
+            inner = (depth + 1)
+        }
         def i:int 0
         def n:int (array_length children)
         while (i < n) {
             def kid:EVGElement (itemAt children i)
-            if (kid.isFixedPosition()) {
+            if ((kid.isFixedPosition()) || ((kid.escapeClips()) >= inner)) {
             } {
-                kid.moveSubtreeUnfixed(dx dy)
+                kid.moveUnfixedIn(dx dy inner)
             }
             i = (i + 1)
         }

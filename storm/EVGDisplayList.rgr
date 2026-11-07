@@ -333,6 +333,12 @@ class EVGDisplayList {
     ; How many turns the walk is inside. A clip is a scissor rectangle and
     ; a turn cannot be written into one, so inside a turn there is no clip.
     def turnedDepth:int 0
+    ; clips open on the way down, and the absolute / fixed boxes out of some
+    ; of them (escape-clip), each to be drawn when its clips are closed, at
+    ; that many open ones
+    def openClips:int 0
+    def escEls:[EVGElement]
+    def escLevel:[int]
     ; The same engine layout measured with. A paragraph is emitted one command
     ; per LINE, broken exactly where layout broke it — a backend that got the
     ; whole string would draw one long run straight out of its box, which is
@@ -2949,6 +2955,9 @@ class EVGDisplayList {
         fixedOY = root.calculatedY
         this.readEffect(root)
         this.collectEffects(root)
+        openClips = 0
+        clear escEls
+        clear escLevel
         this.walk(root)
         def i:int 0
         while (i < (array_length deferredOverlays)) {
@@ -3469,6 +3478,42 @@ class EVGDisplayList {
         c.g2 = (to.green())
         c.b2 = (to.blue())
         c.a2 = (to.alpha())
+    }
+
+    ; the boxes out of the clips just closed: those for this many open ones
+    fn walkEscaped:void () {
+        if ((array_length escEls) == 0) {
+            return
+        }
+        def now:[EVGElement]
+        def keepEls:[EVGElement]
+        def keepAt:[int]
+        def k:int 0
+        while (k < (array_length escEls)) {
+            if ((itemAt escLevel k) >= openClips) {
+                push now (itemAt escEls k)
+            } {
+                push keepEls (itemAt escEls k)
+                push keepAt (itemAt escLevel k)
+            }
+            k = (k + 1)
+        }
+        if ((array_length now) == 0) {
+            return
+        }
+        clear escEls
+        clear escLevel
+        k = 0
+        while (k < (array_length keepEls)) {
+            push escEls (itemAt keepEls k)
+            push escLevel (itemAt keepAt k)
+            k = (k + 1)
+        }
+        k = 0
+        while (k < (array_length now)) {
+            this.walk((itemAt now k))
+            k = (k + 1)
+        }
     }
 
     fn walk:void (el:EVGElement) {
@@ -4175,6 +4220,7 @@ class EVGDisplayList {
                 push layerLabel (0 - 1)
             }
             this.addCmd(cp)
+            openClips = (openClips + 1)
         }
         ; The clip narrows what is worth walking, and it is restored on the
         ; way out — the recursion is the stack. See the note on culling above.
@@ -4216,6 +4262,16 @@ class EVGDisplayList {
         def late:[EVGElement]
         while (i < (el.getChildCount())) {
             def kid:EVGElement (el.getChild(i))
+            ; (a box out of the clips around it is drawn when they close)
+            def esc:int (kid.escapeClips())
+            if ((esc > 0) && (openClips > 0)) {
+                def at:int (openClips - esc)
+                if (at < 0) {
+                    at = 0
+                }
+                push escEls kid
+                push escLevel at
+            } {
             ; A surface is not drawn here. `build` comes back to it once the
             ; whole normal tree is down — see the note there.
             if (kid.isSurface()) {
@@ -4226,6 +4282,7 @@ class EVGDisplayList {
                 } {
                     this.walk(kid)
                 }
+            }
             }
             i = (i + 1)
         }
@@ -4260,6 +4317,8 @@ class EVGDisplayList {
             if (scrolls && scrollbars) {
                 this.addScrollbar(el x y w h)
             }
+            openClips = (openClips - 1)
+            this.walkEscaped()
         }
         backdropR = hadBdR
         backdropG = hadBdG
