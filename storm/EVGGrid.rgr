@@ -1468,7 +1468,10 @@ class EVGGridPlacement {
                 start = n
                 startName = ""
             } {
-                this.rejectName(startName)
+                ; (a name no line has: every implicit line has it, and the
+                ; first is the one past the explicit grid, CSS Grid 8.3)
+                start = (lines + 1)
+                startName = ""
             }
         }
         if ((strlen endName) > 0) {
@@ -1477,7 +1480,8 @@ class EVGGridPlacement {
                 endLine = e
                 endName = ""
             } {
-                this.rejectName(endName)
+                endLine = (lines + 1)
+                endName = ""
             }
         }
         this.applyEndLine()
