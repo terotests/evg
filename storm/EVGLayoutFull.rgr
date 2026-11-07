@@ -61,14 +61,34 @@ class EVGLayoutFull {
             return
         }
         sawSticky = false
-        this.stickyIn(lay root root)
+        def ports:[EVGElement]
+        push ports root
+        this.stickyIn(lay ports root)
     }
 
-    fn stickyIn:void (lay:EVGLayout port:EVGElement el:EVGElement) {
+    ; (`ports`: the scroll containers around, the nearest last; a box out
+    ; of some of their clips, escape-clip, is not in them)
+    fn stickyIn:void (lay:EVGLayout ports:[EVGElement] el:EVGElement) {
         def n:int (el.getChildCount())
         def i:int 0
         while (i < n) {
             def c:EVGElement (el.getChild(i))
+            def cports:[EVGElement] ports
+            def esc:int (c.escapeClips())
+            if (esc > 0) {
+                def outer:[EVGElement]
+                def keep:int ((array_length ports) - esc)
+                if (keep < 1) {
+                    keep = 1
+                }
+                def pk:int 0
+                while (pk < keep) {
+                    push outer (itemAt ports pk)
+                    pk = (pk + 1)
+                }
+                cports = outer
+            }
+            def port:EVGElement (itemAt cports ((array_length cports) - 1))
             if (!null? c.css) {
                 def sx:EVGCssExtra (EVGLayoutFull.cx(c))
                 def dx:double 0.0
@@ -118,7 +138,17 @@ class EVGLayoutFull {
                     def edgeR:double ((((port.calculatedX + port.calculatedWidth) - port.box.borderWidthPx) - sx.stickyRight) - (c.calculatedX + c.calculatedWidth))
                     if (edgeR < 0.0) {
                         dx = edgeR
-                        def upX:double ((((el.calculatedX + el.box.borderWidthPx) + el.box.paddingLeftPx) + c.box.marginLeftPx) - c.calculatedX)
+                        ; (a line-join margin is the line's gap taken back,
+                        ; not a margin of the box)
+                        def mlX:double c.box.marginLeftPx
+                        if (sx.lineJoin && (el.columnGap.isSet || el.gap.isSet)) {
+                            def jg:double el.gap.pixels
+                            if el.columnGap.isSet {
+                                jg = el.columnGap.pixels
+                            }
+                            mlX = (mlX + jg)
+                        }
+                        def upX:double ((((el.calculatedX + el.box.borderWidthPx) + el.box.paddingLeftPx) + mlX) - c.calculatedX)
                         if (dx < upX) {
                             dx = upX
                         }
@@ -134,9 +164,16 @@ class EVGLayoutFull {
                 }
             }
             if ((c.clipsContent()) && (c.overflow != "clip")) {
-                this.stickyIn(lay c c)
+                def inner:[EVGElement]
+                def pi:int 0
+                while (pi < (array_length cports)) {
+                    push inner (itemAt cports pi)
+                    pi = (pi + 1)
+                }
+                push inner c
+                this.stickyIn(lay inner c)
             } {
-                this.stickyIn(lay port c)
+                this.stickyIn(lay cports c)
             }
             i = (i + 1)
         }

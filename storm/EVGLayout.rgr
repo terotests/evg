@@ -1261,7 +1261,7 @@ class EVGLayout {
         def j:int 0
         while (j < (el.getChildCount())) {
             def moved:EVGElement (el.getChild(j))
-            if (moved.isFixedPosition()) {
+            if ((moved.isFixedPosition()) || ((moved.escapeClips()) > 0)) {
             } {
                 moved.moveSubtreeUnfixed((0.0 - el.scrollLeft) (0.0 - el.scrollTop))
             }
@@ -1309,7 +1309,7 @@ class EVGLayout {
         }
         def j:int 0
         while (j < (el.getChildCount())) {
-            this.shiftNear((el.getChild(j)) dx dy el)
+            this.shiftNear((el.getChild(j)) dx dy el 1)
             j = (j + 1)
         }
         el.appliedScrollTop = el.scrollTop
@@ -1331,11 +1331,15 @@ class EVGLayout {
     ; was owed one and has come near pays it together with this one. On a
     ; document of a thousand rows a frame touches the rows near the viewport
     ; and one node per row elsewhere, not every box in the document.
-    fn shiftNear:void (kid:EVGElement dx:double dy:double clip:EVGElement) {
+    fn shiftNear:void (kid:EVGElement dx:double dy:double clip:EVGElement depth:int) {
         ; A FIXED BOX IS NOT SCROLLED, here either. `applyScroll` steps over it
         ; on a full layout and this is the incremental path; a rule kept in one
         ; of the two is a rule that holds until the frame after the first one.
         if (kid.isFixedPosition()) {
+            return
+        }
+        ; (nor a box out of the clips it is under, `depth` of them)
+        if ((kid.escapeClips()) >= depth) {
             return
         }
         kid.moveSelf(dx dy)
@@ -1347,7 +1351,11 @@ class EVGLayout {
             def i:int 0
             def n:int (kid.getChildCount())
             while (i < n) {
-                this.shiftNear((kid.getChild(i)) tx ty clip)
+                def kd:int depth
+                if (kid.clipsContent()) {
+                    kd = (depth + 1)
+                }
+                this.shiftNear((kid.getChild(i)) tx ty clip kd)
                 i = (i + 1)
             }
             return

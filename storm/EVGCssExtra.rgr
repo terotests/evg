@@ -112,6 +112,10 @@ class EVGCssExtra {
     ; a sticky box's top / left inset (sticky-top, sticky-left: px), kept
     ; from its scrollport's edge at scroll position 0; -1: none
     def stickyTop:double -1.0
+    ; an absolute or fixed box out of the clips of this many boxes around
+    ; it, the nearest ones: drawn after them and not moved by their scroll
+    ; (escape-clip: n)
+    def escapeClip:int 0
     def stickyLeft:double -1.0
     def stickyBottom:double -1.0
     def stickyRight:double -1.0
@@ -157,7 +161,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || ((name == "contain-w") || ((name == "grid-lanes") || (name == "lanes-tolerance")))))))))))))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "escape-clip") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || ((name == "contain-w") || ((name == "grid-lanes") || (name == "lanes-tolerance"))))))))))))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -237,6 +241,10 @@ class EVGCssExtra {
         }
         if (name == "float-holder") {
             floatHolder = (value == "true")
+            return
+        }
+        if (name == "escape-clip") {
+            escapeClip = (?? (to_int value) 0)
             return
         }
         if (name == "sticky-top") {
@@ -405,6 +413,7 @@ class EVGCssExtra {
         c.pctAuto = pctAuto
         c.containW = containW
         c.stickyTop = stickyTop
+        c.escapeClip = escapeClip
         c.stickyLeft = stickyLeft
         c.stickyBottom = stickyBottom
         c.stickyRight = stickyRight
