@@ -6165,8 +6165,9 @@ class EVGLayout {
         ; named row line is reported as unknown — which is the truth.
         def rowTemplateSpec:string parent.gridTemplateRows
         if (rowTemplateSpec == "subgrid") {
-            ; Inherited tracks carry no names of their own.
-            rowTemplateSpec = ""
+            ; (the names of the enclosing grid's lines it spans, CSS Grid 2
+            ; 9; "" when they have none)
+            rowTemplateSpec = parent.subgridRowSpec
         }
         ; repeat(auto-fill / auto-fit) down the rows: as many as the height
         ; holds, a definite one, else max-height, else min-height
@@ -6850,6 +6851,8 @@ class EVGLayout {
                     }
                     if isRowSubgrid {
                         it.subgridRowGap = rowGapPx
+                        def noRows:[double]
+                        it.subgridRowSpec = (EVGLayout.subgridSpec(rowTemplate ri rspanM noRows ""))
                     }
                     this.layoutElement(it 0.0 0.0 avail 0.0)
                     if pctH {
@@ -7254,6 +7257,7 @@ class EVGLayout {
             if (el.gridTemplateRows == "subgrid") {
                 clear el.subgridRowSizes
                 el.subgridRowGap = rowGapPx
+                el.subgridRowSpec = ""
                 def sgOwnR:double (itemAt (this.gridGaps(el boxW boxH)) 1)
                 def sgHalfR:double ((sgOwnR - rowGapPx) / 2.0)
                 def sgj:int 0
@@ -7280,6 +7284,7 @@ class EVGLayout {
                     }
                     sgj = (sgj + 1)
                 }
+                el.subgridRowSpec = (EVGLayout.subgridSpec(rowTemplate rIdx rSpan el.subgridRowSizes ""))
             }
 
 

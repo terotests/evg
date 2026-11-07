@@ -769,6 +769,7 @@ class EVGElement {
     ; names and all
     def subgridOwnColumnNames:string ""
     def subgridColumnSpec:string ""
+    def subgridRowSpec:string ""
     def subgridRowGap:double -1.0
     ; The row heights this element's own grid worked out, left behind for an
     ; enclosing grid to read. A row subgrid always spans several of its
@@ -3558,6 +3559,7 @@ class EVGElement {
         subgridColumnGap = other.subgridColumnGap
         subgridOwnColumnNames = other.subgridOwnColumnNames
         subgridColumnSpec = other.subgridColumnSpec
+        subgridRowSpec = other.subgridRowSpec
         subgridRowGap = other.subgridRowGap
         computedRowSizes = other.computedRowSizes
         subgridPending = other.subgridPending
