@@ -36,6 +36,7 @@ export function cmdsOf(dl) {
     o.h = c.h;
     if (c.perCorner) o.rc = [c.radius, c.radiusTR, c.radiusBR, c.radiusBL];
     if (c.radius > 0) o.r = c.radius;
+    if (c.smooth) o.aa = 1;
     if (c.thickness > 0) {
       o.t = c.thickness;
       // Guarded, not just compared: this reads the Ranger object off a

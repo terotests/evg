@@ -339,9 +339,10 @@ function ringsPath(c, close) {
 // A square-cornered box that is not turned is drawn on whole pixels, its
 // edges where the pixel centres inside it end, as Chromium snaps a box's
 // background and borders to device pixels: no half-covered pixel row at a
-// fractional edge.
+// fractional edge. A dash or dot of a dashed or dotted border (aa) keeps
+// its smooth ends, as Chromium draws them.
 function crisp(c, r) {
-  return !c.rot && !(r[0] || r[1] || r[2] || r[3]) ? ` shape-rendering="crispEdges"` : "";
+  return !c.rot && !c.aa && !(r[0] || r[1] || r[2] || r[3]) ? ` shape-rendering="crispEdges"` : "";
 }
 
 function rotAttr(c) {
