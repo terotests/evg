@@ -133,6 +133,12 @@ class EVGCssExtra {
     def bgRepeat:string ""
     def bgPos:string ""
     def bgSize:string ""
+    ; background-attachment: fixed (a seventh part, `fixed vw vh`): the
+    ; positioning area is the viewport, of that width and height, and not
+    ; the box
+    def bgFixed:boolean false
+    def bgVw:double 0.0
+    def bgVh:double 0.0
     def sideBorders:boolean false
     def sbW:[double]
     def sbC:[EVGColor]
@@ -283,7 +289,15 @@ class EVGCssExtra {
         }
         if (name == "bg-picture") {
             def bp:[string] (strsplit value "|")
-            if ((array_length bp) == 6) {
+            if ((array_length bp) == 7) {
+                def fp:[string] (strsplit (trim (itemAt bp 6)) " ")
+                if (((array_length fp) == 3) && ((itemAt fp 0) == "fixed")) {
+                    bgFixed = true
+                    bgVw = (EVGCssExtra.num((itemAt fp 1)))
+                    bgVh = (EVGCssExtra.num((itemAt fp 2)))
+                }
+            }
+            if ((array_length bp) >= 6) {
                 bgSrc = (itemAt bp 0)
                 bgNatW = (EVGCssExtra.num((itemAt bp 1)))
                 bgNatH = (EVGCssExtra.num((itemAt bp 2)))

@@ -458,6 +458,14 @@ class EVGDisplayList {
         def py:double (y + bt)
         def pw:double ((w - bl) - br)
         def ph:double ((h - bt) - bb)
+        ; (fixed: the viewport's, from the root's corner; it is still
+        ; painted over this box only)
+        if (bx.bgFixed && (bx.bgVw > 0.0) && (bx.bgVh > 0.0)) {
+            px = fixedOX
+            py = fixedOY
+            pw = bx.bgVw
+            ph = bx.bgVh
+        }
         ; the tile's size
         def tw:double bx.bgNatW
         def th:double bx.bgNatH
@@ -2840,6 +2848,9 @@ class EVGDisplayList {
     ; How much bigger or smaller than its layout box this subtree will be
     ; drawn, from the transforms above it. One on a page that does not zoom.
     def drawScale:double 1.0
+    ; the viewport's corner a fixed background is placed from (the root's)
+    def fixedOX:double 0.0
+    def fixedOY:double 0.0
     def cullOn:boolean false
     def cullLeft:double 0.0
     def cullTop:double 0.0
@@ -2934,6 +2945,8 @@ class EVGDisplayList {
         clear fxParamCount
         clear fxParamNames
         clear fxParamValues
+        fixedOX = root.calculatedX
+        fixedOY = root.calculatedY
         this.readEffect(root)
         this.collectEffects(root)
         this.walk(root)
