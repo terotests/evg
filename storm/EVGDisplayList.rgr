@@ -88,6 +88,9 @@ class EVGDrawCmd {
     def radiusBR:double 0.0
     def radiusBL:double 0.0
     def thickness:double 0.0
+    ; A dash of a dashed border: drawn with smooth (antialiased)
+    ; ends, where a painter puts a plain box on whole pixels.
+    def smooth:boolean false
     ; Colour, pre-resolved to 0-255 + alpha 0-1 so a backend needs no EVGColor.
     def r:int 0
     def g:int 0
@@ -603,7 +606,10 @@ class EVGDisplayList {
     ; gaps (2t and t from 3px); the gap is stretched so that the side starts
     ; and ends with a dot or dash (Blink's StrokeData::SelectBestDashGap).
     ; Solid sides keep their place between the top and bottom.
-    fn addStyledSide:void (sx:double sy:double len:double t:double horiz:boolean sc:EVGColor style:string) {
+    fn addStyledSide:void (sxIn:double syIn:double lenIn:double t:double horiz:boolean sc:EVGColor style:string) {
+        def sx:double sxIn
+        def sy:double syIn
+        def len:double lenIn
         if ((t <= 0.0) || (len <= 0.0)) {
             return
         }
@@ -616,6 +622,22 @@ class EVGDisplayList {
             return
         }
         if ((sc.alpha()) <= 0.0) {
+            return
+        }
+        ; (the side on whole pixels, as Chromium snaps the border box before
+        ; it lays the dashes along it)
+        def sx0:double sxIn
+        def sy0:double syIn
+        if horiz {
+            sx = (to_double (floor (sx0 + 0.5)))
+            len = ((to_double (floor ((sx0 + len) + 0.5))) - sx)
+            sy = (to_double (floor (sy0 + 0.5)))
+        } {
+            sy = (to_double (floor (sy0 + 0.5)))
+            len = ((to_double (floor ((sy0 + len) + 0.5))) - sy)
+            sx = (to_double (floor (sx0 + 0.5)))
+        }
+        if (len <= 0.0) {
             return
         }
         def dash:double t
@@ -677,6 +699,7 @@ class EVGDisplayList {
             if round {
                 c.radius = (t / 2.0)
             }
+            c.smooth = (style == "dashed")
             c.r = (sc.red())
             c.g = (sc.green())
             c.b = (sc.blue())
@@ -4373,6 +4396,10 @@ class EVGDisplayList {
             if c2.hasCrop {
                 flags = (flags + 256)
             }
+            ; A dash or dot of a border, smooth along the side.
+            if c2.smooth {
+                flags = (flags + 512)
+            }
             int_buffer_set recs (base + 9) flags
             int_buffer_set recs (base + 10) c2.gradDir
             int_buffer_set recs (base + 11) (EVGDisplayList.packRgb(c2.r2 c2.g2 c2.b2))
@@ -4787,6 +4814,9 @@ class EVGDisplayList {
             }
             if (c.radius > 0.0) {
                 co = co + ",\"r\":" + (EVGDisplayList.num(c.radius))
+            }
+            if c.smooth {
+                co = co + ",\"aa\":1"
             }
             if (c.thickness > 0.0) {
                 co = co + ",\"t\":" + (EVGDisplayList.num(c.thickness))

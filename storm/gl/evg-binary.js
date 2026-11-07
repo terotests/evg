@@ -78,6 +78,7 @@ export function cmdsOfBinary(bin) {
     const radius = r[b + 5] / 100;
     if (flags & 64) o.rc = [radius, r[b + 27] / 100, r[b + 28] / 100, r[b + 29] / 100];
     if (radius > 0) o.r = radius;
+    if (flags & 512) o.aa = 1;
     const t = r[b + 6] / 100;
     if (t > 0) {
       o.t = t;
