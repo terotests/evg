@@ -1462,6 +1462,30 @@ class EVGGridPlacement {
             endName = ""
             endNth = 0
         }
+        ; (a lone name is both sides: "top" is top-start / top-end, CSS
+        ; Grid 8.4)
+        if ((((strlen startName) > 0) && (startNth == 0)) && ((((strlen endName) == 0) && (endNth == 0)) && ((endLine == 0) && (spanExplicit == false)))) {
+            def lone:int (tpl.lineNumberNamed((startName + "-end")))
+            if (lone > 0) {
+                endLine = lone
+            }
+        }
+        ; (a name first matches an area's edge, its -start or -end line,
+        ; CSS Grid 8.3)
+        if ((strlen startName) > 0) {
+            def na:int (tpl.lineNumberNamed((startName + "-start")))
+            if (na > 0) {
+                start = na
+                startName = ""
+            }
+        }
+        if ((strlen endName) > 0) {
+            def ea:int (tpl.lineNumberNamed((endName + "-end")))
+            if (ea > 0) {
+                endLine = ea
+                endName = ""
+            }
+        }
         if ((strlen startName) > 0) {
             def n:int (tpl.lineNumberNamed(startName))
             if (n > 0) {
