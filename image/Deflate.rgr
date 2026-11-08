@@ -48,22 +48,29 @@ class DeflateWriter {
         }
     }
 
-    ; Header fields and extra bits: least significant bit first.
+    ; Header fields and extra bits: least significant bit first. The value is
+    ; added to the accumulator whole and full bytes are written out.
     fn bits:void (value:int count:int) {
-        def i:int 0
-        while (i < count) {
-            this.putBit((bit_and (bit_shr value i) 1))
-            i = (i + 1)
+        def v:int (bit_and value ((bit_shl 1 count) - 1))
+        acc = (bit_or acc (bit_shl v nbits))
+        nbits = (nbits + count)
+        while (nbits >= 8) {
+            out.writeByte((bit_and acc 255))
+            acc = (bit_shr acc 8)
+            nbits = (nbits - 8)
         }
     }
 
-    ; A Huffman code: most significant bit first.
+    ; A Huffman code: most significant bit first, so it is reversed and
+    ; written as plain bits.
     fn huff:void (code:int count:int) {
-        def i:int (count - 1)
-        while (i >= 0) {
-            this.putBit((bit_and (bit_shr code i) 1))
-            i = (i - 1)
+        def r:int 0
+        def i:int 0
+        while (i < count) {
+            r = (bit_or (bit_shl r 1) (bit_and (bit_shr code i) 1))
+            i = (i + 1)
         }
+        this.bits(r count)
     }
 
     fn align:void () {
@@ -88,6 +95,11 @@ class Deflate {
     def head:[int]
     def hashBits:int 15
     def hashSize:int 32768
+    ; `head` holds pos + headBase. A compressor used for many streams (a PDF
+    ; writes one per page) moves headBase past the last stream instead of
+    ; refilling 32768 slots: anything below it is from an earlier stream and
+    ; counts as empty.
+    def headBase:int 0
 
     Constructor () {
         push lenBase 3
@@ -274,12 +286,17 @@ class Deflate {
 
     ; One fixed-Huffman block over the whole input. `w` is left byte-aligned.
     fn compress:void (src:buffer n:int w:DeflateWriter) {
-        clear head
-        def i:int 0
-        while (i < hashSize) {
-            push head -1
-            i = (i + 1)
+        ; 2^30 keeps pos + headBase inside a 32-bit int on every target
+        if (((array_length head) != hashSize) || ((headBase + n) > 1073741824)) {
+            clear head
+            def i:int 0
+            while (i < hashSize) {
+                push head -1
+                i = (i + 1)
+            }
+            headBase = 0
         }
+        def base:int headBase
         ; BFINAL = 1, BTYPE = 01 (fixed Huffman)
         w.bits(1 1)
         w.bits(1 2)
@@ -290,8 +307,8 @@ class Deflate {
             def bestDist:int 0
             if ((pos + 3) <= n) {
                 def h:int (Deflate.hash3((buffer_get src pos) (buffer_get src (pos + 1)) (buffer_get src (pos + 2))))
-                def cand:int (itemAt head h)
-                set head h pos
+                def cand:int ((itemAt head h) - base)
+                set head h (pos + base)
                 if (cand >= 0) {
                     def dist:int (pos - cand)
                     if ((dist > 0) && (dist <= 32768)) {
@@ -322,7 +339,7 @@ class Deflate {
                     def at:int (pos + j)
                     if ((at + 3) <= n) {
                         def h2:int (Deflate.hash3((buffer_get src at) (buffer_get src (at + 1)) (buffer_get src (at + 2))))
-                        set head h2 at
+                        set head h2 (at + base)
                     }
                     j = (j + 1)
                 }
@@ -335,5 +352,6 @@ class Deflate {
         ; End of block, then pad to a byte so the adler can follow.
         this.literal(w 256)
         w.align()
+        headBase = (base + n + 1)
     }
 }
