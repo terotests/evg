@@ -48,21 +48,36 @@ class GrowableBuffer {
     }
     
     fn writeByte:void (b:int) {
-        if (currentChunk.isFull()) {
+        def c:BufferChunk currentChunk
+        if (c.used >= c.capacity) {
             this.allocateNewChunk()
+            c = currentChunk
         }
-        def pos:int currentChunk.used
-        buffer_set currentChunk.data pos b
-        currentChunk.used = pos + 1
+        def pos:int c.used
+        buffer_set c.data pos b
+        c.used = pos + 1
         totalSize = totalSize + 1
     }
     
+    ; Copied a chunk's worth at a time.
     fn writeBytes:void (src:buffer srcOffset:int length:int) {
-        def i 0
-        while (i < length) {
-            def b:int (buffer_get src (srcOffset + i))
-            this.writeByte(b)
-            i = i + 1
+        def at:int srcOffset
+        def end:int (srcOffset + length)
+        while (at < end) {
+            def c:BufferChunk currentChunk
+            if (c.used >= c.capacity) {
+                this.allocateNewChunk()
+                c = currentChunk
+            }
+            def take:int (c.capacity - c.used)
+            if (take > (end - at)) {
+                take = (end - at)
+            }
+            def u:int c.used
+            buffer_copy c.data u src at take
+            c.used = (u + take)
+            totalSize = (totalSize + take)
+            at = (at + take)
         }
     }
     
@@ -122,13 +137,8 @@ class GrowableBuffer {
         
         while (done == false) {
             def chunkUsed:int chunk.used
-            def i 0
-            while (i < chunkUsed) {
-                def b:int (buffer_get chunk.data i)
-                buffer_set result pos b
-                pos = pos + 1
-                i = i + 1
-            }
+            buffer_copy result pos chunk.data 0 chunkUsed
+            pos = pos + chunkUsed
             if (null? chunk.next) {
                 done = true
             } {

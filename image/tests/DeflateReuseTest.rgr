@@ -1,0 +1,67 @@
+; SPDX-License-Identifier: MIT
+; One Deflate and one GrowableBuffer used for many inputs: every stream must
+; inflate back to its input (check_deflate_reuse.py next to this checks the output).
+; Writes one line per stream: the input as hex, then the raw deflate as hex.
+
+Import "../Deflate.rgr"
+Import "../Buffer.rgr"
+
+class DeflateReuseTest {
+    sfn hex:string (b:buffer) {
+        def digits:string "0123456789abcdef"
+        def out:string ""
+        def i:int 0
+        while (i < (buffer_length b)) {
+            def v:int (buffer_get b i)
+            out = out + (substring digits (idiv v 16) ((idiv v 16) + 1)) + (substring digits (v % 16) ((v % 16) + 1))
+            i = i + 1
+        }
+        return out
+    }
+
+    sfn sample:buffer (seed:int n:int) {
+        def b:buffer (buffer_alloc n)
+        def x:int seed
+        def i:int 0
+        while (i < n) {
+            x = ((x * 1103) + 12345) % 65536
+            ; mostly a small alphabet, so there are matches to find
+            buffer_set b i (97 + (x % 7))
+            if ((i % 50) == 0) {
+                buffer_set b i (x % 256)
+            }
+            i = i + 1
+        }
+        return b
+    }
+
+    sfn m@(main):void () {
+        def d (new Deflate)
+        def sizes:[int]
+        push sizes 0
+        push sizes 1
+        push sizes 3
+        push sizes 300
+        push sizes 5000
+        push sizes 70000
+        push sizes 17
+        def k:int 0
+        while (k < (array_length sizes)) {
+            def src:buffer (DeflateReuseTest.sample((k + 1) (itemAt sizes k)))
+            def w (new DeflateWriter)
+            d.compress(src (buffer_length src) w)
+            w.align()
+            print ((DeflateReuseTest.hex(src)) + " " + (DeflateReuseTest.hex((w.out.toBuffer()))))
+            k = k + 1
+        }
+        ; GrowableBuffer: writeBytes across chunk boundaries, mixed with writeByte
+        def g (new GrowableBuffer)
+        g.setChunkSize(7)
+        def expect:buffer (DeflateReuseTest.sample(99 40))
+        g.writeByte((buffer_get expect 0))
+        g.writeBytes(expect 1 20)
+        g.writeByte((buffer_get expect 21))
+        g.writeBuffer((buffer_slice expect 22 40))
+        print ("buffer " + (DeflateReuseTest.hex(expect)) + " " + (DeflateReuseTest.hex((g.toBuffer()))) + " " + (to_string (g.size())))
+    }
+}
