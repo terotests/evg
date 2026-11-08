@@ -98,6 +98,9 @@ class EVGLayoutFull {
                     if (c.calculatedX < wantX) {
                         dx = (wantX - c.calculatedX)
                         def roomX:double ((((el.calculatedX + el.calculatedWidth) - el.box.borderWidthPx) - el.box.paddingRightPx) - ((c.calculatedX + c.calculatedWidth) + c.box.marginRightPx))
+                        if ((el == port) && (el.scrollWidth > 0.0)) {
+                            roomX = (EVGLayoutFull.stickyMax(roomX (((((el.calculatedX + el.box.borderWidthPx) - el.scrollLeft) + el.scrollWidth) - el.box.paddingRightPx) - ((c.calculatedX + c.calculatedWidth) + c.box.marginRightPx))))
+                        }
                         if (dx > roomX) {
                             dx = roomX
                         }
@@ -111,6 +114,11 @@ class EVGLayoutFull {
                     if (c.calculatedY < wantY) {
                         dy = (wantY - c.calculatedY)
                         def roomY:double ((((el.calculatedY + el.calculatedHeight) - el.box.borderWidthPx) - el.box.paddingBottomPx) - ((c.calculatedY + c.calculatedHeight) + c.box.marginBottomPx))
+                        ; (in its scroll container itself, the block is the
+                        ; scrolled content, as tall as it reaches)
+                        if ((el == port) && (el.scrollHeight > 0.0)) {
+                            roomY = (EVGLayoutFull.stickyMax(roomY (((((el.calculatedY + el.box.borderWidthPx) - el.scrollTop) + el.scrollHeight) - el.box.paddingBottomPx) - ((c.calculatedY + c.calculatedHeight) + c.box.marginBottomPx))))
+                        }
                         if (dy > roomY) {
                             dy = roomY
                         }
@@ -177,6 +185,13 @@ class EVGLayoutFull {
             }
             i = (i + 1)
         }
+    }
+
+    sfn stickyMax:double (a:double b:double) {
+        if (a > b) {
+            return a
+        }
+        return b
     }
 
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
@@ -5097,8 +5112,34 @@ class EVGLayoutFull {
         }
         ; down each line
         def jc:string parent.justifyContent
+        ; (each line's items and auto margins along it)
+        def lineItems:[int]
+        def lineAutos:[int]
+        def l4:int 0
+        while (l4 < lineCount) {
+            push lineItems 0
+            push lineAutos 0
+            l4 = (l4 + 1)
+        }
+        def m4:int 0
+        while (m4 < cnt) {
+            def it4:EVGElement (itemAt items m4)
+            def ln4:int (itemAt lineOf m4)
+            set lineItems ln4 ((itemAt lineItems ln4) + 1)
+            def au4:int 0
+            if it4.marginAutoTop {
+                au4 = (au4 + 1)
+            }
+            if it4.marginAutoBottom {
+                au4 = (au4 + 1)
+            }
+            set lineAutos ln4 ((itemAt lineAutos ln4) + au4)
+            m4 = (m4 + 1)
+        }
         def y:double 0.0
         def line:int -1
+        def between:double 0.0
+        def perAuto:double 0.0
         def m:int 0
         while (m < cnt) {
             def it:EVGElement (itemAt items m)
@@ -5107,8 +5148,36 @@ class EVGLayoutFull {
             if (ln != line) {
                 line = ln
                 def free:double (limit - (itemAt lineMain ln))
+                def nIn:int (itemAt lineItems ln)
                 y = 0.0
+                between = 0.0
+                perAuto = 0.0
                 if (free > 0.0) {
+                    ; (auto margins take the free space first, CSS Flexbox
+                    ; 8.1)
+                    if ((itemAt lineAutos ln) > 0) {
+                        perAuto = (free / (to_double (itemAt lineAutos ln)))
+                    } {
+                        if (jc == "center") {
+                            y = (free / 2.0)
+                        }
+                        if ((jc == "flex-end") || (jc == "end")) {
+                            y = free
+                        }
+                        if ((jc == "space-between") && (nIn > 1)) {
+                            between = (free / (to_double (nIn - 1)))
+                        }
+                        if (jc == "space-around") {
+                            between = (free / (to_double nIn))
+                            y = (between / 2.0)
+                        }
+                        if (jc == "space-evenly") {
+                            between = (free / (to_double (nIn + 1)))
+                            y = between
+                        }
+                    }
+                } {
+                    ; (overflowing: centred all the same, CSS Align 3 4.4)
                     if (jc == "center") {
                         y = (free / 2.0)
                     }
@@ -5116,6 +5185,9 @@ class EVGLayoutFull {
                         y = free
                     }
                 }
+            }
+            if it.marginAutoTop {
+                y = (y + perAuto)
             }
             def align:string (lay.crossAlignIn(true it parent.alignItems))
             def mX:double (it.box.marginLeftPx + it.box.marginRightPx)
@@ -5145,6 +5217,10 @@ class EVGLayoutFull {
             def ny:double ((startY + y) + it.box.marginTopPx)
             lay.translateSubtree(it (nx - it.calculatedX) (ny - it.calculatedY))
             y = ((((y + it.calculatedHeight) + it.box.marginTopPx) + it.box.marginBottomPx) + gapPx)
+            y = (y + between)
+            if it.marginAutoBottom {
+                y = (y + perAuto)
+            }
             m = (m + 1)
         }
         return true
@@ -5211,6 +5287,95 @@ class EVGLayoutFull {
     ; a percentage height of a height not yet known is auto (CSS 2.1
     ; 10.5); a stretched flex item lays its children out again once its
     ; height is definite
+    ; (CSS Flexbox 9.9.1: the items broken into columns by the box's
+    ; height or max-height, in px, each column as wide as its widest item;
+    ; items whose height is not given in px leave it to the caller)
+    fn columnWrapWidth:double (lay:EVGLayout el:EVGElement wantMin:boolean) {
+        if (wantMin || ((el.flexWrapSet == false) || (el.flexWrap == "nowrap"))) {
+            return -1.0
+        }
+        if ((el.flexDirection != "column") && (el.flexDirection != "column-reverse")) {
+            return -1.0
+        }
+        def limit:double -1.0
+        if (el.height.isSet && ((el.height.isPercent()) == false)) {
+            limit = el.height.pixels
+        } {
+            if (el.maxHeight.isSet && ((el.maxHeight.isPercent()) == false)) {
+                limit = el.maxHeight.pixels
+            }
+        }
+        if (limit < 0.0) {
+            return -1.0
+        }
+        ; (EVG's sizes are border-box ones)
+        limit = (limit - (el.box.getVerticalChrome()))
+        def rg:double 0.0
+        if el.rowGap.isSet {
+            rg = el.rowGap.pixels
+        } {
+            if el.gap.isSet {
+                rg = el.gap.pixels
+            }
+        }
+        def cg:double 0.0
+        if el.columnGap.isSet {
+            cg = el.columnGap.pixels
+        } {
+            if el.gap.isSet {
+                cg = el.gap.pixels
+            }
+        }
+        if ((el.rowGap.isSet && (el.rowGap.isPercent())) || (el.columnGap.isSet && (el.columnGap.isPercent()))) {
+            return -1.0
+        }
+        def total:double 0.0
+        def lines:int 0
+        def run:double 0.0
+        def runW:double 0.0
+        def n:int (el.getChildCount())
+        def i:int 0
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if ((c.isAbsolute == false) && ((c.isHidden()) == false)) {
+                def h:double -1.0
+                if ((c.flexBasis.isSet && ((c.flexBasis.isPercent()) == false)) && (c.flexBasisAuto == false)) {
+                    h = c.flexBasis.pixels
+                } {
+                    if (c.height.isSet && ((c.height.isPercent()) == false)) {
+                        h = c.height.pixels
+                    }
+                }
+                if (h < 0.0) {
+                    return -1.0
+                }
+                h = ((h + c.box.marginTopPx) + c.box.marginBottomPx)
+                def w:double (lay.intrinsicWidth(c false))
+                if ((lines > 0) && (((run + rg) + h) > (limit + 0.01))) {
+                    total = ((total + runW) + cg)
+                    run = h
+                    runW = w
+                    lines = (lines + 1)
+                } {
+                    if (lines == 0) {
+                        lines = 1
+                        run = h
+                    } {
+                        run = ((run + rg) + h)
+                    }
+                    if (w > runW) {
+                        runW = w
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        if (lines < 2) {
+            return -1.0
+        }
+        return ((total + runW) + (el.box.getHorizontalChrome()))
+    }
+
     fn containedWidth:double (el:EVGElement) {
         def cc:EVGCssExtra (EVGLayoutFull.cx(el))
         return cc.containW

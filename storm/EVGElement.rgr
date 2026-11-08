@@ -158,6 +158,9 @@ class EVGElement {
     ; centre it. The margin itself resolves to zero until the layout
     ; hands it the space.
     def marginAutoTop:boolean false
+    ; how far the box is raised off its line's baseline (baseline-shift:
+    ; px, below it when negative), CSS vertical-align super/sub/<length>
+    def baselineShift:double 0.0
     def marginAutoRight:boolean false
     def marginAutoBottom:boolean false
     def marginAutoLeft:boolean false
@@ -3422,6 +3425,7 @@ class EVGElement {
         ; the page to say it ever was one.
         href = other.href
         marginAutoTop = other.marginAutoTop
+        baselineShift = other.baselineShift
         justifySelf = other.justifySelf
         aspectRatio = other.aspectRatio
         contentBox = other.contentBox
@@ -4531,6 +4535,10 @@ class EVGElement {
         if ((name == "text-decoration-extend") || (name == "textDecorationExtend")) {
             def tdx:EVGUnit (this.unitOf(name value))
             textDecorationExtend = tdx.pixels
+            return
+        }
+        if (name == "baseline-shift") {
+            baselineShift = (?? (to_double (trim value)) 0.0)
             return
         }
         if ((name == "letter-spacing") || (name == "letterSpacing")) {

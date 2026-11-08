@@ -1201,8 +1201,8 @@ class EVGLayout {
                 h = bottom
             }
             ; (a box that does not clip passes on its children's overflow:
-            ; a line of text that does not wrap reaches past its row, one
-            ; level down)
+            ; a line of text that does not wrap reaches past its row, the
+            ; items of a short flex column below it, one level down)
             if (kid.overflow == "visible") {
                 def j:int 0
                 while (j < (kid.getChildCount())) {
@@ -1211,6 +1211,10 @@ class EVGLayout {
                         def gr:double ((g.calculatedX + g.calculatedWidth) - innerX)
                         if (gr > w) {
                             w = gr
+                        }
+                        def gb:double ((g.calculatedY + g.calculatedHeight) - innerY)
+                        if (gb > h) {
+                            h = gb
                         }
                     }
                     j = (j + 1)
@@ -1629,7 +1633,7 @@ class EVGLayout {
             return true
         }
         def a:string child.alignSelf
-        return ((a == "center") || ((a == "flex-end") || ((a == "end") || (a == "flex-start"))))
+        return ((a == "center") || ((a == "flex-end") || ((a == "end") || ((a == "flex-start") || ((a == "start") || ((a == "self-start") || (a == "self-end")))))))
     }
 
     ; A main-axis size, clamped the way CSS clamps it.
@@ -1669,6 +1673,18 @@ class EVGLayout {
                             if (chW < autoMin) {
                                 autoMin = chW
                             }
+                        }
+                    }
+                }
+                ; (and with a set width, no more than its content's own
+                ; min-content size, CSS Flexbox 4.5: the smaller of the
+                ; specified and the content size suggestions)
+                ; (asked only where it would hold the size up)
+                if (((out < autoMin) && (c.width.isSet && ((c.width.isPercent()) == false))) && (((strlen c.src) == 0) && ((strlen c.svgSource) == 0))) {
+                    if (((c.tagName != "svg") && (c.tagName != "canvas")) && (c.aspectRatio <= 0.0)) {
+                        def cmw:double (this.contentMinWidth(c))
+                        if ((cmw >= 0.0) && (cmw < autoMin)) {
+                            autoMin = cmw
                         }
                     }
                 }
@@ -1732,6 +1748,20 @@ class EVGLayout {
                 this.layoutElement(child 0.0 0.0 child.viewportW child.viewportH)
                 layingOutAlongRow = wasRowF
                 columnCrossShrinks = wasShrinkF
+                ; (placed from the far edge with the size its content gave
+                ; it, as the absolute branch below: layoutElement placed it
+                ; before that size was known)
+                def fxX:double 0.0
+                def fxY:double 0.0
+                if ((child.right.isSet && (child.left.isSet == false)) && (child.x.isSet == false)) {
+                    fxX = ((((child.viewportW - child.right.pixels) - child.calculatedWidth) - child.box.marginRightPx) - child.calculatedX)
+                }
+                if ((child.bottom.isSet && (child.top.isSet == false)) && (child.y.isSet == false)) {
+                    fxY = ((((child.viewportH - child.bottom.pixels) - child.calculatedHeight) - child.box.marginBottomPx) - child.calculatedY)
+                }
+                if ((fxX != 0.0) || (fxY != 0.0)) {
+                    this.translateSubtree(child fxX fxY)
+                }
                 ; The viewport's own origin. It is (0,0) for a page, so
                 ; this is a no-op for every host that has one viewport;
                 ; a stage with a frame per width moves the box onto its
@@ -3640,18 +3670,18 @@ class EVGLayout {
     def synthTop:boolean false
     fn baselineOffsetOf:double (el:EVGElement) {
         if el.hasBaseline {
-            return (el.box.marginTopPx + el.calculatedBaseline)
+            return ((el.box.marginTopPx + el.calculatedBaseline) + el.baselineShift)
         }
         if synthTop {
             if synthBorder {
-                return el.box.marginTopPx
+                return (el.box.marginTopPx + el.baselineShift)
             }
-            return 0.0
+            return el.baselineShift
         }
         if synthBorder {
-            return (el.box.marginTopPx + el.calculatedHeight)
+            return ((el.box.marginTopPx + el.calculatedHeight) + el.baselineShift)
         }
-        return (el.box.marginTopPx + el.calculatedHeight + el.box.marginBottomPx)
+        return ((el.box.marginTopPx + el.calculatedHeight + el.box.marginBottomPx) + el.baselineShift)
     }
 
     fn alignRow:double (rowElements:[EVGElement] parent:EVGElement rowHeight:double startX:double innerWidth:double) {
@@ -4967,6 +4997,12 @@ class EVGLayout {
                     outer = (this.intrinsicOfGrid(el wantMin))
                 } {
                     outer = (this.intrinsicOfChildren(el wantMin))
+                    if ((wantMin == false) && (el.flexWrapSet && (el.flexDirection != "row"))) {
+                        def cww:double (ext.columnWrapWidth(this el wantMin))
+                        if (cww > outer) {
+                            outer = cww
+                        }
+                    }
                 }
             }
             ; (a set height and an aspect-ratio give the width it asks for,
@@ -5439,6 +5475,29 @@ class EVGLayout {
     ; `wrap` is treated as a row here on purpose: max-content is defined as the
     ; size the box would take with unlimited space, and with unlimited space a
     ; wrapping row does not wrap.
+    ; the min-content width of a box's content and chrome, whatever its
+    ; own width says (-1: not known here)
+    fn contentMinWidth:double (el:EVGElement) {
+        if ((el.getChildCount()) == 0) {
+            def tc:string el.textContent
+            if ((strlen tc) == 0) {
+                return (el.box.getHorizontalChrome())
+            }
+            def fs:double el.inheritedFontSize
+            if el.fontSize.isSet {
+                fs = el.fontSize.pixels
+            }
+            if (fs <= 0.0) {
+                fs = 14.0
+            }
+            return ((textEngine.minLineWidthSpaced(tc (el.effectiveFontFamily()) fs el.letterSpacing)) + (el.box.getHorizontalChrome()))
+        }
+        if (el.display == "grid") {
+            return -1.0
+        }
+        return (this.intrinsicOfChildren(el true))
+    }
+
     fn intrinsicOfChildren:double (el:EVGElement wantMin:boolean) {
         def n:int (el.getChildCount())
         ; (an empty box is as wide as its padding and border)
