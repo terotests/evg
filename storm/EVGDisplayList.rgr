@@ -631,6 +631,32 @@ class EVGDisplayList {
         }
     }
 
+    sfn paintZOf:double (kid:EVGElement) {
+        if (null? kid.css) {
+            return 0.0
+        }
+        def kx:EVGCssExtra (unwrap kid.css)
+        return kx.paintZ
+    }
+
+    ; a stable insertion sort of `els` by paint-z (few: one box's
+    ; positioned children)
+    fn sortByZ:void (els:[EVGElement]) {
+        def i:int 1
+        def n:int (array_length els)
+        while (i < n) {
+            def cur:EVGElement (itemAt els i)
+            def cz:double (EVGDisplayList.paintZOf(cur))
+            def j:int (i - 1)
+            while ((j >= 0) && ((EVGDisplayList.paintZOf((itemAt els j))) > cz)) {
+                set els (j + 1) (itemAt els j)
+                j = (j - 1)
+            }
+            set els (j + 1) cur
+            i = (i + 1)
+        }
+    }
+
     sfn paintsLate:boolean (kid:EVGElement) {
         if (null? kid.css) {
             return false
@@ -766,6 +792,22 @@ class EVGDisplayList {
             this.addCmd(c)
             k = (k + 1.0)
         }
+    }
+
+    ; two stops of which one is written inside the box (`green 51%`)
+    sfn innerStops:boolean (g:EVGGradient) {
+        if (((g.getStopCount()) != 2) || (g.isLinear == false)) {
+            return false
+        }
+        def a:EVGGradientStop (itemAt g.stops 0)
+        def b:EVGGradientStop (itemAt g.stops 1)
+        if (a.given && ((a.percentage > 0.0) || (a.px > 0.0))) {
+            return true
+        }
+        if (b.given && ((b.percentage < 1.0) || (b.px >= 0.0))) {
+            return true
+        }
+        return false
     }
 
     ; A linear gradient of many stops on an axis, as bands: before the first
@@ -3824,7 +3866,8 @@ class EVGDisplayList {
             ; (more than two stops along an axis: the background is the
             ; colour alone, and the ramp goes on as bands, one per pair of
             ; stops, each a two-stop gradient or a flat colour)
-            def bands:boolean ((gradOk && (el.gradientSet == false)) && (((el.gradient.getStopCount()) > 2) && ((radius <= 0.0) && (perCorner == false))))
+            ; (and two stops not at the ends: a ramp over part of the box)
+            def bands:boolean ((gradOk && (el.gradientSet == false)) && ((((el.gradient.getStopCount()) > 2) || (EVGDisplayList.innerStops(el.gradient))) && ((radius <= 0.0) && (perCorner == false))))
             if bands {
                 c.hasGrad = false
                 if (bgSet == false) {
@@ -4249,10 +4292,20 @@ class EVGDisplayList {
         if clips {
             def cp (new EVGDrawCmd())
             cp.kind = 4
-            cp.x = x
-            cp.y = y
-            cp.w = w
-            cp.h = h
+            ; (the padding box: the content does not go over the border,
+            ; CSS Overflow 3 2)
+            def cbw:double el.box.borderWidthPx
+            if (((cbw > 0.0) && (w > (cbw * 2.0))) && (h > (cbw * 2.0))) {
+                cp.x = (x + cbw)
+                cp.y = (y + cbw)
+                cp.w = (w - (cbw * 2.0))
+                cp.h = (h - (cbw * 2.0))
+            } {
+                cp.x = x
+                cp.y = y
+                cp.w = w
+                cp.h = h
+            }
             if scrolls {
                 cp.layer = ((array_length layerEls) + 1)
                 push layerStack (array_length layerEls)
@@ -4351,7 +4404,11 @@ class EVGDisplayList {
         if ((this.paintsAsUnit(el clips)) || ((array_length late) > 0)) {
             this.walkInline(inlFrom)
         }
-        ; (CSS positioned boxes: after the in-flow ones, in tree order)
+        ; (CSS positioned boxes: after the in-flow ones, by their z-index,
+        ; in tree order among equals)
+        if ((array_length late) > 1) {
+            this.sortByZ(late)
+        }
         def li2:int 0
         while (li2 < (array_length late)) {
             this.walk((itemAt late li2))

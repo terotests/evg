@@ -125,6 +125,12 @@ class EVGLayoutExt {
         return -1.0
     }
 
+    ; the max-content width of a wrapping column flex box: its lines side by
+    ; side (-1: not one, or not known here)
+    fn columnWrapWidth:double (lay:EVGLayout el:EVGElement wantMin:boolean) {
+        return -1.0
+    }
+
     ; once the whole tree is laid out
     fn afterLayout:void (lay:EVGLayout root:EVGElement) {
     }
