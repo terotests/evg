@@ -5689,7 +5689,7 @@ class EVGLayout {
                 ; (an item joined to the one before takes the gap back with
                 ; its margin; starting a line of its own it gets it again)
                 def wl:double w
-                if (isColumn == false) {
+                if ((isColumn == false) && ((kid.box.marginLeftPx < 0.0) && (gapPx > 0.0))) {
                     wl = (w + (ext.lineStartGap(kid gapPx)))
                 }
                 if (wl > widest) {
