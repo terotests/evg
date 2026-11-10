@@ -643,7 +643,12 @@ class EVGLayout {
             if (((element.width.isSet == false) && (element.hasFlexWidth == false)) && ((element.aspectRatio > 0.0) && (keywordW == false))) {
                 def edgeXa:double ((element.box.paddingLeftPx + element.box.paddingRightPx) + (element.box.borderWidthPx * 2.0))
                 def edgeYa:double ((element.box.paddingTopPx + element.box.paddingBottomPx) + (element.box.borderWidthPx * 2.0))
-                def innerHa:double (height - edgeYa)
+                ; (down a column, the flexed height's)
+                def hA:double height
+                if ((element.calculatedFlexHeight > 0.0) && ((this.parentIsRow(element)) == false)) {
+                    hA = element.calculatedFlexHeight
+                }
+                def innerHa:double (hA - edgeYa)
                 if (innerHa < 0.0) {
                     innerHa = 0.0
                 }
@@ -5625,6 +5630,11 @@ class EVGLayout {
                         if ((((kid.height.isSet == false) && (el.display == "flex")) && (isColumn == false)) && (kas == "stretch")) {
                             kh = ((kpin - kid.box.marginTopPx) - kid.box.marginBottomPx)
                         }
+                        ; (the one item of a column that grows: as tall as
+                        ; the column, its width from that)
+                        if (((el.display != "grid") && isColumn) && ((kid.flex > 0.0) && (n == 1))) {
+                            kh = ((kpin - kid.box.marginTopPx) - kid.box.marginBottomPx)
+                        }
                     }
                     if (kh >= 0.0) {
                         def kEY:double (kid.box.getVerticalChrome())
@@ -5676,8 +5686,14 @@ class EVGLayout {
                     }
                     push kidMains km
                 }
-                if (w > widest) {
-                    widest = w
+                ; (an item joined to the one before takes the gap back with
+                ; its margin; starting a line of its own it gets it again)
+                def wl:double w
+                if (isColumn == false) {
+                    wl = (w + (ext.lineStartGap(kid gapPx)))
+                }
+                if (wl > widest) {
+                    widest = wl
                 }
                 if el.flexBalance {
                     push rowWs w
@@ -5693,6 +5709,11 @@ class EVGLayout {
         def inner:double total
         ; a row that wraps is, at its narrowest, its widest item
         if (isColumn || (wantMin && (el.flexWrap != "nowrap"))) {
+            inner = widest
+        }
+        ; (and at its widest no narrower than that: a negative margin, as a
+        ; negative text-indent's, does not take its min-content size back)
+        if (((isColumn == false) && (wantMin == false)) && ((el.flexWrap != "nowrap") && (inner < widest))) {
             inner = widest
         }
         if colLines {
