@@ -182,6 +182,45 @@ class EVGFixedTest {
         c.eqInt("and sits above the bottom" (to_int bar.calculatedY) 720)
     }
 
+    ; The modal: `inset: 0; margin: auto` with a size centres the box in the
+    ; page, as for an absolute box (CSS 2.1 10.3.7 and 10.6.4). Written inside
+    ; a column that is not the page, so the page's size is the one shared.
+    sfn testAutoMarginsCentre:void (c:FixedCheck) {
+        print ""
+        print "--- auto margins between both insets ---"
+        def page:EVGElement (EVGFixedTest.box("page" 400.0 800.0))
+        page.setAttribute("flex-direction" "column")
+        def col:EVGElement (EVGFixedTest.box("col" 200.0 400.0))
+        col.setAttribute("margin-left" "30px")
+        def m (EVGElement.createDiv())
+        m.id = "modal"
+        m.setAttribute("position" "fixed")
+        m.setAttribute("left" "20px")
+        m.setAttribute("right" "60px")
+        m.setAttribute("top" "100px")
+        m.setAttribute("bottom" "100px")
+        m.setAttribute("width" "120px")
+        m.setAttribute("height" "200px")
+        m.setAttribute("margin" "auto")
+        col.addChild(m)
+        page.addChild(col)
+        def lay:EVGLayout (EVGFixedTest.laidOut(page))
+        c.eqInt("the room across is shared" (to_int m.calculatedX) 120)
+        c.eqInt("and the room down" (to_int m.calculatedY) 300)
+        def m2 (EVGElement.createDiv())
+        m2.id = "start"
+        m2.setAttribute("position" "fixed")
+        m2.setAttribute("left" "0px")
+        m2.setAttribute("right" "0px")
+        m2.setAttribute("width" "100px")
+        m2.setAttribute("height" "10px")
+        m2.setAttribute("margin-left" "auto")
+        def page2:EVGElement (EVGFixedTest.box("page2" 400.0 800.0))
+        page2.addChild(m2)
+        def lay2:EVGLayout (EVGFixedTest.laidOut(page2))
+        c.eqInt("an auto start margin alone takes all of it" (to_int m2.calculatedX) 300)
+    }
+
     sfn testScrollLeavesItAlone:void (c:FixedCheck) {
         print ""
         print "--- a scroll moves the content, not the furniture ---"
@@ -275,6 +314,7 @@ class EVGFixedTest {
         EVGFixedTest.testAgainstViewport(c)
         EVGFixedTest.testPercentAgainstViewport(c)
         EVGFixedTest.testStretch(c)
+        EVGFixedTest.testAutoMarginsCentre(c)
         EVGFixedTest.testScrollLeavesItAlone(c)
         EVGFixedTest.testScrollOnlyLeavesItAlone(c)
         EVGFixedTest.testViewportRoot(c)
