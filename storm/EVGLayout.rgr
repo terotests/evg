@@ -1759,6 +1759,33 @@ class EVGLayout {
                 if ((child.bottom.isSet && (child.top.isSet == false)) && (child.y.isSet == false)) {
                     fxY = ((((child.viewportH - child.bottom.pixels) - child.calculatedHeight) - child.box.marginBottomPx) - child.calculatedY)
                 }
+                ; (between two insets the room left goes to the auto
+                ; margins, CSS 2.1 10.3.7 and 10.6.4, as for an absolute
+                ; box: a modal centred with `inset: 0; margin: auto`)
+                if ((child.left.isSet && child.right.isSet) && (child.marginAutoLeft || child.marginAutoRight)) {
+                    def fxFree:double ((((child.viewportW - child.left.pixels) - child.right.pixels) - child.calculatedWidth) - (child.box.marginLeftPx + child.box.marginRightPx))
+                    def fxAt:double ((child.left.pixels + child.box.marginLeftPx) - child.calculatedX)
+                    if (child.marginAutoLeft && child.marginAutoRight) {
+                        if (fxFree > 0.0) {
+                            fxX = (fxAt + (fxFree / 2.0))
+                        }
+                    } {
+                        if (child.marginAutoLeft && (fxFree > 0.0)) {
+                            fxX = (fxAt + fxFree)
+                        }
+                    }
+                }
+                if ((child.top.isSet && child.bottom.isSet) && (child.marginAutoTop || child.marginAutoBottom)) {
+                    def fyFree:double ((((child.viewportH - child.top.pixels) - child.bottom.pixels) - child.calculatedHeight) - (child.box.marginTopPx + child.box.marginBottomPx))
+                    def fyAt:double ((child.top.pixels + child.box.marginTopPx) - child.calculatedY)
+                    if (child.marginAutoTop && child.marginAutoBottom) {
+                        fxY = (fyAt + (fyFree / 2.0))
+                    } {
+                        if child.marginAutoTop {
+                            fxY = (fyAt + fyFree)
+                        }
+                    }
+                }
                 if ((fxX != 0.0) || (fxY != 0.0)) {
                     this.translateSubtree(child fxX fxY)
                 }
