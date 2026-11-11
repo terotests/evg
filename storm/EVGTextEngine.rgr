@@ -377,6 +377,104 @@ class EVGTextEngine {
         return kept.lines
     }
 
+    ; The wrap with lines narrowed by floats beside them: insets holds a
+    ; left and a right inset for each line from the first (CSS 2.1 9.5,
+    ; EVGElement.lineInsets); the lines after them are maxWidth wide. A
+    ; line too narrow for its first word is left empty, the word going to
+    ; the next line, as a line box goes down past a float.
+    fn breakLinesInset:[EVGTextLine] (text:string fontFamily:string fontSize:double maxWidth:double spacing:double insets:[double]) {
+        if (((array_length insets) == 0) || (maxWidth <= 0.0)) {
+            return (this.breakLinesSpaced(text fontFamily fontSize maxWidth spacing))
+        }
+        this.checkFamily(fontFamily)
+        def key:string ((this.cacheKey("w" fontFamily fontSize maxWidth text)) + "|in")
+        def ii:int 0
+        while (ii < (array_length insets)) {
+            key = ((key + ",") + (to_string (itemAt insets ii)))
+            ii = (ii + 1)
+        }
+        if (spacing != 0.0) {
+            key = ((key + "|ls") + (to_string spacing))
+        }
+        def hit@(optional):int (get wrapIndex key)
+        if (null? hit) {
+            def fresh:[EVGTextLine] (this.wrapInset(text fontFamily fontSize maxWidth spacing insets))
+            if ((array_length wrapStore) >= (EVGTextEngine.cacheLimit())) {
+                this.clearCache()
+            }
+            def entry (new EVGWrapEntry())
+            entry.lines = fresh
+            push wrapStore entry
+            set wrapIndex key ((array_length wrapStore) - 1)
+            return fresh
+        }
+        def kept:EVGWrapEntry (itemAt wrapStore (unwrap hit))
+        return kept.lines
+    }
+
+    ; The width line n of a wrap with insets has
+    sfn insetWidth:double (insets:[double] n:int maxWidth:double) {
+        def k:int (n * 2)
+        if ((k + 1) < (array_length insets)) {
+            return ((maxWidth - (itemAt insets k)) - (itemAt insets (k + 1)))
+        }
+        return maxWidth
+    }
+
+    fn wrapInset:[EVGTextLine] (text:string fontFamily:string fontSize:double maxWidth:double spacing:double insets:[double]) {
+        def out:[EVGTextLine]
+        def paragraphs:[string] (strsplit text "\n")
+        def p:int 0
+        while (p < (array_length paragraphs)) {
+            def para:string (itemAt paragraphs p)
+            def firstOfPara:int (array_length out)
+            def words:[string] (strsplit para " ")
+            def currentLine:string ""
+            def tokensOnLine:int 0
+            def w:int 0
+            while (w < (array_length words)) {
+                def lw:double (EVGTextEngine.insetWidth(insets (array_length out) maxWidth))
+                def narrowed:boolean (lw < maxWidth)
+                def word:string (itemAt words w)
+                def testLine:string word
+                if (tokensOnLine > 0) {
+                    testLine = currentLine + " " + word
+                }
+                def testWidth:double ((measurer.measureTextWidth(testLine fontFamily fontSize)) + (EVGTextEngine.trackingWidth(testLine spacing)))
+                def over:boolean ((testWidth - lw) > (EVGTextEngine.fitEpsilon()))
+                if (over && (tokensOnLine == 0)) {
+                    if (narrowed && ((strlen word) > 0)) {
+                        ; (no room for it beside the floats: an empty line)
+                        push out (this.measuredLineSpaced("" fontFamily fontSize spacing))
+                    } {
+                        currentLine = testLine
+                        tokensOnLine = 1
+                        w = (w + 1)
+                    }
+                } {
+                    if over {
+                        push out (this.measuredLineSpaced(currentLine fontFamily fontSize spacing))
+                        currentLine = ""
+                        tokensOnLine = 0
+                    } {
+                        currentLine = testLine
+                        tokensOnLine = (tokensOnLine + 1)
+                        w = (w + 1)
+                    }
+                }
+            }
+            push out (this.measuredLineSpaced(currentLine fontFamily fontSize spacing))
+            if (p > 0) {
+                if (firstOfPara < (array_length out)) {
+                    def opener:EVGTextLine (itemAt out firstOfPara)
+                    opener.startsParagraph = true
+                }
+            }
+            p = (p + 1)
+        }
+        return out
+    }
+
     ; The wrap itself, with no cache in front of it.
     fn wrapUncached:[EVGTextLine] (text:string fontFamily:string fontSize:double maxWidth:double spacing:double) {
         def out:[EVGTextLine]

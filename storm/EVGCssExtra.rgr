@@ -99,6 +99,9 @@ class EVGCssExtra {
     ; a block in the flow right after floats (beside-floats: true): its
     ; content is moved past the floats beside its top
     def besideFloats:boolean false
+    ; a line of text after floats as a wrapping row (beside-floats: lines):
+    ; each of its lines is shortened by the floats beside it
+    def besideLines:boolean false
     ; a formatting context in the flow after floats (beside-floats: bfc):
     ; its border box goes where it fits beside them, moved down past their
     ; bottoms until it does (CSS 2.1 9.5)
@@ -240,7 +243,8 @@ class EVGCssExtra {
             return
         }
         if (name == "beside-floats") {
-            besideFloats = (value == "true")
+            besideFloats = ((value == "true") || (value == "lines"))
+            besideLines = (value == "lines")
             bfcFloats = (value == "bfc")
             return
         }
@@ -431,6 +435,7 @@ class EVGCssExtra {
         c.clearSide = clearSide
         c.clearMargin = clearMargin
         c.besideFloats = besideFloats
+        c.besideLines = besideLines
         c.bfcFloats = bfcFloats
         c.floatHolder = floatHolder
         c.pctAuto = pctAuto

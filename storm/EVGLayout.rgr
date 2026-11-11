@@ -566,7 +566,8 @@ class EVGLayout {
                     }
                     def contentW:double (textEngine.maxLineWidthSpaced(textContent (element.effectiveFontFamily()) fontSize element.letterSpacing))
                     def measuredW:double (contentW + element.box.paddingLeftPx + element.box.paddingRightPx + (element.box.borderWidthPx * 2.0))
-                    if (measuredW < parentWidth) {
+                    ; (lines shortened by floats beside them span the block)
+                    if ((measuredW < parentWidth) && ((array_length element.lineInsets) == 0)) {
                         width = measuredW
                     } {
                         ; (but never under its longest word, which overflows)
@@ -965,7 +966,12 @@ class EVGLayout {
                 ; drew a different one, which is a box the last line falls out
                 ; of.
                 def availableWidth:double (element.wrapWidth((element.box.getInnerWidth(width))))
-                def lineCount:int (textEngine.lineCountSpaced(textContent (element.effectiveFontFamily()) fontSize availableWidth element.letterSpacing))
+                def lineCount:int 0
+                if ((array_length element.lineInsets) > 0) {
+                    lineCount = (array_length (textEngine.breakLinesInset(textContent (element.effectiveFontFamily()) fontSize availableWidth element.letterSpacing element.lineInsets)))
+                } {
+                    lineCount = (textEngine.lineCountSpaced(textContent (element.effectiveFontFamily()) fontSize availableWidth element.letterSpacing))
+                }
 
                 contentHeight = (lineSpacing * (to_double lineCount))
                 ; And the gaps between paragraphs, which are not line boxes:
@@ -1923,6 +1929,11 @@ class EVGLayout {
         
         def currentX:double startX
         def currentY:double startY
+        ; (the room of the row's current line: less beside floats,
+        ; EVGElement.lineFloats)
+        def lineX0:double startX
+        def lineW:double innerWidth
+        def hasLineFloats:boolean ((array_length parent.lineFloats) > 0)
         def rowHeight:double 0.0
         def rowElements:[EVGElement]
         def totalHeight:double 0.0
@@ -2775,7 +2786,7 @@ class EVGLayout {
             ; rather than a layout that does not fit. An item that genuinely
             ; does not fit misses the line by whole pixels and still wraps.
             if (isColumn == false) {
-                def availableWidth:double (((startX + innerWidth) - currentX) + 0.01)
+                def availableWidth:double (((lineX0 + lineW) - currentX) + 0.01)
                 ; (an item that takes no room, a line break, stays on the
                 ; line however full it is)
                 def wrapNow:boolean ((((childTotalWidth > availableWidth) && ((array_length rowElements) > 0)) && (parent.flexWrap != "nowrap")) && (childTotalWidth > 0.0))
@@ -2788,7 +2799,7 @@ class EVGLayout {
                 if wrapNow {
                     lineAt = (lineAt + 1)
                     ; Wrap to next row
-                    rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
+                    rowHeight = (this.alignRow(rowElements parent rowHeight lineX0 lineW))
                     this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
                     currentY = ((currentY + rowHeight) + crossGapPx)
                     totalHeight = ((totalHeight + rowHeight) + crossGapPx)
@@ -2798,6 +2809,50 @@ class EVGLayout {
                 }
             }
             
+            ; (a line beside floats starts past the left ones and ends
+            ; before the right ones; one whose first item has no room there
+            ; goes down past them, CSS 2.1 9.5)
+            if ((hasLineFloats && (isColumn == false)) && ((array_length rowElements) == 0)) {
+                def tries:int 0
+                def roomAgain:boolean true
+                while roomAgain {
+                    roomAgain = false
+                    def lf:[double] parent.lineFloats
+                    def le:double startX
+                    def re:double (startX + innerWidth)
+                    def nextB:double -1.0
+                    def q:int 0
+                    while ((q + 3) < (array_length lf)) {
+                        def ft:double (itemAt lf q)
+                        def fb:double (itemAt lf (q + 1))
+                        if ((ft <= (currentY + 0.01)) && (fb > (currentY + 0.01))) {
+                            def edge:double (itemAt lf (q + 3))
+                            if ((itemAt lf (q + 2)) < 0.5) {
+                                if (edge > le) {
+                                    le = edge
+                                }
+                            } {
+                                if (edge < re) {
+                                    re = edge
+                                }
+                            }
+                            if ((nextB < 0.0) || (fb < nextB)) {
+                                nextB = fb
+                            }
+                        }
+                        q = (q + 4)
+                    }
+                    lineX0 = le
+                    lineW = (re - le)
+                    if (((childTotalWidth > (lineW + 0.01)) && (nextB > currentY)) && (tries < 16)) {
+                        totalHeight = (totalHeight + (nextB - currentY))
+                        currentY = nextB
+                        tries = (tries + 1)
+                        roomAgain = true
+                    }
+                }
+                currentX = lineX0
+            }
             ; (an item joined to the one before starts a line where any
             ; other would: there was no gap to take back)
             if (((isColumn == false) && (!null? child.css)) && ((array_length rowElements) == 0)) {
@@ -2806,6 +2861,10 @@ class EVGLayout {
             if (isColumn && (!null? child.css)) {
                 curChildWidth = childWidth
                 def clr:double (ext.clearance(this parent i currentY))
+                ; (text whose lines are shortened by floats spans the block)
+                if (((array_length child.lineInsets) > 0) && (child.width.isSet == false)) {
+                    childWidth = availableForChild
+                }
                 currentY = (currentY + clr)
                 totalHeight = (totalHeight + clr)
             }
@@ -2858,7 +2917,7 @@ class EVGLayout {
             ; Handle explicit line break
             if child.lineBreak {
                 if (isColumn == false) {
-                    rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
+                    rowHeight = (this.alignRow(rowElements parent rowHeight lineX0 lineW))
                     this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
                     currentY = ((currentY + rowHeight) + crossGapPx)
                     totalHeight = ((totalHeight + rowHeight) + crossGapPx)
@@ -2873,7 +2932,7 @@ class EVGLayout {
         
         ; Handle final row (for row layout)
         if ((isColumn == false) && ((array_length rowElements) > 0)) {
-            rowHeight = (this.alignRow(rowElements parent rowHeight startX innerWidth))
+            rowHeight = (this.alignRow(rowElements parent rowHeight lineX0 lineW))
             this.recordLine(lineMembers lineCounts lineHeights rowElements rowHeight)
             totalHeight = totalHeight + rowHeight
         }

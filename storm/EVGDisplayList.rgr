@@ -4143,7 +4143,13 @@ class EVGDisplayList {
             ; what `text-align` centres inside.
             ; The line objects, not just their strings: a paragraph gap is
             ; a property of WHICH line this is, and the strings cannot say.
-            def broken:[EVGTextLine] (textEngine.breakLinesSpaced(el.textContent face fs (el.wrapWidth(avail)) el.letterSpacing))
+            def insetN:int (array_length el.lineInsets)
+            def broken:[EVGTextLine]
+            if (insetN > 0) {
+                broken = (textEngine.breakLinesInset(el.textContent face fs (el.wrapWidth(avail)) el.letterSpacing el.lineInsets))
+            } {
+                broken = (textEngine.breakLinesSpaced(el.textContent face fs (el.wrapWidth(avail)) el.letterSpacing))
+            }
             def lines:[string]
             ; `text-overflow: ellipsis`: a line wider than the box is drawn
             ; cut with "…" (EVGElement.ellipsizes, EVGTextEngine.ellipsizeSpaced)
@@ -4189,14 +4195,23 @@ class EVGDisplayList {
                 ; asking the same engine that broke the line how wide the line
                 ; came out and moving the start by the slack.
                 def indent:double 0.0
+                ; (a line beside floats starts past the left ones and is
+                ; aligned in the room they leave)
+                def roomL:double 0.0
+                def roomR:double 0.0
+                if ((insetN > 0) && ((((li * 2) + 1) < insetN) && ((el.wrapWidth(avail)) > 0.0))) {
+                    roomL = (itemAt el.lineInsets (li * 2))
+                    roomR = (itemAt el.lineInsets ((li * 2) + 1))
+                    indent = roomL
+                }
                 if ((el.textAlign == "center") || (el.textAlign == "right")) {
                     def m:EVGTextMetrics (textEngine.measureRunSpaced((itemAt lines li) face fs el.letterSpacing))
-                    def slack:double (avail - m.width)
+                    def slack:double (((avail - roomL) - roomR) - m.width)
                     if (slack > 0.0) {
                         if (el.textAlign == "center") {
-                            indent = (slack / 2.0)
+                            indent = (roomL + (slack / 2.0))
                         } {
-                            indent = slack
+                            indent = (roomL + slack)
                         }
                     }
                 }
