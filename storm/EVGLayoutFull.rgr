@@ -862,6 +862,156 @@ class EVGLayoutFull {
         return (y - top)
     }
 
+    ; a line of text with boxes in it that wraps (a row of its runs)
+    sfn wrapRow:boolean (el:EVGElement) {
+        if ((el.getChildCount()) == 0) {
+            return false
+        }
+        if ((EVGLayoutFull.cx(el)).besideLines == false) {
+            return false
+        }
+        return ((el.flexDirection != "column") && (el.flexWrap != "nowrap"))
+    }
+
+    ; the floats of the float rows before a wrapping line, for its lines to
+    ; keep clear of (EVGElement.lineFloats)
+    sfn floatsBeside:void (parent:EVGElement child:EVGElement index:int) {
+        def pi:int 0
+        while (pi < index) {
+            def pc:EVGElement (parent.getChild(pi))
+            if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
+                def k:int 0
+                while (k < (pc.getChildCount())) {
+                    def f:EVGElement (pc.getChild(k))
+                    def side:string ((EVGLayoutFull.cx(f)).floatSide)
+                    def ft:double (f.calculatedY - f.box.marginTopPx)
+                    def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                    if (((fb - ft) > 0.0) && ((side == "left") || (side == "right"))) {
+                        push child.lineFloats ft
+                        push child.lineFloats fb
+                        if (side == "left") {
+                            push child.lineFloats 0.0
+                            push child.lineFloats ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
+                        } {
+                            push child.lineFloats 1.0
+                            push child.lineFloats (f.calculatedX - f.box.marginLeftPx)
+                        }
+                    }
+                    k = (k + 1)
+                }
+            }
+            pi = (pi + 1)
+        }
+    }
+
+    ; a text element whose lines wrap in it (no children, white-space that
+    ; wraps)
+    sfn plainText:boolean (el:EVGElement) {
+        if ((el.getChildCount()) > 0) {
+            return false
+        }
+        if ((strlen el.textContent) == 0) {
+            return false
+        }
+        return ((el.wrapWidth(1.0)) > 0.0)
+    }
+
+    ; a text element beside the floats of the float rows before it: each
+    ; of its lines is narrowed by the floats beside that line, those under
+    ; the floats are full width (CSS 2.1 9.5, EVGElement.lineInsets)
+    sfn insetBesideFloats:void (lay:EVGLayout parent:EVGElement child:EVGElement index:int top:double) {
+        def cs:double ((parent.calculatedX + parent.box.borderWidthPx) + parent.box.paddingLeftPx)
+        def ce:double (cs + parent.calculatedInnerWidth)
+        def inL:double (((cs + child.box.marginLeftPx) + child.box.borderWidthPx) + child.box.paddingLeftPx)
+        def inR:double (((ce - child.box.marginRightPx) - child.box.borderWidthPx) - child.box.paddingRightPx)
+        def fs:double child.inheritedFontSize
+        if child.fontSize.isSet {
+            fs = child.fontSize.pixels
+        }
+        if (fs <= 0.0) {
+            fs = 14.0
+        }
+        def te:EVGTextEngine (lay.getTextEngine())
+        def lh:double (child.lineBoxFor(fs (te.lineHeightFor((child.effectiveFontFamily()) fs))))
+        if (lh <= 0.0) {
+            return
+        }
+        def y0:double ((top + child.box.borderWidthPx) + child.box.paddingTopPx)
+        def ins:[double]
+        def any:boolean false
+        def line:int 0
+        def more:boolean true
+        while (more && (line < 2000)) {
+            def y:double (y0 + ((to_double line) * lh))
+            more = false
+            def le:double inL
+            def re:double inR
+            def pi:int 0
+            while (pi < index) {
+                def pc:EVGElement (parent.getChild(pi))
+                if ((pc.isAbsolute == false) && ((!null? pc.css) && ((EVGLayoutFull.cx(pc)).floatRow))) {
+                    def k:int 0
+                    while (k < (pc.getChildCount())) {
+                        def f:EVGElement (pc.getChild(k))
+                        def side:string ((EVGLayoutFull.cx(f)).floatSide)
+                        def ft:double (f.calculatedY - f.box.marginTopPx)
+                        def fb:double ((f.calculatedY + f.calculatedHeight) + f.box.marginBottomPx)
+                        if ((fb - ft) > 0.0) {
+                            if (fb > ((y + lh) + 0.01)) {
+                                more = true
+                            }
+                            if ((ft < ((y + lh) - 0.01)) && (fb > (y + 0.01))) {
+                                if (side == "left") {
+                                    def edge:double ((f.calculatedX + f.calculatedWidth) + f.box.marginRightPx)
+                                    if (edge > le) {
+                                        le = edge
+                                    }
+                                }
+                                if (side == "right") {
+                                    def edge2:double (f.calculatedX - f.box.marginLeftPx)
+                                    if (edge2 < re) {
+                                        re = edge2
+                                    }
+                                }
+                            }
+                        }
+                        k = (k + 1)
+                    }
+                }
+                pi = (pi + 1)
+            }
+            def a:double (le - inL)
+            def b:double (inR - re)
+            if ((a > 0.0) || (b > 0.0)) {
+                any = true
+            }
+            push ins a
+            push ins b
+            line = (line + 1)
+        }
+        ; (text that fits on its first line beside the floats is one line
+        ; moved past them, as the box it is shrink-wraps)
+        if (any && ((indexOf child.textContent "\n") < 0)) {
+            def tw:double (te.maxLineWidthSpaced(child.textContent (child.effectiveFontFamily()) fs child.letterSpacing))
+            def room0:double (((inR - inL) - (itemAt ins 0)) - (itemAt ins 1))
+            if (tw <= (room0 + 0.01)) {
+                any = false
+            }
+        }
+        if any {
+            ; (the full-width lines at the end are dropped)
+            def n:int (array_length ins)
+            while ((n >= 2) && (((itemAt ins (n - 2)) <= 0.0) && ((itemAt ins (n - 1)) <= 0.0))) {
+                n = (n - 2)
+            }
+            def k2:int 0
+            while (k2 < n) {
+                push child.lineInsets (itemAt ins k2)
+                k2 = (k2 + 1)
+            }
+        }
+    }
+
     ; a block beside the floats of the float rows before it: its lines
     ; start past the left ones and end before the right ones at its top
     ; (CSS 2.1 9.5), taken as padding for all of its content
@@ -981,7 +1131,25 @@ class EVGLayoutFull {
     ; of the float rows before it (CSS 2.1 9.5.2)
     fn clearance:double (lay:EVGLayout parent:EVGElement index:int currentY:double) {
         def child:EVGElement (parent.getChild(index))
-        if ((EVGLayoutFull.cx(child)).besideFloats == true) {
+        if ((array_length child.lineInsets) > 0) {
+            clear child.lineInsets
+        }
+        if ((array_length child.lineFloats) > 0) {
+            clear child.lineFloats
+        }
+        if (((EVGLayoutFull.cx(child)).besideFloats == true) && (EVGLayoutFull.wrapRow(child))) {
+            EVGLayoutFull.floatsBeside(parent child index)
+            if ((EVGLayoutFull.cx(child)).clearFloats == false) {
+                return 0.0
+            }
+        }
+        if (((EVGLayoutFull.cx(child)).besideFloats == true) && (EVGLayoutFull.plainText(child))) {
+            EVGLayoutFull.insetBesideFloats(lay parent child index (currentY + child.box.marginTopPx))
+            if (((EVGLayoutFull.cx(child)).clearFloats == false) && ((array_length child.lineInsets) > 0)) {
+                return 0.0
+            }
+        }
+        if (((EVGLayoutFull.cx(child)).besideFloats == true) && (((array_length child.lineInsets) + (array_length child.lineFloats)) == 0)) {
             def down:double (EVGLayoutFull.shiftBesideFloats(parent child index (currentY + child.box.marginTopPx)))
             if ((down > 0.0) && ((EVGLayoutFull.cx(child)).clearFloats == false)) {
                 return down

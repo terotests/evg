@@ -632,6 +632,16 @@ class EVGElement {
     ; included, so the gap has to be a property of the block. ZERO is the
     ; single-spaced block every caller had before.
     def paragraphSpacing:double 0.0
+    ; Lines of this text narrowed by floats beside them: a left and a right
+    ; inset (px, from the content box) for each line from the first; the
+    ; lines after them are full width (EVGTextEngine.breakLinesInset).
+    ; EMPTY is the plain wrap.
+    def lineInsets:[double]
+    ; The floats beside the lines of a wrapping row (a line of text with
+    ; boxes in it): top, bottom, side (0 left, 1 right) and the edge the
+    ; lines keep clear of, page px, for each (EVGLayout.layoutChildren).
+    ; EMPTY is the whole width for every line.
+    def lineFloats:[double]
     ; CSS `text-decoration` lines on this text, as its host resolved and
     ; propagated them: entries split by ";", each "kind size ascent skip
     ; color" — kind underline, overline or line-through; size and ascent the
@@ -3521,6 +3531,8 @@ class EVGElement {
         fontStyle = other.fontStyle
         letterSpacing = other.letterSpacing
         paragraphSpacing = other.paragraphSpacing
+        lineInsets = other.lineInsets
+        lineFloats = other.lineFloats
         textDecorations = other.textDecorations
         textDecorationExtend = other.textDecorationExtend
         strokeLineCap = other.strokeLineCap
