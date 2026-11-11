@@ -3531,6 +3531,8 @@ class EVGElement {
         fontStyle = other.fontStyle
         letterSpacing = other.letterSpacing
         paragraphSpacing = other.paragraphSpacing
+        lineInsets = other.lineInsets
+        lineFloats = other.lineFloats
         textDecorations = other.textDecorations
         textDecorationExtend = other.textDecorationExtend
         strokeLineCap = other.strokeLineCap
