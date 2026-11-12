@@ -896,6 +896,26 @@ class EVGDisplayList {
             }
             j = (j + 1)
         }
+        ; (repeating: the stops' span again and again over the whole axis,
+        ; CSS Images 3, 3.6; one of no length is the last colour)
+        if (g.repeating && (n >= 2)) {
+            def p0:double (itemAt pos 0)
+            def period:double ((itemAt pos (n - 1)) - p0)
+            if ((period > 0.25) && ((len / period) < 20000.0)) {
+                def t:double (p0 - (period * (to_double (ceil (p0 / period)))))
+                while (t < len) {
+                    def r:int 0
+                    while (r < (n - 1)) {
+                        def ra:EVGGradientStop (g.getStop(r))
+                        def rb:EVGGradientStop (g.getStop((r + 1)))
+                        this.addBand(x y w h len dir rev (t + ((itemAt pos r) - p0)) (t + ((itemAt pos (r + 1)) - p0)) ra.color rb.color)
+                        r = (r + 1)
+                    }
+                    t = (t + period)
+                }
+                return
+            }
+        }
         ; the bands: [from, to) along the axis with two colours
         def first:EVGGradientStop (g.getStop(0))
         def last:EVGGradientStop (g.getStop((n - 1)))
@@ -3867,7 +3887,7 @@ class EVGDisplayList {
             ; colour alone, and the ramp goes on as bands, one per pair of
             ; stops, each a two-stop gradient or a flat colour)
             ; (and two stops not at the ends: a ramp over part of the box)
-            def bands:boolean ((gradOk && (el.gradientSet == false)) && ((((el.gradient.getStopCount()) > 2) || (EVGDisplayList.innerStops(el.gradient))) && ((radius <= 0.0) && (perCorner == false))))
+            def bands:boolean ((gradOk && (el.gradientSet == false)) && ((((el.gradient.getStopCount()) > 2) || ((EVGDisplayList.innerStops(el.gradient)) || el.gradient.repeating)) && ((radius <= 0.0) && (perCorner == false))))
             if bands {
                 c.hasGrad = false
                 if (bgSet == false) {
