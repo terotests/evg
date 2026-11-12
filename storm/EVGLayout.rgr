@@ -2665,6 +2665,40 @@ class EVGLayout {
             }
         }
 
+        ; (with wrap, an item too wide for a line of its own is that line,
+        ; and shrinks to it as a line does, CSS Flexbox 9.7: no further
+        ; than its min-width or the floor of its content)
+        if (((isColumn == false) && (innerWidth > 0.0)) && ((parent.flexWrapSet && (parent.flexWrap != "nowrap")) && ((parent.clipsContent()) == false))) {
+            def jw2:int 0
+            while (jw2 < childCount) {
+                def c:EVGElement (parent.getChild(jw2))
+                if (((c.isAbsolute == false) && (c.flexShrink > 0.0)) && ((this.hasBaseMain(c)) && ((c.flex <= 0.0) && ((c.width.isPercent()) == false)))) {
+                    def baseW2:double (this.baseMain(c))
+                    def room:double ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx)
+                    if (baseW2 > (room + 0.01)) {
+                        def floorW2:double 0.0
+                        if c.minWidth.isSet {
+                            floorW2 = c.minWidth.pixels
+                        } {
+                            floorW2 = (ext.shrinkFloorWidth(this parent c))
+                        }
+                        if (floorW2 < (c.box.getHorizontalChrome())) {
+                            floorW2 = (c.box.getHorizontalChrome())
+                        }
+                        def fw2:double room
+                        if (fw2 < floorW2) {
+                            fw2 = floorW2
+                        }
+                        if (fw2 < baseW2) {
+                            c.calculatedFlexWidth = fw2
+                            c.hasFlexWidth = true
+                        }
+                    }
+                }
+                jw2 = (jw2 + 1)
+            }
+        }
+
         ; (the balanced line being filled)
         def lineAt:int 0
         def i:int 0
