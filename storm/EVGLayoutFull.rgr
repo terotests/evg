@@ -194,8 +194,38 @@ class EVGLayoutFull {
         return b
     }
 
+    ; (main-mirror: a reversed flex direction that wraps. Each in-flow
+    ; child is reflected about the content box along the main axis; its
+    ; margins stay on their physical sides, as in mirrorChildren)
+    sfn mirrorMain:void (lay:EVGLayout element:EVGElement childCount:int vertical:boolean) {
+        def lo:double ((element.calculatedX + element.box.borderWidthPx) + element.box.paddingLeftPx)
+        def hi:double (lo + element.calculatedInnerWidth)
+        if vertical {
+            lo = ((element.calculatedY + element.box.borderWidthPx) + element.box.paddingTopPx)
+            hi = (lo + element.calculatedInnerHeight)
+        }
+        def span:double (lo + hi)
+        def i:int 0
+        while (i < childCount) {
+            def ch:EVGElement (element.getChild(i))
+            if (ch.isAbsolute == false) {
+                if vertical {
+                    def nyy:double (((span - ((ch.calculatedY + ch.calculatedHeight) + ch.box.marginBottomPx))) + ch.box.marginTopPx)
+                    lay.translateSubtree(ch 0.0 (nyy - ch.calculatedY))
+                } {
+                    def nxx:double (((span - ((ch.calculatedX + ch.calculatedWidth) + ch.box.marginRightPx))) + ch.box.marginLeftPx)
+                    lay.translateSubtree(ch (nxx - ch.calculatedX) 0.0)
+                }
+            }
+            i = (i + 1)
+        }
+    }
+
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        if (((strlen css.mainMirror) > 0) && (childCount > 0)) {
+            EVGLayoutFull.mirrorMain(lay element childCount (css.mainMirror == "y"))
+        }
         if (((css.stickyLeft >= 0.0) || (css.stickyTop >= 0.0)) || ((css.stickyBottom >= 0.0) || (css.stickyRight >= 0.0))) {
             sawSticky = true
         }

@@ -53,6 +53,10 @@ class EVGCssExtra {
     ; a CSS flex container (flex-box: true): its baseline is its first
     ; item's, synthesized from that item's border box when it has none
     def flexBox:boolean false
+    ; a reversed flex direction that wraps (main-mirror: x or y): laid
+    ; out forward, then each child reflected about the content box along
+    ; that axis, so every line keeps its items and packs from the end
+    def mainMirror:string ""
     ; a line with no text: its baseline this far above its bottom
     ; (baseline-from-bottom; -1 when not said)
     def baseFromBottom:double -1.0
@@ -174,7 +178,7 @@ class EVGCssExtra {
 
     ; the attribute names that are kept here
     sfn owns:boolean (name:string) {
-        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "inline-atomic") || ((name == "clear-margin") || ((name == "escape-clip") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || ((name == "contain-w") || ((name == "grid-lanes") || ((name == "lanes-tolerance") || (name == "paint-z"))))))))))))))))))))))))))))))))))))))
+        return ((name == "line-join") || ((name == "height-through") || ((name == "static-flex") || ((name == "static-flow") || ((name == "icb") || ((name == "cb") || ((name == "cb-outer") || ((name == "flex-box") || ((name == "main-mirror") || ((name == "baseline-from-bottom") || ((name == "baseline-from-top") || ((name == "baseline-last") || ((name == "folded-border") || ((name == "side-borders") || ((name == "bg-picture") || ((name == "bg-canvas") || ((name == "paint-late") || ((name == "baseline-central") || ((name == "baseline-flip") || ((name == "skip-first-baseline") || ((name == "baseline-under") || ((name == "baseline-synth-top") || ((name == "float-row") || ((name == "float-side") || ((name == "clear-floats") || ((name == "beside-floats") || ((name == "float-holder") || ((name == "inline-atomic") || ((name == "clear-margin") || ((name == "escape-clip") || ((name == "sticky-top") || ((name == "sticky-left") || ((name == "sticky-bottom") || ((name == "sticky-right") || ((name == "pct-auto") || ((name == "contain-w") || ((name == "grid-lanes") || ((name == "lanes-tolerance") || (name == "paint-z")))))))))))))))))))))))))))))))))))))))
     }
 
     fn set:void (name:string value:string) {
@@ -223,6 +227,10 @@ class EVGCssExtra {
         }
         if (name == "flex-box") {
             flexBox = (value == "true")
+            return
+        }
+        if (name == "main-mirror") {
+            mainMirror = value
             return
         }
         if (name == "baseline-flip") {
@@ -421,6 +429,7 @@ class EVGCssExtra {
         c.cbOuterSize = cbOuterSize
         c.cbOuterStatic = cbOuterStatic
         c.flexBox = flexBox
+        c.mainMirror = mainMirror
         c.baseFromBottom = baseFromBottom
         c.baseFromTop = baseFromTop
         c.lastBase = lastBase
