@@ -31,6 +31,8 @@ class EVGGradient {
     def isLinear:boolean true     ; true = linear, false = radial
     def angle:double 0.0          ; degrees for linear gradient (0 = to top, 90 = to right)
     def stops:[EVGGradientStop]
+    ; repeating-linear-gradient: the stops' span repeats along the axis
+    def repeating:boolean false
     
     Constructor () {
         def s:[EVGGradientStop]
@@ -91,6 +93,7 @@ class EVGGradient {
         if (linearIdx >= 0) {
             grad.isLinear = true
             grad.isSet = true
+            grad.repeating = ((indexOf gradStr "repeating-linear-gradient") >= 0)
             ; CSS with no direction runs TOP TO BOTTOM. The field's own default
             ; is 0 — to the top — so a gradient written the shortest way came
             ; out upside down, and every painter agreed with the other about

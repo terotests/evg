@@ -3487,13 +3487,29 @@ class EVGLayout {
         if (mode == "start") {
             return
         }
+        ; (lines taller than the box are not stretched: they start at the
+        ; cross start, the far end when the lines run up, wrap-reverse)
+        if (((mode == "stretch") || ((mode == "normal") || ((strlen mode) == 0))) && ((parent.flexWrap == "wrap-reverse") && ((contentHeight > innerHeight) && ((parent.clipsContent()) == false)))) {
+            mode = "flex-end"
+        }
         if ((mode == "stretch") || (mode == "normal")) {
             this.applyAlignContentStretch(parent members counts heights contentHeight innerHeight)
             return
         }
         def free:double (innerHeight - contentHeight)
+        ; (lines taller than the box: center and end still place them,
+        ; overflowing both ends or the start; the space-* fall back to the
+        ; start, CSS Box Alignment 4.3 and 5.3)
         if (free <= 0.0) {
-            return
+            if (((free == 0.0) || (parent.clipsContent())) || ((mode != "center") && ((mode != "flex-end") && (mode != "end")))) {
+                return
+            }
+            ; (several wrap-reverse lines packed at the start were already
+            ; placed from the far edge by applyWrapReverse)
+            def acR:string parent.alignContent
+            if (((parent.flexWrap == "wrap-reverse") && (lineCount > 1)) && (((strlen acR) == 0) || ((acR == "normal") || ((acR == "stretch") || (acR == "flex-start"))))) {
+                return
+            }
         }
 
         def first:double 0.0
