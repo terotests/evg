@@ -3265,6 +3265,47 @@ class EVGLayoutFull {
         if ((L.kind < 0) || (R.kind < 0)) {
             return out
         }
+        ; (positive numbers and plain spans need no template: a table's cells
+        ; are placed so, each one asking with the same long template)
+        def plainL:boolean (((strlen L.name) == 0) && ((L.kind != 1) || (L.n > 0)))
+        def plainR:boolean (((strlen R.name) == 0) && ((R.kind != 1) || (R.n > 0)))
+        if (plainL && plainR) {
+            def ps:int 0
+            def pe:int 0
+            if ((L.kind == 1) && (R.kind == 1)) {
+                ps = L.n
+                pe = R.n
+                if (pe < ps) {
+                    def pt:int ps
+                    ps = pe
+                    pe = pt
+                }
+                if (ps == pe) {
+                    pe = (ps + 1)
+                }
+            } {
+                if (L.kind == 1) {
+                    ps = L.n
+                    pe = (ps + 1)
+                    if (R.kind == 2) {
+                        pe = (ps + R.n)
+                    }
+                } {
+                    if (R.kind == 1) {
+                        pe = R.n
+                        ps = (pe - 1)
+                        if (L.kind == 2) {
+                            ps = (pe - L.n)
+                        }
+                    } {
+                        return out
+                    }
+                }
+            }
+            push out ps
+            push out pe
+            return out
+        }
         def tpl:EVGGridTemplate (EVGGridTemplate.parse(tplSpec))
         def count:int (tpl.count())
         if (((strlen tplSpec) == 0) || (tplSpec == "none")) {
