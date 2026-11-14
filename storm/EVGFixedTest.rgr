@@ -234,6 +234,35 @@ class EVGFixedTest {
         c.eqInt("the bar stayed on the bottom" (to_int bar.calculatedY) 736)
     }
 
+    ; A `flex: 1 1 auto` scroll container in a column is measured at its
+    ; content height first, where there is nothing to scroll. The offset the
+    ; application asked for has to survive that pass: a data grid's body
+    ; scrolled to row 1 000 came back at the top with its rows 42 000 px
+    ; below the fold.
+    sfn testScrollSurvivesFlexBasis:void (c:FixedCheck) {
+        print ""
+        print "--- a flex: 1 1 auto scroller keeps its offset ---"
+        def page:EVGElement (EVGFixedTest.box("page" 400.0 800.0))
+        page.setAttribute("display" "flex")
+        page.setAttribute("flex-direction" "column")
+        page.setAttribute("flex-wrap" "nowrap")
+        def body (EVGElement.createDiv())
+        body.id = "body"
+        body.setAttribute("flex" "1 1 auto")
+        body.setAttribute("overflow" "auto")
+        def content:EVGElement (EVGFixedTest.box("content" 400.0 84000.0))
+        def row:EVGElement (EVGFixedTest.box("row" 400.0 40.0))
+        row.setAttribute("margin-top" "42000px")
+        content.addChild(row)
+        body.addChild(content)
+        page.addChild(body)
+        body.scrollTop = 41990.0
+        def lay:EVGLayout (EVGFixedTest.laidOut(page))
+        c.eqInt("the body is the column's height" (to_int body.calculatedHeight) 800)
+        c.eqInt("the offset is kept" (to_int body.scrollTop) 41990)
+        c.eqInt("the row is in view" (to_int row.calculatedY) 10)
+    }
+
     sfn testScrollOnlyLeavesItAlone:void (c:FixedCheck) {
         print ""
         print "--- and the incremental path leaves it alone too ---"
@@ -317,6 +346,7 @@ class EVGFixedTest {
         EVGFixedTest.testAutoMarginsCentre(c)
         EVGFixedTest.testScrollLeavesItAlone(c)
         EVGFixedTest.testScrollOnlyLeavesItAlone(c)
+        EVGFixedTest.testScrollSurvivesFlexBasis(c)
         EVGFixedTest.testViewportRoot(c)
         print ""
         print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))

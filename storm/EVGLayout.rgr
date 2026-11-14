@@ -1345,29 +1345,43 @@ class EVGLayout {
         ; not in the setter is what makes it correct — how far there is to go
         ; is not known until the content has been measured, and it changes
         ; every time the content does.
+        ;
+        ; NOT WHILE MEASURING A BASIS. A column measures a `flex: 1 1 auto`
+        ; item at its content height first, where nothing scrolls, and lays
+        ; it out again at the height it gets. Clamping the application's
+        ; offset in the first pass threw it away: a data grid's body scrolled
+        ; to row 1 000 came back at 0 and its rows drew 42 000 px below the
+        ; fold. The measuring pass translates by the clamped value and leaves
+        ; the asked-for offset for the real one.
+        def st:double el.scrollTop
         def maxY:double (el.maxScrollTop())
-        if (el.scrollTop > maxY) {
-            el.scrollTop = maxY
+        if (st > maxY) {
+            st = maxY
         }
-        if (el.scrollTop < 0.0) {
-            el.scrollTop = 0.0
+        if (st < 0.0) {
+            st = 0.0
         }
+        def sl:double el.scrollLeft
         def maxX:double (el.maxScrollLeft())
-        if (el.scrollLeft > maxX) {
-            el.scrollLeft = maxX
+        if (sl > maxX) {
+            sl = maxX
         }
-        if (el.scrollLeft < 0.0) {
-            el.scrollLeft = 0.0
+        if (sl < 0.0) {
+            sl = 0.0
+        }
+        if (measureDepth == 0) {
+            el.scrollTop = st
+            el.scrollLeft = sl
         }
 
         ; Where the boxes now are, which is what `scrollOnly` moves FROM.
         ; Written whether or not anything is translated: an unscrolled
         ; container has applied zero, and that is a fact about it, not the
         ; absence of one.
-        el.appliedScrollTop = el.scrollTop
-        el.appliedScrollLeft = el.scrollLeft
+        el.appliedScrollTop = st
+        el.appliedScrollLeft = sl
 
-        if ((el.scrollTop == 0.0) && (el.scrollLeft == 0.0)) {
+        if ((st == 0.0) && (sl == 0.0)) {
             return
         }
         def j:int 0
@@ -1375,11 +1389,15 @@ class EVGLayout {
             def moved:EVGElement (el.getChild(j))
             if ((moved.isFixedPosition()) || ((moved.escapeClips()) > 0)) {
             } {
-                moved.moveSubtreeUnfixed((0.0 - el.scrollLeft) (0.0 - el.scrollTop))
+                moved.moveSubtreeUnfixed((0.0 - sl) (0.0 - st))
             }
             j = (j + 1)
         }
     }
+
+    ; How many basis-measuring layouts are open: `applyScroll` does not
+    ; clamp the application's offset inside one.
+    def measureDepth:int 0
 
     ; --- SCROLLING WITHOUT LAYING OUT -----------------------------------------
     ;
@@ -2448,7 +2466,9 @@ class EVGLayout {
                         layingOutAlongRow = false
                         columnCrossShrinks = (this.crossShrinksUnder(parent))
                         c.calculatedFlexHeight = 0.0
+                        measureDepth = (measureDepth + 1)
                         this.layoutElement(c 0.0 0.0 cw innerHeight)
+                        measureDepth = (measureDepth - 1)
                         layingOutAlongRow = wasRowM
                         columnCrossShrinks = wasShrinkM
                         fixedHeight = (fixedHeight + c.calculatedHeight)
