@@ -221,8 +221,218 @@ class EVGLayoutFull {
         }
     }
 
+    ; (multicol: a fragmentation unit is a box that is not broken across
+    ; columns: one with no children, a row (a line of words, a flex row) or
+    ; a grid)
+    sfn colUnit:boolean (el:EVGElement) {
+        if ((el.getChildCount()) == 0) {
+            return true
+        }
+        if ((el.flexDirection == "row") || (el.flexDirection == "row-reverse")) {
+            return true
+        }
+        return (el.display == "grid")
+    }
+    sfn colUnits:void (el:EVGElement units:[EVGElement]) {
+        def i:int 0
+        def n:int (el.getChildCount())
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if (c.isAbsolute == false) {
+                if (EVGLayoutFull.colUnit(c)) {
+                    push units c
+                } {
+                    EVGLayoutFull.colUnits(c units)
+                }
+            }
+            i = (i + 1)
+        }
+    }
+    ; the columns the units fall into at column height h: each unit's column
+    ; in cols, each column's flow start in starts; the column count
+    sfn colAssign:int (units:[EVGElement] top:double h:double cols:[int] starts:[double]) {
+        def c:int 0
+        def start:double top
+        push starts start
+        def i:int 0
+        def n:int (array_length units)
+        while (i < n) {
+            def u:EVGElement (itemAt units i)
+            def ut:double (u.calculatedY - u.box.marginTopPx)
+            def ub:double ((u.calculatedY + u.calculatedHeight) + u.box.marginBottomPx)
+            if ((ub > ((start + h) + 0.5)) && (ut > (start + 0.5))) {
+                c = (c + 1)
+                start = ut
+                push starts start
+            }
+            push cols c
+            i = (i + 1)
+        }
+        return (c + 1)
+    }
+    ; a subtree whose units are all in one column moves there whole, else
+    ; its children are placed one by one (the box itself stays)
+    sfn colPlace:int (el:EVGElement units:[EVGElement] cols:[int] at:int starts:[double] top:double step:double lay:EVGLayout) {
+        if (EVGLayoutFull.colUnit(el)) {
+            def uc:int (itemAt cols at)
+            if (uc > 0) {
+                lay.translateSubtree(el ((to_double uc) * step) (top - (itemAt starts uc)))
+            }
+            return (at + 1)
+        }
+        def nu:int (EVGLayoutFull.colCountIn(el))
+        if (nu == 0) {
+            return at
+        }
+        def c0:int (itemAt cols at)
+        def c1:int (itemAt cols ((at + nu) - 1))
+        if (c0 == c1) {
+            if (c0 > 0) {
+                lay.translateSubtree(el ((to_double c0) * step) (top - (itemAt starts c0)))
+            }
+            return (at + nu)
+        }
+        def k:int at
+        def i:int 0
+        def n:int (el.getChildCount())
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if (c.isAbsolute == false) {
+                k = (EVGLayoutFull.colPlace(c units cols k starts top step lay))
+            }
+            i = (i + 1)
+        }
+        return k
+    }
+    sfn colCountIn:int (el:EVGElement) {
+        if (EVGLayoutFull.colUnit(el)) {
+            return 1
+        }
+        def s:int 0
+        def i:int 0
+        def n:int (el.getChildCount())
+        while (i < n) {
+            def c:EVGElement (el.getChild(i))
+            if (c.isAbsolute == false) {
+                s = (s + (EVGLayoutFull.colCountIn(c)))
+            }
+            i = (i + 1)
+        }
+        return s
+    }
+    ; CSS Multi-column 1: the column count and width from column-count,
+    ; column-width and the box's width (3.4), the content laid out again at
+    ; that width, a balanced column height found (the least at which the
+    ; content fits in the count, units kept whole), and every unit moved to
+    ; its column; an auto height becomes that column height
+    sfn multiColumn:void (lay:EVGLayout element:EVGElement childCount:int css:EVGCssExtra) {
+        def w:double element.calculatedInnerWidth
+        def gap:double css.colGap
+        def n:int css.colCount
+        if (css.colWidth > 0.0) {
+            def byW:double (((w + gap) / (css.colWidth + gap)))
+            def nw:int (to_int byW)
+            if (nw < 1) {
+                nw = 1
+            }
+            if ((n <= 0) || (nw < n)) {
+                n = nw
+            }
+        }
+        if (n <= 1) {
+            return
+        }
+        def cw:double ((w - ((to_double (n - 1)) * gap)) / (to_double n))
+        if (cw <= 0.0) {
+            return
+        }
+        element.calculatedInnerWidth = cw
+        def kr:int 0
+        while (kr < childCount) {
+            def kc:EVGElement (element.getChild(kr))
+            kc.resetLayoutState()
+            kr = (kr + 1)
+        }
+        lay.layoutChildren(element)
+        element.calculatedInnerWidth = w
+        def top:double ((element.calculatedY + element.box.borderWidthPx) + element.box.paddingTopPx)
+        def units:[EVGElement]
+        EVGLayoutFull.colUnits(element units)
+        def nu:int (array_length units)
+        if (nu == 0) {
+            return
+        }
+        def last:EVGElement (itemAt units (nu - 1))
+        def total:double (((last.calculatedY + last.calculatedHeight) + last.box.marginBottomPx) - top)
+        def tallest:double 0.0
+        def ti:int 0
+        while (ti < nu) {
+            def tu:EVGElement (itemAt units ti)
+            def th:double ((tu.calculatedHeight + tu.box.marginTopPx) + tu.box.marginBottomPx)
+            if (th > tallest) {
+                tallest = th
+            }
+            ti = (ti + 1)
+        }
+        def fixedH:boolean element.hasDefiniteHeight
+        def h:double (total / (to_double n))
+        if (h < tallest) {
+            h = tallest
+        }
+        if fixedH {
+            h = element.calculatedInnerHeight
+        }
+        def cols:[int]
+        def starts:[double]
+        def used:int (EVGLayoutFull.colAssign(units top h cols starts))
+        def tries:int 0
+        while ((used > n) && ((fixedH == false) && (tries < 40))) {
+            ; (taller by the overflow shared out, at least a pixel)
+            def more:double (((to_double (used - n)) * h) / (to_double n))
+            if (more > (total / 20.0)) {
+                more = (total / 20.0)
+            }
+            if (more < 1.0) {
+                more = 1.0
+            }
+            h = (h + more)
+            cols = ([] _:int ())
+            starts = ([] _:double ())
+            used = (EVGLayoutFull.colAssign(units top h cols starts))
+            tries = (tries + 1)
+        }
+        def step:double (cw + gap)
+        def k:int 0
+        def i:int 0
+        while (i < childCount) {
+            def c:EVGElement (element.getChild(i))
+            if (c.isAbsolute == false) {
+                k = (EVGLayoutFull.colPlace(c units cols k starts top step lay))
+            }
+            i = (i + 1)
+        }
+        if (fixedH == false) {
+            ; (the tallest column is the content's height)
+            def ch:double 0.0
+            def ui:int 0
+            while (ui < nu) {
+                def uu:EVGElement (itemAt units ui)
+                def ubb:double (((uu.calculatedY + uu.calculatedHeight) + uu.box.marginBottomPx) - top)
+                if (ubb > ch) {
+                    ch = ubb
+                }
+                ui = (ui + 1)
+            }
+            element.calculatedInnerHeight = ch
+            element.calculatedHeight = (ch + (element.box.getVerticalChrome()))
+        }
+    }
+
     fn finishElement:void (lay:EVGLayout element:EVGElement childCount:int) {
         def css:EVGCssExtra (EVGLayoutFull.cx(element))
+        if (((css.colCount > 1) || (css.colWidth > 0.0)) && (childCount > 0)) {
+            EVGLayoutFull.multiColumn(lay element childCount css)
+        }
         if (((strlen css.mainMirror) > 0) && (childCount > 0)) {
             EVGLayoutFull.mirrorMain(lay element childCount (css.mainMirror == "y"))
         }
