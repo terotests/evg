@@ -1648,6 +1648,10 @@ class EVGElement {
     ; The item's column placement, parsed once for its `grid-column` (a
     ; copy: the layout resolves names and lines on it).
     fn placeCol:EVGGridPlacement () {
+        ; (auto: nothing to parse, and nothing to keep)
+        if ((strlen gridColumn) == 0) {
+            return (new EVGGridPlacement())
+        }
         if ((null? colPlace) || (colPlaceOf != gridColumn)) {
             colPlace = (EVGGridPlacement.parse(gridColumn))
             colPlaceOf = gridColumn
@@ -1656,6 +1660,10 @@ class EVGElement {
         return (cp.copy())
     }
     fn placeRow:EVGGridPlacement () {
+        ; (auto: nothing to parse, and nothing to keep)
+        if ((strlen gridRow) == 0) {
+            return (new EVGGridPlacement())
+        }
         if ((null? rowPlace) || (rowPlaceOf != gridRow)) {
             rowPlace = (EVGGridPlacement.parse(gridRow))
             rowPlaceOf = gridRow
