@@ -1,0 +1,169 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGMultiColTest — CSS multi-column layout (multicol: count gap width)
+; ==============================================================================
+;
+; A CSS front end marks a box with `multicol` (column-count, column-gap and
+; column-width in px, 0 / -1 for auto). EVGLayoutFull lays its content out at
+; one column's width, finds the least column height at which the content fits
+; in the count (boxes that are not broken across columns: leaves, rows, grids)
+; and moves each such box to its column. An auto height is that column height.
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGUnit.rgr"
+Import "EVGLayout.rgr"
+Import "EVGLayoutFull.rgr"
+
+class MultiColCheck {
+    def passed:int 0
+    def failed:int 0
+
+    Constructor () {
+    }
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn near:boolean (a:double b:double) {
+        def d:double (a - b)
+        if (d < 0.0) {
+            d = (0.0 - d)
+        }
+        return (d < 0.5)
+    }
+
+    fn layoutAt:void (root:EVGElement w:double h:double) {
+        def lay (new EVGLayout())
+        lay.setPageSize(w h)
+        lay.layout(root)
+    }
+
+    fn row:EVGElement (h:int) {
+        def r (EVGElement.createDiv())
+        r.setAttribute("height" ((to_string h) + "px"))
+        return r
+    }
+
+    fn run:void () {
+        print "EVGMultiColTest"
+
+        ; --- 1. eight 20px rows in four columns of 2 ---------------------------
+        def page (EVGElement.createDiv())
+        page.setAttribute("width" "430px")
+        def mc (EVGElement.createDiv())
+        mc.setAttribute("flex-direction" "column")
+        mc.setAttribute("multicol" "4 10 -1")
+        def rows:[EVGElement]
+        def i:int 0
+        while (i < 8) {
+            def r:EVGElement (this.row(20))
+            mc.addChild(r)
+            push rows r
+            i = (i + 1)
+        }
+        page.addChild(mc)
+        this.layoutAt(page 430.0 600.0)
+        def r0:EVGElement (itemAt rows 0)
+        def r2:EVGElement (itemAt rows 2)
+        def r7:EVGElement (itemAt rows 7)
+        this.ok("a column is (430 - 3 x 10) / 4 = 100 wide" (this.near(r0.calculatedWidth 100.0)))
+        this.ok("the third row starts the second column" ((this.near(r2.calculatedX 110.0)) && (this.near(r2.calculatedY 0.0))))
+        this.ok("the last row is the fourth column's second" ((this.near(r7.calculatedX 330.0)) && (this.near(r7.calculatedY 20.0))))
+        this.ok("the box is as tall as a column: 40" (this.near(mc.calculatedHeight 40.0)))
+
+        ; --- 2. a group whose rows fall in two columns is split, not moved -----
+        def page2 (EVGElement.createDiv())
+        page2.setAttribute("width" "210px")
+        def mc2 (EVGElement.createDiv())
+        mc2.setAttribute("flex-direction" "column")
+        mc2.setAttribute("multicol" "2 10 -1")
+        def g (EVGElement.createDiv())
+        g.setAttribute("flex-direction" "column")
+        def gr:[EVGElement]
+        def j:int 0
+        while (j < 6) {
+            def r:EVGElement (this.row(10))
+            g.addChild(r)
+            push gr r
+            j = (j + 1)
+        }
+        mc2.addChild(g)
+        page2.addChild(mc2)
+        this.layoutAt(page2 210.0 600.0)
+        def g3:EVGElement (itemAt gr 3)
+        def g2:EVGElement (itemAt gr 2)
+        this.ok("a group's fourth row heads the second column" ((this.near(g3.calculatedX 110.0)) && (this.near(g3.calculatedY 0.0))))
+        this.ok("its third row stays in the first" ((this.near(g2.calculatedX 0.0)) && (this.near(g2.calculatedY 20.0))))
+        this.ok("the box is 30 tall" (this.near(mc2.calculatedHeight 30.0)))
+
+        ; --- 3. a box taller than the even share keeps whole ------------------
+        def page3 (EVGElement.createDiv())
+        page3.setAttribute("width" "210px")
+        def mc3 (EVGElement.createDiv())
+        mc3.setAttribute("flex-direction" "column")
+        mc3.setAttribute("multicol" "2 10 -1")
+        def big:EVGElement (this.row(50))
+        def s1:EVGElement (this.row(10))
+        def s2:EVGElement (this.row(10))
+        mc3.addChild(big)
+        mc3.addChild(s1)
+        mc3.addChild(s2)
+        page3.addChild(mc3)
+        this.layoutAt(page3 210.0 600.0)
+        this.ok("the tall box alone fills the first column" (this.near(mc3.calculatedHeight 50.0)))
+        this.ok("the small ones go to the second" ((this.near(s1.calculatedX 110.0)) && (this.near(s2.calculatedY 10.0))))
+
+        ; --- 4. column-width: as many 90px columns as fit in 300 --------------
+        def page4 (EVGElement.createDiv())
+        page4.setAttribute("width" "300px")
+        def mc4 (EVGElement.createDiv())
+        mc4.setAttribute("flex-direction" "column")
+        mc4.setAttribute("multicol" "0 10 90")
+        def k:int 0
+        def w0:EVGElement (this.row(20))
+        mc4.addChild(w0)
+        while (k < 5) {
+            mc4.addChild(this.row(20))
+            k = (k + 1)
+        }
+        page4.addChild(mc4)
+        this.layoutAt(page4 300.0 600.0)
+        this.ok("three columns of (300 - 20) / 3 wide" (this.near(w0.calculatedWidth (280.0 / 3.0))))
+        this.ok("two rows each: 40 tall" (this.near(mc4.calculatedHeight 40.0)))
+
+        ; --- 5. one column: nothing changes -----------------------------------
+        def page5 (EVGElement.createDiv())
+        page5.setAttribute("width" "100px")
+        def mc5 (EVGElement.createDiv())
+        mc5.setAttribute("flex-direction" "column")
+        mc5.setAttribute("multicol" "0 10 200")
+        mc5.addChild(this.row(20))
+        mc5.addChild(this.row(20))
+        page5.addChild(mc5)
+        this.layoutAt(page5 100.0 600.0)
+        this.ok("a column-width wider than the box: one column, 40 tall" (this.near(mc5.calculatedHeight 40.0)))
+
+        print ""
+        print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
+        if (failed > 0) {
+            print "FAILED"
+        } {
+            print "OK"
+        }
+    }
+
+    sfn m@(main):void () {
+        EVGLayoutFull.install()
+        def c (new MultiColCheck())
+        c.run()
+    }
+}
