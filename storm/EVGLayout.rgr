@@ -1560,6 +1560,16 @@ class EVGLayout {
         return c.height.pixels
     }
 
+    ; may a column's item shrink below its content: its automatic minimum
+    ; is 0 when it is a scroll container, or its min-height says 0 (CSS
+    ; Flexbox 4.5)
+    fn columnMinZero:boolean (c:EVGElement) {
+        if c.minHeight.isSet {
+            return ((c.minHeight.pixels <= 0.0) && ((c.minHeight.isPercent()) == false))
+        }
+        return (c.clipsContent())
+    }
+
     ; the growing items of a column that a min-height or max-height holds
     ; are frozen there and the rest share what they left (CSS Flexbox 9.7
     ; 4d): nothing to do unless one is held
@@ -2478,6 +2488,51 @@ class EVGLayout {
                     jg = (jg + 1)
                 }
                 this.freezeColumnGrow(parent availC totalFlexC)
+                ; GROWING ITEMS WHOSE CONTENT OVERFLOWS THE COLUMN SHRINK.
+                ;
+                ; A `flex: 1 1 auto` item starts from its content; when the
+                ; bases overflow there is nothing to grow into and the items
+                ; shrink instead (CSS Flexbox 9.7: the shrink factor is used
+                ; when the sum of the bases is over the container). One whose
+                ; automatic minimum is 0, a scroll container or a min-height
+                ; of 0, goes down to fit: a data grid's `flex: 1 1 auto;
+                ; min-height: 0; overflow: auto` body was 84 000 px tall in a
+                ; 700 px grid, and the grid virtualised its rows to that.
+                def overC:double ((fixedHeight + gapTotalC) - innerHeight)
+                if ((overC > 0.0) && (parent.flexWrap == "nowrap")) {
+                    def weightC:double 0.0
+                    def jw:int 0
+                    while (jw < childCount) {
+                        def c:EVGElement (parent.getChild(jw))
+                        if ((jw < (array_length autoBasisC)) && ((itemAt autoBasisC jw) > 0.0)) {
+                            if (this.columnMinZero(c)) {
+                                weightC = (weightC + (c.flexShrink * (itemAt autoBasisC jw)))
+                            }
+                        }
+                        jw = (jw + 1)
+                    }
+                    if (weightC > 0.0) {
+                        def jx:int 0
+                        while (jx < childCount) {
+                            def c:EVGElement (parent.getChild(jx))
+                            if ((jx < (array_length autoBasisC)) && ((itemAt autoBasisC jx) > 0.0)) {
+                                if ((this.columnMinZero(c)) && (c.flexShrink > 0.0)) {
+                                    def bC:double (itemAt autoBasisC jx)
+                                    def hC:double (bC - ((overC * (c.flexShrink * bC)) / weightC))
+                                    if (hC < (c.box.getVerticalChrome())) {
+                                        hC = (c.box.getVerticalChrome())
+                                    }
+                                    if (c.minHeight.isSet && (hC < c.minHeight.pixels)) {
+                                        hC = c.minHeight.pixels
+                                    }
+                                    c.calculatedFlexHeight = hC
+                                    c.hasFlexHeight = true
+                                }
+                            }
+                            jx = (jx + 1)
+                        }
+                    }
+                }
             } {
                 ; No grow flex — shrink to fit. Each item gives up space in
                 ; proportion to (flex-shrink x its size), so flex-shrink: 0
