@@ -636,9 +636,9 @@ class EVGLayoutFull {
                 push rows -1
                 push rowSpan 1
             } {
-                def cp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridColumn))
+                def cp:EVGGridPlacement ((kid.placeCol()))
                 cp.resolveNames(tpl)
-                def rp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridRow))
+                def rp:EVGGridPlacement ((kid.placeRow()))
                 rp.resolveNames(rowTpl)
                 if ((strlen kid.gridArea) > 0) {
                     return none
@@ -1961,9 +1961,9 @@ class EVGLayoutFull {
         def j:int 0
         while (j < k) {
             def c:EVGElement (itemAt kids j)
-            def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+            def cp:EVGGridPlacement ((c.placeCol()))
             cp.resolveNames(colTpl)
-            def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+            def rp:EVGGridPlacement ((c.placeRow()))
             rp.resolveNames(rowTpl)
             push cs (cp.start - 1)
             push csp cp.span
@@ -2359,7 +2359,7 @@ class EVGLayoutFull {
             def sgk:EVGElement (sgi.getChild(sc))
             if (sc < (array_length sgCols)) {
                 def kc:int (itemAt sgCols sc)
-                def kp:EVGGridPlacement (EVGGridPlacement.parse(sgk.gridColumn))
+                def kp:EVGGridPlacement ((sgk.placeCol()))
                 kp.resolveNames(tpl)
                 def ks:int kp.span
                 if ((kc >= 0) && ((kc + ks) <= sgSpan)) {
@@ -3970,9 +3970,9 @@ class EVGLayoutFull {
         def q:int 0
         while (q < itemCount) {
             def it:EVGElement (itemAt items q)
-            def pl:EVGGridPlacement (EVGGridPlacement.parse(it.gridColumn))
+            def pl:EVGGridPlacement ((it.placeCol()))
             if rowDir {
-                pl = (EVGGridPlacement.parse(it.gridRow))
+                pl = ((it.placeRow()))
             }
             pl.resolveNames(tpl)
             if (pl.span < 1) {
@@ -4357,9 +4357,9 @@ class EVGLayoutFull {
                     v = (lay.intrinsicWidthOf(it))
                 }
             }
-            def spx:EVGGridPlacement (EVGGridPlacement.parse(it.gridColumn))
+            def spx:EVGGridPlacement ((it.placeCol()))
             if rowDir {
-                spx = (EVGGridPlacement.parse(it.gridRow))
+                spx = ((it.placeRow()))
             }
             ; (a spanning item's share: its size less the gaps it
             ; crosses, split evenly over the tracks it spans)
@@ -4935,7 +4935,7 @@ class EVGLayoutFull {
         while (pi < (parent.getChildCount())) {
             def pc:EVGElement (parent.getChild(pi))
             if (((pc.hasAbsolutePosition()) == false) && ((strlen pc.gridColumn) > 0)) {
-                def pp:EVGGridPlacement (EVGGridPlacement.parse(pc.gridColumn))
+                def pp:EVGGridPlacement ((pc.placeCol()))
                 ; (a negative line from the explicit grid's end, a name)
                 if ((EVGLayoutFull.countsFromEnd(pc.gridColumn)) && (parent.gridTemplateColumns != "subgrid")) {
                     def rl:[int] (EVGLayoutFull.rawLines(pc.gridColumn parent.gridTemplateColumns parent.gridTemplateAreas false))
@@ -4974,11 +4974,11 @@ class EVGLayoutFull {
             while (ri < (parent.getChildCount())) {
                 def rc:EVGElement (parent.getChild(ri))
                 if ((rc.hasAbsolutePosition()) == false) {
-                    def cpl:EVGGridPlacement (EVGGridPlacement.parse(rc.gridColumn))
+                    def cpl:EVGGridPlacement ((rc.placeCol()))
                     if (cpl.span > lastLine) {
                         lastLine = cpl.span
                     }
-                    def rpl:EVGGridPlacement (EVGGridPlacement.parse(rc.gridRow))
+                    def rpl:EVGGridPlacement ((rc.placeRow()))
                     ; (and an item placed on both axes holds its columns in
                     ; its rows)
                     def both:boolean (((rpl.start > 0) && (cpl.start > 0)) && (((strlen cpl.startName) == 0) && ((strlen rpl.startName) == 0)))
@@ -5017,7 +5017,7 @@ class EVGLayoutFull {
                 while (wi < (parent.getChildCount())) {
                     def wc:EVGElement (parent.getChild(wi))
                     if ((wc.hasAbsolutePosition()) == false) {
-                        def wp:EVGGridPlacement (EVGGridPlacement.parse(wc.gridColumn))
+                        def wp:EVGGridPlacement ((wc.placeCol()))
                         W = ((W + wp.start) + wp.span)
                     }
                     wi = (wi + 1)
@@ -5042,8 +5042,8 @@ class EVGLayoutFull {
                     while (qi < (parent.getChildCount())) {
                         def qc:EVGElement (parent.getChild(qi))
                         if ((qc.hasAbsolutePosition()) == false) {
-                            def qcp:EVGGridPlacement (EVGGridPlacement.parse(qc.gridColumn))
-                            def qrp:EVGGridPlacement (EVGGridPlacement.parse(qc.gridRow))
+                            def qcp:EVGGridPlacement ((qc.placeCol()))
+                            def qrp:EVGGridPlacement ((qc.placeRow()))
                             def qboth:boolean (((qrp.start > 0) && (qcp.start > 0)) && (((strlen qcp.startName) == 0) && ((strlen qrp.startName) == 0)))
                             def qlocked:boolean ((qrp.start > 0) && (qcp.start == 0) && ((strlen qcp.startName) == 0) && (qcp.endLine == 0))
                             def c0:int -1
@@ -5828,7 +5828,7 @@ class EVGLayoutFull {
                     }
                 }
                 if (((strlen c.gridColumn) > 0) && ((array_length colAuto) == 0)) {
-                    def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+                    def cp:EVGGridPlacement ((c.placeCol()))
                     cp.resolveNames(cols)
                     if (cp.start > 0) {
                         ; (lines past the tracks there are, the collapsed
@@ -5872,7 +5872,7 @@ class EVGLayoutFull {
                     ah = (itemAt rowAuto 1)
                 }
                 if (((strlen c.gridRow) > 0) && ((array_length rowAuto) == 0)) {
-                    def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+                    def rp:EVGGridPlacement ((c.placeRow()))
                     rp.resolveNames(rowTemplate)
                     if (rp.start > 0) {
                         ay = (rowShift + (lay.gridRowOffset(rowSizes (rp.start - 1) rowGap)))

@@ -11,6 +11,7 @@ Import "EVGCssExtra.rgr"
 Import "EVGGradient.rgr"
 Import "SvgParser.rgr"
 Import "SVGPathParser.rgr"
+Import "EVGGrid.rgr"
 
 ; Element type constants
 ; 0 = CONTAINER (div)
@@ -504,6 +505,57 @@ class EVGElement {
     def hasLayout:boolean false
     def layoutClean:boolean false
     def layoutSkipped:boolean false
+    ; …and the other inputs it was laid out in, with what it computed in
+    ; them (`altKept`): a grid or table cell is laid out for its content,
+    ; then stretched to its row, every pass. `altAnswered` says the last
+    ; call was answered from them, so the sizes on the box are not those of
+    ; the inputs the subtree holds (kept in `res*`).
+    ; (and the box's own width and height as the call found them: a
+    ; parent may set or unset them for a call, to measure it)
+    def lastWS:boolean false
+    def lastWV:double 0.0
+    def lastWT:int 0
+    def lastHS:boolean false
+    def lastHV:double 0.0
+    def lastHT:int 0
+    def altWS:boolean false
+    def altWV:double 0.0
+    def altWT:int 0
+    def altHS:boolean false
+    def altHV:double 0.0
+    def altHT:int 0
+    ; (and the layout's mode and the fit-content room: see `layoutMode`)
+    def lastMode:int 0
+    def altMode:int 0
+    def lastFit:double -1.0
+    def altFit:double -1.0
+    def altKept:boolean false
+    def altAnswered:boolean false
+    ; (set while the layout lays an answered subtree out in those inputs)
+    def altForce:boolean false
+    ; (where the display list keeps this box's fragment, see `EVGDisplayList.fragmentOf`)
+    def fragSlot:int -1
+    def altParentW:double 0.0
+    def altParentH:double 0.0
+    def altFlex:boolean false
+    def altFlexW:double 0.0
+    def altFlexH:double 0.0
+    def altW:double 0.0
+    def altH:double 0.0
+    def altInnerW:double 0.0
+    def altInnerH:double 0.0
+    def altBase:double 0.0
+    def altDescent:double 0.0
+    def altHasBase:boolean false
+    def altDefH:boolean false
+    def resW:double 0.0
+    def resH:double 0.0
+    def resInnerW:double 0.0
+    def resInnerH:double 0.0
+    def resBase:double 0.0
+    def resDescent:double 0.0
+    def resHasBase:boolean false
+    def resDefH:boolean false
     def kidOffX:double 0.0
     def kidOffY:double 0.0
     ; Whether `paintTop` and the rest were measured since the subtree was
@@ -811,6 +863,12 @@ class EVGElement {
     def gridArea:string ""
     def gridColumn:string ""
     def gridRow:string ""
+    ; `gridColumn` and `gridRow` parsed (placeCol, placeRow): a grid lays
+    ; its items out several times a pass, and a table's cells are many
+    def colPlaceOf:string ""
+    def colPlace@(optional):EVGGridPlacement
+    def rowPlaceOf:string ""
+    def rowPlace@(optional):EVGGridPlacement
     def position:string "relative"
     
     ; CSS Margin/Padding (shorthand expansion handled at parse time)
@@ -1545,9 +1603,109 @@ class EVGElement {
             ; `resetLayoutNow` — and would match `lastFlexH`.
             calculatedFlexHeight = 0.0
             hasFlexHeight = false
+            ; And its units: the parent resolves them again this pass, against
+            ; the room it has now, as it does for every box — a box laid out
+            ; anew below keeps what the parent resolved (see `layoutElement`).
+            unitsResolved = false
             return
         }
         this.resetLayoutNow()
+    }
+
+    fn keepOwnSize:void (mode:int) {
+        lastMode = mode
+        lastFit = fitRoom
+        lastWS = width.isSet
+        lastWV = width.value
+        lastWT = width.unitType
+        lastHS = height.isSet
+        lastHV = height.value
+        lastHT = height.unitType
+    }
+    fn ownSizeToAlt:void () {
+        altMode = lastMode
+        altFit = lastFit
+        altWS = lastWS
+        altWV = lastWV
+        altWT = lastWT
+        altHS = lastHS
+        altHV = lastHV
+        altHT = lastHT
+    }
+    fn sameOwnSize:boolean (alt:boolean mode:int) {
+        if alt {
+            if ((altMode != mode) || (altFit != fitRoom)) {
+                return false
+            }
+            return ((((altWS == width.isSet) && (altWV == width.value)) && ((altWT == width.unitType) && (altHS == height.isSet))) && ((altHV == height.value) && (altHT == height.unitType)))
+        }
+        if ((lastMode != mode) || (lastFit != fitRoom)) {
+            return false
+        }
+        return ((((lastWS == width.isSet) && (lastWV == width.value)) && ((lastWT == width.unitType) && (lastHS == height.isSet))) && ((lastHV == height.value) && (lastHT == height.unitType)))
+    }
+
+    ; The item's column placement, parsed once for its `grid-column` (a
+    ; copy: the layout resolves names and lines on it).
+    fn placeCol:EVGGridPlacement () {
+        if ((null? colPlace) || (colPlaceOf != gridColumn)) {
+            colPlace = (EVGGridPlacement.parse(gridColumn))
+            colPlaceOf = gridColumn
+        }
+        def cp:EVGGridPlacement (unwrap colPlace)
+        return (cp.copy())
+    }
+    fn placeRow:EVGGridPlacement () {
+        if ((null? rowPlace) || (rowPlaceOf != gridRow)) {
+            rowPlace = (EVGGridPlacement.parse(gridRow))
+            rowPlaceOf = gridRow
+        }
+        def rp:EVGGridPlacement (unwrap rowPlace)
+        return (rp.copy())
+    }
+
+    ; What the layout computed for this box, kept (`res*`, `alt*`) —
+    ; see `altKept`.
+    fn keepResults:void () {
+        resW = calculatedWidth
+        resH = calculatedHeight
+        resInnerW = calculatedInnerWidth
+        resInnerH = calculatedInnerHeight
+        resBase = calculatedBaseline
+        resDescent = calculatedDescent
+        resHasBase = hasBaseline
+        resDefH = hasDefiniteHeight
+    }
+    fn copyResultsToAlt:void () {
+        altW = resW
+        altH = resH
+        altInnerW = resInnerW
+        altInnerH = resInnerH
+        altBase = resBase
+        altDescent = resDescent
+        altHasBase = resHasBase
+        altDefH = resDefH
+    }
+    fn restoreResults:void (alt:boolean) {
+        if alt {
+            calculatedWidth = altW
+            calculatedHeight = altH
+            calculatedInnerWidth = altInnerW
+            calculatedInnerHeight = altInnerH
+            calculatedBaseline = altBase
+            calculatedDescent = altDescent
+            hasBaseline = altHasBase
+            hasDefiniteHeight = altDefH
+            return
+        }
+        calculatedWidth = resW
+        calculatedHeight = resH
+        calculatedInnerWidth = resInnerW
+        calculatedInnerHeight = resInnerH
+        calculatedBaseline = resBase
+        calculatedDescent = resDescent
+        hasBaseline = resHasBase
+        hasDefiniteHeight = resDefH
     }
 
     ; Nothing under here has been laid out, as far as `keepLayout` is
@@ -1556,6 +1714,8 @@ class EVGElement {
     ; though nothing the flow hands the subtree's root need have changed.
     fn forgetLayout:void () {
         hasLayout = false
+        altKept = false
+        altAnswered = false
         def i:int 0
         while (i < (array_length children)) {
             def child:EVGElement (itemAt children i)
@@ -3642,6 +3802,45 @@ class EVGElement {
         layoutSkipped = other.layoutSkipped
         kidOffX = other.kidOffX
         kidOffY = other.kidOffY
+        altKept = other.altKept
+        lastMode = other.lastMode
+        altMode = other.altMode
+        lastFit = other.lastFit
+        altFit = other.altFit
+        lastWS = other.lastWS
+        lastWV = other.lastWV
+        lastWT = other.lastWT
+        lastHS = other.lastHS
+        lastHV = other.lastHV
+        lastHT = other.lastHT
+        altWS = other.altWS
+        altWV = other.altWV
+        altWT = other.altWT
+        altHS = other.altHS
+        altHV = other.altHV
+        altHT = other.altHT
+        altAnswered = other.altAnswered
+        altParentW = other.altParentW
+        altParentH = other.altParentH
+        altFlex = other.altFlex
+        altFlexW = other.altFlexW
+        altFlexH = other.altFlexH
+        altW = other.altW
+        altH = other.altH
+        altInnerW = other.altInnerW
+        altInnerH = other.altInnerH
+        altBase = other.altBase
+        altDescent = other.altDescent
+        altHasBase = other.altHasBase
+        altDefH = other.altDefH
+        resW = other.resW
+        resH = other.resH
+        resInnerW = other.resInnerW
+        resInnerH = other.resInnerH
+        resBase = other.resBase
+        resDescent = other.resDescent
+        resHasBase = other.resHasBase
+        resDefH = other.resDefH
         boundsFresh = other.boundsFresh
         lastParentW = other.lastParentW
         fitRoom = other.fitRoom
