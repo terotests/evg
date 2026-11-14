@@ -583,7 +583,9 @@ class EVGLayout {
         element.lastFlex = element.hasFlexWidth
         element.lastFlexW = element.calculatedFlexWidth
         element.lastFlexH = element.calculatedFlexHeight
-        element.keepOwnSize((this.layoutMode()))
+        if element.keepLayout {
+            element.keepOwnSize((this.layoutMode()))
+        }
         element.resolveUnits(parentWidth parentHeight)
         ; `display: none` has no box and lays out nothing under it.
         if (element.isHidden()) {
