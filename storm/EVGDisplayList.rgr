@@ -604,7 +604,7 @@ class EVGDisplayList {
         if (clips || ((el.opacity < 1.0) || (el.hasTransform()))) {
             return true
         }
-        if ((el.keepLayout && fragments) || (EVGDisplayList.paintsLate(el))) {
+        if (EVGDisplayList.paintsLate(el)) {
             return true
         }
         return ((EVGDisplayList.inlineLate(el)) || (el.isSurface()))
@@ -2383,13 +2383,14 @@ class EVGDisplayList {
         clear fragOffY
     }
 
+    ; (the slot is the element's own note of where its fragment is: a
+    ; walk over every kept fragment for each kept box is quadratic)
     fn fragmentOf:int (el:EVGElement) {
-        def i:int 0
-        while (i < (array_length fragEls)) {
+        def i:int el.fragSlot
+        if ((i >= 0) && (i < (array_length fragEls))) {
             if ((itemAt fragEls i) == el) {
                 return i
             }
-            i = (i + 1)
         }
         return (0 - 1)
     }
@@ -2454,6 +2455,7 @@ class EVGDisplayList {
         def offY:double (el.calculatedY - first.y)
         def fi:int (this.fragmentOf(el))
         if (fi < 0) {
+            el.fragSlot = (array_length fragEls)
             push fragEls el
             push fragLists kept
             push fragStamps el.paintStamp
@@ -3689,6 +3691,9 @@ class EVGDisplayList {
                 turnedDepth = (turnedDepth + 1)
             }
         }
+        def inl0:int (array_length inlEls)
+        def esc0:int (array_length escEls)
+        def ovl0:int (array_length deferredOverlays)
         this.walkOpaque(el)
         turnedDepth = hadTurned
         drawScale = hadScale
@@ -3700,8 +3705,14 @@ class EVGDisplayList {
         curNode = prevNode
         this.fadeFrom(emitStart el.opacity)
         this.transformFrom(emitStart el)
+        ; (only a subtree drawn whole is kept: one that left an atomic
+        ; inline, a box out of its clips or a surface to be drawn later by
+        ; a box around it is painted in that order, which a replay would
+        ; not keep)
         if keeping {
-            this.recordFragment(el emitStart)
+            if (((inl0 == (array_length inlEls)) && (esc0 == (array_length escEls))) && (ovl0 == (array_length deferredOverlays))) {
+                this.recordFragment(el emitStart)
+            }
         }
     }
 

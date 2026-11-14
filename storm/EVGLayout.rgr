@@ -246,6 +246,7 @@ class EVGLayout {
         
         ; Layout root at (0, 0)
         this.layoutElement(root 0.0 0.0 pageWidth pageHeight)
+        this.settleAltAnswers()
         ext.afterLayout(this root)
 
         ; The names first: a surface may be positioned against any box in the
@@ -407,6 +408,80 @@ class EVGLayout {
     ; (set while a column of no height shrinks its items into its max-height)
     def shrinkIntoMax:boolean false
 
+    ; The layout's own state a call is made in, as bits: a kept subtree
+    ; laid out in another mode is not the same layout.
+    ; Kept subtrees answered from their other inputs (`altKept`) and not
+    ; laid out again after: a grid cell's content pass is followed by its
+    ; stretch, which puts the subtree in place, but a box whose last call
+    ; was the other one holds the layout of the call before it. Each such
+    ; subtree is laid out once more, for real, in the inputs it answered —
+    ; at the place the flow gave it, with the same size, so nothing around
+    ; it moves. (Latest first: a box answered after the ones inside it
+    ; lays them out too.)
+    def altPending:[EVGElement]
+    fn settleAltAnswers:void () {
+        ; (a subtree laid out again here may answer inside itself the same
+        ; way: those are settled in the next round)
+        while ((array_length altPending) > 0) {
+            def round:[EVGElement]
+            def j:int 0
+            while (j < (array_length altPending)) {
+                push round (itemAt altPending j)
+                j = (j + 1)
+            }
+            clear altPending
+            def i:int ((array_length round) - 1)
+            while (i >= 0) {
+                def el:EVGElement (itemAt round i)
+                if el.altAnswered {
+                    this.relayoutAlt(el)
+                }
+                i = (i - 1)
+            }
+        }
+    }
+    fn relayoutAlt:void (el:EVGElement) {
+        def wasCross:boolean columnCrossShrinks
+        def wasMax:boolean shrinkIntoMax
+        def wasKw:boolean measuringKeyword
+        def wasRow:boolean layingOutAlongRow
+        def wasFit:double el.fitRoom
+        def m:int el.altMode
+        columnCrossShrinks = ((m % 2) == 1)
+        shrinkIntoMax = ((m % 4) >= 2)
+        measuringKeyword = ((m % 8) >= 4)
+        layingOutAlongRow = (m >= 8)
+        el.fitRoom = el.altFit
+        el.hasFlexWidth = el.altFlex
+        el.calculatedFlexWidth = el.altFlexW
+        el.calculatedFlexHeight = el.altFlexH
+        el.altForce = true
+        this.layoutElement(el el.calculatedX el.calculatedY el.altParentW el.altParentH)
+        el.altForce = false
+        el.fitRoom = wasFit
+        columnCrossShrinks = wasCross
+        shrinkIntoMax = wasMax
+        measuringKeyword = wasKw
+        layingOutAlongRow = wasRow
+    }
+
+    fn layoutMode:int () {
+        def m:int 0
+        if columnCrossShrinks {
+            m = (m + 1)
+        }
+        if shrinkIntoMax {
+            m = (m + 2)
+        }
+        if measuringKeyword {
+            m = (m + 4)
+        }
+        if layingOutAlongRow {
+            m = (m + 8)
+        }
+        return m
+    }
+
     fn layoutElement:void (element:EVGElement parentX:double parentY:double parentWidth:double parentHeight:double) {
         ; (the CSS layer may lay out a percentage height of a height still
         ; unknown as auto, and such a max-height as none, CSS 2.1 10.5, 10.7)
@@ -427,42 +502,55 @@ class EVGLayout {
         ; A subtree the app keeps — see `EVGElement.keepLayout` — with the
         ; same inputs as last time is the same layout, moved: the flow
         ; reads its size and baseline off it as if it had been laid out.
+        if (element.keepLayout == false) {
+            element.altKept = false
+        }
         if element.keepLayout {
             if (element.hasLayout && element.layoutClean) {
-                if ((((element.lastParentW == parentWidth) && (element.lastParentH == parentHeight))
-                     && (element.lastFlex == element.hasFlexWidth)) && ((element.lastFlexW == element.calculatedFlexWidth) && (element.lastFlexH == element.calculatedFlexHeight))) {
-                    ; The box is at (parentX, parentY): the flow wrote it there
-                    ; before this call, or means it at the origin to move it
-                    ; after. What is under it follows by the difference between
-                    ; where the first child is and where it sat relative to the
-                    ; box when the subtree was measured; the bounds, which were
-                    ; measured with the children, follow by the same.
-                    element.calculatedX = parentX
-                    element.calculatedY = parentY
-                    def n:int (element.getChildCount())
-                    if (n > 0) {
-                        def k0:EVGElement (element.getChild(0))
-                        def dx:double ((parentX + element.kidOffX) - k0.calculatedX)
-                        def dy:double ((parentY + element.kidOffY) - k0.calculatedY)
-                        if ((dx != 0.0) || (dy != 0.0)) {
-                            def i:int 0
-                            while (i < n) {
-                                def kid:EVGElement (element.getChild(i))
-                                kid.moveSubtree(dx dy)
-                                i = (i + 1)
-                            }
-                            element.paintLeft = (element.paintLeft + dx)
-                            element.paintRight = (element.paintRight + dx)
-                            element.paintTop = (element.paintTop + dy)
-                            element.paintBottom = (element.paintBottom + dy)
-                        }
-                    } {
-                        element.boundsFresh = false
-                    }
+                ; (what the last call computed, unless that call was answered
+                ; from the other inputs — see `EVGElement.altKept`)
+                if (element.altAnswered == false) {
+                    element.keepResults()
+                }
+                if ((element.altForce == false) && (((((element.lastParentW == parentWidth) && (element.lastParentH == parentHeight))
+                     && (element.lastFlex == element.hasFlexWidth)) && ((element.lastFlexW == element.calculatedFlexWidth) && (element.lastFlexH == element.calculatedFlexHeight))) && (element.sameOwnSize(false (this.layoutMode()))))) {
+                    element.restoreResults(false)
+                    element.altAnswered = false
+                    this.moveKept(element parentX parentY)
                     element.layoutSkipped = true
                     return
                 }
+                ; The other inputs the subtree was laid out in last time: a
+                ; grid or a table lays a cell out for its content height,
+                ; then again stretched to the row's. Asked for those, the
+                ; subtree answers with the sizes it had then and stays where
+                ; it is: the call after it, in the inputs it holds, moves it.
+                if (element.altKept && (element.altForce == false)) {
+                    if (((((element.altParentW == parentWidth) && (element.altParentH == parentHeight))
+                         && (element.altFlex == element.hasFlexWidth)) && ((element.altFlexW == element.calculatedFlexWidth) && (element.altFlexH == element.calculatedFlexHeight))) && (element.sameOwnSize(true (this.layoutMode())))) {
+                        element.restoreResults(true)
+                        this.moveKept(element parentX parentY)
+                        element.altAnswered = true
+                        push altPending element
+                        element.layoutSkipped = true
+                        return
+                    }
+                }
+                ; Laid out in other inputs again: the ones it holds now are
+                ; the other ones from here on.
+                element.altParentW = element.lastParentW
+                element.altParentH = element.lastParentH
+                element.altFlex = element.lastFlex
+                element.altFlexW = element.lastFlexW
+                element.altFlexH = element.lastFlexH
+                element.copyResultsToAlt()
+                element.ownSizeToAlt()
+                element.altKept = true
+            } {
+                ; (laid out anew: what it held in other inputs is gone)
+                element.altKept = false
             }
+            element.altAnswered = false
             ; Laid out for real: what the root's reset left in place goes,
             ; but not what the parent has just handed down — the flex width,
             ; the flex height, and the box's place, which the flow wrote before
@@ -473,7 +561,13 @@ class EVGLayout {
             def flexH:double element.calculatedFlexHeight
             def bx:double element.calculatedX
             def by:double element.calculatedY
+            ; (and the units, which the parent may have resolved this pass
+            ; against its own room, before this call: a percentage width
+            ; resolved again against the flexed width it has become is a
+            ; quarter of a quarter)
+            def unitsSet:boolean element.unitsResolved
             element.resetLayoutNow()
+            element.unitsResolved = unitsSet
             element.hasFlexWidth = flex
             element.calculatedFlexWidth = flexW
             element.hasFlexHeight = flexHSet
@@ -489,6 +583,9 @@ class EVGLayout {
         element.lastFlex = element.hasFlexWidth
         element.lastFlexW = element.calculatedFlexWidth
         element.lastFlexH = element.calculatedFlexHeight
+        if element.keepLayout {
+            element.keepOwnSize((this.layoutMode()))
+        }
         element.resolveUnits(parentWidth parentHeight)
         ; `display: none` has no box and lays out nothing under it.
         if (element.isHidden()) {
@@ -5060,6 +5157,36 @@ class EVGLayout {
         return (this.intrinsicWidth(el true))
     }
 
+    ; A kept subtree's box put at (x, y): the flow wrote it there before
+    ; the call, or means it at the origin to move it after. What is under it
+    ; follows by the difference between where the first child is and where
+    ; it sat relative to the box when the subtree was measured; the bounds,
+    ; which were measured with the children, follow by the same.
+    fn moveKept:void (element:EVGElement x:double y:double) {
+        element.calculatedX = x
+        element.calculatedY = y
+        def n:int (element.getChildCount())
+        if (n > 0) {
+            def k0:EVGElement (element.getChild(0))
+            def dx:double ((x + element.kidOffX) - k0.calculatedX)
+            def dy:double ((y + element.kidOffY) - k0.calculatedY)
+            if ((dx != 0.0) || (dy != 0.0)) {
+                def i:int 0
+                while (i < n) {
+                    def kid:EVGElement (element.getChild(i))
+                    kid.moveSubtree(dx dy)
+                    i = (i + 1)
+                }
+                element.paintLeft = (element.paintLeft + dx)
+                element.paintRight = (element.paintRight + dx)
+                element.paintTop = (element.paintTop + dy)
+                element.paintBottom = (element.paintBottom + dy)
+            }
+        } {
+            element.boundsFresh = false
+        }
+    }
+
     ; The intrinsic width of a kept subtree is kept with it: measuring it
     ; is a walk of the subtree, and a subtree that is the same has the
     ; same width.
@@ -5375,7 +5502,7 @@ class EVGLayout {
                 def col:int (at % nc)
                 ; (an item placed on a line: its column, one past the
                 ; explicit ones an implicit auto column)
-                def kp:EVGGridPlacement (EVGGridPlacement.parse(kid.gridColumn))
+                def kp:EVGGridPlacement ((kid.placeCol()))
                 kp.resolveNames(tpl)
                 if (i < (array_length autoCols)) {
                     if ((itemAt autoCols i) >= 0) {
@@ -6255,7 +6382,7 @@ class EVGLayout {
                 } {
                     ; (while measured, an auto track per column it spans: its
                     ; items side by side as they will be, not stacked)
-                    def sgp:EVGGridPlacement (EVGGridPlacement.parse(parent.gridColumn))
+                    def sgp:EVGGridPlacement ((parent.placeCol()))
                     def sgn:int sgp.span
                     if ((sgp.spanExplicit == false) && (sgp.endLine < 0)) {
                         sgn = (parent.getChildCount())
@@ -6432,12 +6559,12 @@ class EVGLayout {
                 ; Named lines live on the container's template, so the
                 ; placement is parsed first and pointed at real lines here,
                 ; where both are in hand.
-                def cp:EVGGridPlacement (EVGGridPlacement.parse(c.gridColumn))
+                def cp:EVGGridPlacement ((c.placeCol()))
                 cp.resolveNames(cols)
                 if (cp.hadError) {
                     this.warn(("grid-column: " + cp.errorText))
                 }
-                def rp:EVGGridPlacement (EVGGridPlacement.parse(c.gridRow))
+                def rp:EVGGridPlacement ((c.placeRow()))
                 rp.resolveNames(rowTemplate)
                 if (rp.hadError) {
                     this.warn(("grid-row: " + rp.errorText))

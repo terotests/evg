@@ -1306,6 +1306,22 @@ class EVGGridPlacement {
         spanExplicit = false
     }
 
+    fn copy:EVGGridPlacement () {
+        def c (new EVGGridPlacement())
+        c.start = start
+        c.span = span
+        c.hadError = hadError
+        c.errorText = errorText
+        c.startName = startName
+        c.endName = endName
+        c.endLine = endLine
+        c.spanExplicit = spanExplicit
+        c.backSpan = backSpan
+        c.startNth = startNth
+        c.endNth = endNth
+        return c
+    }
+
     ; "span 2" | "2" | "2 / 4" | "2 / span 3" | "" (auto)
     sfn parse:EVGGridPlacement (spec:string) {
         def p (new EVGGridPlacement())
