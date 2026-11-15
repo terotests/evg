@@ -26,6 +26,7 @@
 Import "EVGElement.rgr"
 Import "EVGUnit.rgr"
 Import "EVGLayout.rgr"
+Import "EVGDisplayList.rgr"
 
 class FixedCheck {
     def passed:int 0
@@ -263,6 +264,56 @@ class EVGFixedTest {
         c.eqInt("the row is in view" (to_int row.calculatedY) 10)
     }
 
+    ; opacity on a box with a child: with groupOpacity the list holds the
+    ; two as one group (OPEN with the alpha, both at full alpha, CLOSE), as
+    ; CSS fades a subtree; without it each command is faded on its own. A
+    ; box alone is one command: no group, its own alpha.
+    sfn testGroupOpacity:void (c:FixedCheck) {
+        print ""
+        print "--- opacity as a group ---"
+        def page:EVGElement (EVGFixedTest.box("page" 400.0 400.0))
+        def card:EVGElement (EVGFixedTest.box("card" 200.0 100.0))
+        card.setAttribute("background-color" "#ff0000")
+        card.setAttribute("opacity" "0.5")
+        def dot:EVGElement (EVGFixedTest.box("dot" 20.0 20.0))
+        dot.setAttribute("background-color" "#0000ff")
+        card.addChild(dot)
+        def lone:EVGElement (EVGFixedTest.box("lone" 50.0 50.0))
+        lone.setAttribute("background-color" "#00ff00")
+        lone.setAttribute("opacity" "0.25")
+        page.addChild(card)
+        page.addChild(lone)
+        def lay:EVGLayout (EVGFixedTest.laidOut(page))
+        def dl (new EVGDisplayList())
+        dl.groupOpacity = true
+        dl.setTextEngine((lay.getTextEngine()))
+        dl.build(page)
+        def kinds:string ""
+        def alphas:string ""
+        def i:int 0
+        while (i < (array_length dl.cmds)) {
+            def cmd:EVGDrawCmd (itemAt dl.cmds i)
+            if ((cmd.kind != 0) || (cmd.a > 0.0)) {
+                kinds = (kinds + (to_string cmd.kind))
+                alphas = (alphas + (to_string (to_int (cmd.a * 100.0))) + " ")
+            }
+            i = (i + 1)
+        }
+        c.ok(("the card is a group: " + kinds) (kinds == "80090"))
+        c.ok(("its commands at full alpha, the open at 0.5, the lone box at its own: " + alphas) (alphas == "50 100 100 100 25 "))
+        def dl2 (new EVGDisplayList())
+        dl2.setTextEngine((lay.getTextEngine()))
+        dl2.build(page)
+        def plain:string ""
+        def j:int 0
+        while (j < (array_length dl2.cmds)) {
+            def pc:EVGDrawCmd (itemAt dl2.cmds j)
+            plain = (plain + (to_string pc.kind))
+            j = (j + 1)
+        }
+        c.ok(("off: no group commands: " + plain) ((plain.indexOf("8") < 0) && (plain.indexOf("9") < 0)))
+    }
+
     sfn testScrollOnlyLeavesItAlone:void (c:FixedCheck) {
         print ""
         print "--- and the incremental path leaves it alone too ---"
@@ -347,6 +398,7 @@ class EVGFixedTest {
         EVGFixedTest.testScrollLeavesItAlone(c)
         EVGFixedTest.testScrollOnlyLeavesItAlone(c)
         EVGFixedTest.testScrollSurvivesFlexBasis(c)
+        EVGFixedTest.testGroupOpacity(c)
         EVGFixedTest.testViewportRoot(c)
         print ""
         print ("passed=" + (to_string c.passed) + " failed=" + (to_string c.failed))
