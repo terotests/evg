@@ -129,7 +129,7 @@ class EVGPopoverTest {
         c.eqInt("aligned to the trigger's left edge" (to_int m.calculatedX) 0)
         c.eqStr("and it says where it went" m.overlayPlacedSide "bottom")
         c.eqStr("…and how it was aligned" m.overlayPlacedAlign "start")
-        c.eqStr("…and what it is" m.overlayPlacedPresentation "anchored")
+        c.eqStr("…and what it is" m.rare.overlayPlacedPresentation "anchored")
         ; Out of flow: the body sits directly under the bar, and the `popover`
         ; tag alone was enough to make that true — nothing said `overlay`.
         def body:EVGElement (page.getChild(1))
@@ -246,7 +246,7 @@ class EVGPopoverTest {
         ; Neither side fits 700. Above the trigger hangs off by 104 and below
         ; by 544, so it opens upwards and is cut to the 596 there is.
         c.eqStr("it opened on the side it loses least on" m.overlayPlacedSide "top")
-        c.ok("and it says it was cut" m.overlayClamped)
+        c.ok("and it says it was cut" m.rare.overlayClamped)
         c.eqInt("to the room above the trigger" (to_int m.calculatedHeight) 596)
         c.eqInt("which starts at the top of the page" (to_int m.calculatedY) 0)
         c.eqInt("the rest is there to scroll to" (to_int m.scrollHeight) 700)
@@ -279,7 +279,7 @@ class EVGPopoverTest {
         m.setAttribute("sheet-below" "600px")
         page.addChild(m)
         def lay:EVGLayout (EVGPopoverTest.laidOut(page 400.0 800.0))
-        c.eqStr("at 400 wide it is a sheet" m.overlayPlacedPresentation "sheet")
+        c.eqStr("at 400 wide it is a sheet" m.rare.overlayPlacedPresentation "sheet")
         c.eqInt("as wide as the page" (to_int m.calculatedWidth) 400)
         c.eqInt("against its left edge" (to_int m.calculatedX) 0)
         c.eqInt("as tall as its three rows" (to_int m.calculatedHeight) 180)
@@ -293,7 +293,7 @@ class EVGPopoverTest {
         m2.setAttribute("sheet-below" "600px")
         wide.addChild(m2)
         def lay2:EVGLayout (EVGPopoverTest.laidOut(wide 900.0 800.0))
-        c.eqStr("at 900 it is an anchored menu again" m2.overlayPlacedPresentation "anchored")
+        c.eqStr("at 900 it is an anchored menu again" m2.rare.overlayPlacedPresentation "anchored")
         c.eqInt("under the trigger" (to_int m2.calculatedY) 44)
         c.eqInt("and back to its own width" (to_int m2.calculatedWidth) 160)
     }
@@ -306,7 +306,7 @@ class EVGPopoverTest {
         m.setAttribute("presentation" "fullscreen")
         page.addChild(m)
         def lay:EVGLayout (EVGPopoverTest.laidOut(page 400.0 800.0))
-        c.eqStr("it covers the page" m.overlayPlacedPresentation "fullscreen")
+        c.eqStr("it covers the page" m.rare.overlayPlacedPresentation "fullscreen")
         c.eqInt("from the top left" (to_int m.calculatedX) 0)
         c.eqInt("…" (to_int m.calculatedY) 0)
         c.eqInt("as wide as the page" (to_int m.calculatedWidth) 400)
@@ -370,7 +370,7 @@ class EVGPopoverTest {
         bad.setAttribute("position-anchor" "--file")
         bad.setAttribute("left" "anchor(bottom)")
         page4.addChild(bad)
-        c.ok("a cross-axis edge is not taken" ((strlen bad.anchorLeftSide) == 0))
+        c.ok("a cross-axis edge is not taken" ((strlen bad.rare.anchorLeftSide) == 0))
     }
 
     sfn main:void () {

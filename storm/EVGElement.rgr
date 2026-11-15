@@ -8,6 +8,7 @@ Import "EVGColor.rgr"
 Import "EVGEasing.rgr"
 Import "EVGBox.rgr"
 Import "EVGCssExtra.rgr"
+Import "EVGRare.rgr"
 Import "EVGGradient.rgr"
 Import "SvgParser.rgr"
 Import "SVGPathParser.rgr"
@@ -265,91 +266,11 @@ class EVGElement {
     ; Empty means nobody has said anything, which is what makes inheriting
     ; distinguishable from an author writing `default` on purpose.
     def cursor:string ""
-    ; The scroll container's bar, as CSS styles it: `scrollbar-width` (auto,
-    ; thin, none), `scrollbar-color` (the thumb's colour, then the track's;
-    ; `auto` for either is ink on whatever the bar is over), and the EVG
-    ; extension `evg-scrollbar-label` (percent, none). Read by
-    ; `EVGDisplayList.addScrollbar`, which draws the bar when an app asks
-    ; the list to.
-    def scrollbarWidth:string ""
     def scrollbarThumb:EVGColor
     def scrollbarTrack:EVGColor
-    def scrollbarLabel:string ""
 
-    ; --- A SURFACE EFFECT ------------------------------------------------------
-    ;
-    ; `evg-surface-effect: ripple`, and the family of `evg-ripple-*` numbers
-    ; under it. The `evg-` prefix is not decoration: this is an EVG EXTENSION
-    ; and not a CSS property, so nothing in the gallery should ever measure it
-    ; against a browser and find a divergence — there is nothing to diverge
-    ; from. Every other property in this file is CSS and is measured; these are
-    ; ours, and they say so in their names.
-    ;
-    ; The effect belongs to a SURFACE, not to a box. It names a post-process
-    ; over everything that was drawn: the display list carries it beside the
-    ; commands rather than as one of them, and a backend that has never heard
-    ; of it draws the page and ignores the field.
-    def surfaceEffect:string ""
-    ; How fast the ring travels, in pixels a second.
-    def rippleSpeed:double 220.0
-    ; How wide the ring is — the Gaussian envelope's sigma, in pixels.
-    def rippleWidth:double 28.0
-    ; How far the surface is pushed at the crest, in pixels.
-    def rippleStrength:double 7.0
-    ; How fast the whole thing dies away, per second.
-    def rippleDecay:double 1.8
-    ; How much the crest lightens. Small: this is the difference between water
-    ; and a filter somebody put on a video.
-    def rippleHighlight:double 0.08
 
-    ; --- how many rings ONE touch sends -----------------------------------------
-    ;
-    ; A drop on water does not make one ring. It makes a TRAIN of them, born at
-    ; the same point a moment apart and travelling out together, each fainter
-    ; than the one in front: the shape is a single expanding target rather than
-    ; a single circle.
-    ;
-    ; This costs no state at all. The rings of one touch differ only in when
-    ; they started, and that is the touch's age minus a multiple of the stagger
-    ; — so the shader works them out from the one age it already has, and a
-    ; ring whose start is still in the future simply has not been born yet.
-    def rippleRings:double 3.0
-    ; Seconds between one wavefront and the next.
-    def rippleStagger:double 0.09
-    ; What each ring behind the front is worth. Below about a half the train
-    ; reads as one ring with a smudge behind it.
-    def rippleFalloff:double 0.62
 
-    ; --- and what makes it look WET ---------------------------------------------
-    ;
-    ; A brightness proportional to the wave's height is an AMBIENT term: every
-    ; part of a crest lights up by the same amount however it is tilted, which
-    ; is exactly what a matte surface does. Water is not matte. What makes it
-    ; read as water is a SPECULAR: a highlight that depends on the angle
-    ; between the light, the eye and the surface's own normal, so it lives on
-    ; the FLANK of a wave rather than on its top and slides along as the wave
-    ; moves.
-    ;
-    ; The normal comes from the height field the rings already sum to — its
-    ; screen-space gradient is the slope, and the slope is the normal. Nothing
-    ; new has to be computed or stored.
-    ;
-    ; How strong the glint is. 0 turns it off and leaves the ambient term.
-    def rippleShine:double 0.45
-    ; The Blinn-Phong exponent: how TIGHT the glint is. Low is a broad sheen
-    ; like wet stone, high is a sharp point like a bead of water. Past about
-    ; 200 the glint stops being an arc along the ring and breaks into
-    ; separate specks, because the surviving band gets narrower than a pixel.
-    def rippleGloss:double 120.0
-    ; How much the wave's height tilts the normal. This is the one number with
-    ; no physical meaning — the height field is in arbitrary units, so this is
-    ; what turns it into a slope.
-    def rippleBump:double 70.0
-    ; Where the light is. The default is over the viewer's left shoulder,
-    ; which is where every UI in this gallery already pretends its light is.
-    def rippleLightX:double -0.45
-    def rippleLightY:double -0.65
-    def rippleLightZ:double 0.62
 
     ; --- and the state it needs, which is not styling ---------------------------
     ;
@@ -369,26 +290,6 @@ class EVGElement {
     def rippleYs:[double]
     def rippleAges:[double]
 
-    ; --- WHICH BOX, AND WHAT STARTS IT ----------------------------------------
-    ;
-    ; `evg-surface-effect` above says WHAT to run. These two say WHERE and
-    ; WHEN, and they are the whole difference between an effect a page has and
-    ; an effect a page's code has to remember to drive.
-    ;
-    ; WHERE is this element's own border box: an effect declared on a card is
-    ; the card's, and the display list carries the box the layout gave it, so
-    ; nothing downstream has to be told a rectangle somebody typed.
-    ;
-    ; WHEN is `evg-effect-on`, a list of the pointer things that feed it —
-    ; `press`, `drag`, `hover` — or `always` for one that runs on its own
-    ; clock and needs no pointer at all. The default is EMPTY, which means the
-    ; application drives it, and that is what the original ripple did from the
-    ; page's own `pointerdown`: the property is how a page stops having to.
-    ;
-    ; Nothing in EVG reads this. It is written into the display list and read
-    ; by the host's effect driver, for the same reason `cursor` is: what a
-    ; pointer is belongs to whatever owns the pointer.
-    def effectTrigger:string ""
 
     ; --- THE PARAMETERS, FOR AN EFFECT THIS FILE HAS NEVER HEARD OF -----------
     ;
@@ -419,8 +320,6 @@ class EVGElement {
     ; inline property still outranks it, which is what makes the two mix.
     def documentCss:string ""
 
-    def fxNames:[string]
-    def fxValues:[double]
 
     ; --- SCROLLING ------------------------------------------------------------
     ;
@@ -707,11 +606,6 @@ class EVGElement {
     ; How far the lines go on past the text's end, in px: the space to the
     ; next word that has them too, which its host lays out as a gap
     def textDecorationExtend:double 0.0
-    ; SVG's `stroke-linecap` and `stroke-linejoin` on a stroked path.
-    ; "butt" and "miter" are what the painter drew before either existed,
-    ; so a caller that says nothing keeps the picture it had.
-    def strokeLineCap:string "butt"
-    def strokeLineJoin:string "miter"
     ; ZERO means `normal`, which is the FACE's own line box and is asked of
     ; the text engine. It used to default to 1.2 — a number people type, not
     ; one a browser computes: measured, the sans fallback's normal is 1.15em
@@ -795,8 +689,6 @@ class EVGElement {
     ; not say" — CSS spells that `auto`, and both are accepted — so an item
     ; that never mentions it costs one string comparison and nothing else.
     def alignSelf:string ""
-    def justifySelf:string ""
-    def justifyItems:string ""
     ; align-content: how WRAPPED LINES are distributed along the cross axis,
     ; as opposed to alignItems which positions children within one line. Only
     ; meaningful when the content wraps and the container has room to spare.
@@ -818,45 +710,10 @@ class EVGElement {
     ; a grid container with no column template gets a single 1fr column.
     def gridTemplateColumns:string ""
     def gridTemplateRows:string ""
-    ; Per-item placement, e.g. "span 2" or "2 / 4". Empty means auto-flow.
-    ; grid-template-areas: rows of names, e.g.
-    ;   "hero hero" "left right"
-    ; An item claims a region with grid-area.
-    ; Track sizes handed down by an enclosing grid when this element declares
-    ; `grid-template-columns: subgrid` / `grid-template-rows: subgrid`. Filled
-    ; in by EVGLayout just before the child is laid out, because the parent is
-    ; the only thing that knows its own tracks.
-    def subgridColumnSizes:[double]
-    def subgridRowSizes:[double]
-    ; the enclosing grid's column and row gaps, which a subgrid's own
-    ; `normal` gap is (CSS Grid 2 9; -1 when not a subgrid)
-    def subgridColumnGap:double -1.0
-    ; the column line names a subgrid declares after the keyword
-    ; ("subgrid [a] []") and the template its enclosing grid hands it,
-    ; names and all
-    def subgridOwnColumnNames:string ""
-    def subgridColumnSpec:string ""
-    def subgridRowSpec:string ""
-    def subgridRowGap:double -1.0
-    ; The row heights this element's own grid worked out, left behind for an
-    ; enclosing grid to read. A row subgrid always spans several of its
-    ; parent's rows, and with subgrid it is the GRANDCHILDREN that have to size
-    ; those rows — so the parent measures the subgrid once and adopts the rows
-    ; it came up with, rather than trying to see through it.
-    def computedRowSizes:[double]
-    ; Set by the enclosing grid as soon as it has claimed this element, which
-    ; is well before it can size its tracks. It is what tells a subgrid child
-    ; laid out during the parent's content-measuring pass — where the sizes do
-    ; not exist yet — apart from one with no enclosing grid at all. Without it
-    ; the first kind reported "no enclosing grid", which was simply untrue.
-    def subgridPending:boolean false
     def gridTemplateAreas:string ""
     ; grid-auto-flow: "row" (default) or "row dense" — dense backfills earlier
     ; holes instead of only moving forward.
     def gridAutoFlow:string "row"
-    ; the size of an implicit column, an implicit row ("" is auto)
-    def gridAutoColumns:string ""
-    def gridAutoRows:string ""
     ; Full-bleed: this element should run past the trim edge into the bleed
     ; area, so the cut falls inside its ink rather than at its edge. Only has
     ; an effect when the output was asked for a bleed, and only on the edges
@@ -935,12 +792,6 @@ class EVGElement {
     
     ; SVG Path properties
     def svgPath:string ""
-    ; How the outline is fitted into the box, in SVG's own words. `meet`
-    ; keeps the shape and letterboxes it; `none` stretches. Everything here
-    ; is authored at its own size and so fits either way — until a shape is
-    ; RESIZED, and then the two are the difference between a wider shape and
-    ; the same shape in a wider frame.
-    def preserveAspectRatio:string "xMidYMid meet"
     ; --- the flattened outline, kept ------------------------------------------
     ;
     ; `d` is a string, and the display list wants points: parsing it and
@@ -1004,51 +855,13 @@ class EVGElement {
     def strokeDashArray:string ""
     def strokeDashOffset:double 0.0
 
-    ; ---------------------------------------------------------------------
-    ; Anchors and connectors
-    ; ---------------------------------------------------------------------
-    ;
-    ; `anchor-name` is CSS Anchor Positioning's own property: a name other
-    ; elements can point at, written `--orders` by convention. It is kept as
-    ; written, so `--orders` and `orders` are two different names, the way the
-    ; CSS one is.
-    def anchorName:string ""
 
-    ; A `connector` is a path whose `d` the LAYOUT writes. The author says
-    ; which two boxes it joins and how it should look; where those boxes end
-    ; up is the layout's business, and it is re-solved on every layout pass,
-    ; which is the whole point — a hand-placed `left: 171px` arrow is wrong
-    ; the moment the grid it was measured against reflows.
-    ;
-    ; `from`/`to` name an anchor (`--orders`) or an id (`#orders`).
-    def connectorFrom:string ""
-    def connectorTo:string ""
-    ; Which edge of the box to leave from and arrive at: left, right, top,
-    ; bottom, center — or `auto`, which picks the pair facing each other. Auto
-    ; is what makes the same connector correct in both a two-column desktop
-    ; layout and a stacked phone one.
-    def connectorFromSide:string "auto"
-    def connectorToSide:string "auto"
-    ; straight | orthogonal | bezier
-    def connectorRouting:string "straight"
-    ; A gap left between the box edge and the line's end, along the side's
-    ; own normal.
-    def connectorFromOffset:double 0.0
-    def connectorToOffset:double 0.0
-    ; none | triangle | open. `triangle` is filled, `open` is two strokes;
-    ; both follow the direction of the segment they sit on.
-    def arrowStart:string "none"
-    def arrowEnd:string "none"
-    def arrowSize:double 10.0
     ; The heads, as their own `d`. They are kept OUT of `svgPath` because a
     ; fill fills every subpath of the path it is on, closing each one
     ; implicitly — an orthogonal shaft and its head on one path would come
     ; back as a filled triangle of shaft. So the shaft is stroked and this is
     ; filled, which is also what the two of them are.
     def arrowPath:string ""
-    ; Set by the layout when it could not resolve `from` or `to`; the draw is
-    ; skipped rather than pointed at the origin.
-    def connectorResolved:boolean false
     
     ; Clip path (for any element)
     def clipPath:string ""
@@ -1058,26 +871,7 @@ class EVGElement {
     def className:string ""
     ; Theme name for stylesheet resolution, read from the document root.
     def theme:string ""
-    ; Property names the authoring layer set directly on this element, in
-    ; kebab-case. A stylesheet must not overwrite these — inline wins the
-    ; cascade — so front-ends call markInline() for every attribute they apply.
-    def inlineProps:[string]
 
-    ; WHICH PROPERTIES CAME FROM THE DOCUMENT'S STYLESHEET.
-    ;
-    ; The sheet is applied by writing values onto elements, which makes a
-    ; cascaded value indistinguishable from an authored one the moment layout
-    ; has run — and anything that serializes the tree afterwards writes the
-    ; whole cascade into every node, turning a stylesheet into a one-time
-    ; macro. It happened: a page with six `.glass` cards came back with the
-    ; rule copied onto all six, class and all.
-    ;
-    ; So the sheet says so. `EVGStyleSheet` marks what it set, `EVGLayout`
-    ; clears the marks before re-applying, and `EVGTreeJson` leaves a marked
-    ; property out — the document keeps saying `class-name`, and the rule
-    ; stays one place. An inline property is never marked, because the sheet
-    ; does not touch one.
-    def cssProps:[string]
 
     ; PDF/Print settings (for Print element)
     def imageQuality:int 0          ; JPEG quality 1-100 (0 = use default)
@@ -1219,34 +1013,7 @@ class EVGElement {
     def overlayPlacedSide:string ""
     ; …and which alignment, for the same reason: a fallback may change both.
     def overlayPlacedAlign:string ""
-    ; anchored | sheet | fullscreen — what the surface ended up being. A menu
-    ; that turned into a bottom sheet on a phone is a different widget, and a
-    ; stylesheet, a test and an accessibility tree all want to know.
-    def overlayPlacedPresentation:string ""
-    ; The placement had to make it smaller than it asked to be, so it clips and
-    ; has somewhere to scroll — `scrollHeight` is the extent, as everywhere.
-    def overlayClamped:boolean false
 
-    ; --- popover: anchoring by name, fallbacks, presentation ------------------
-    ;
-    ; CSS Anchor Positioning's own vocabulary, as far as this engine carries
-    ; it. The alternative was a second EVG-shaped spelling of the same idea,
-    ; which costs everyone who already knows the CSS one.
-    ;
-    ; `position-anchor` names the box to position against — an `anchor-name`
-    ; (`--file-menu`) or an `#id`. It also MARKS the element as a surface:
-    ; anything positioned against another box wants to be out of flow and in
-    ; the top layer, and making that follow from one property is the whole
-    ; ergonomic difference between this and writing four.
-    def positionAnchor:string ""
-    ; A comma-separated list of position-areas to try when the declared one
-    ; does not fit: "top start, right start, left start". CSS spells it
-    ; `position-try-fallbacks`; the shorter `position-try` is accepted too.
-    def positionTryFallbacks:string ""
-    ; "" tries them in order and takes the first that fits. "most-space" scores
-    ; them all and takes the roomiest, which is CSS's `position-try-order`
-    ; heading in the same direction.
-    def positionTryOrder:string ""
     ; anchored | sheet | fullscreen. The one thing here that is not CSS: on a
     ; phone an anchored menu is the wrong widget, not a badly placed one, and
     ; no amount of fallback placement fixes that.
@@ -1259,24 +1026,6 @@ class EVGElement {
     ; off the page. With `overflow` other than `visible` it then scrolls.
     def fitViewport:boolean false
 
-    ; CSS's `anchor()` in an inset property: `left: anchor(right)` puts this
-    ; element's left edge on the anchor's right edge, and
-    ; `calc(anchor(right) + 8px)` puts it eight past. Each edge keeps which
-    ; edge of the ANCHOR it was given and how far off it sits; empty means the
-    ; edge was an ordinary length and `left`/`top` hold it as usual.
-    ;
-    ; This is the other half of `position-anchor`. `position-area` places a
-    ; whole surface on a side of its anchor, which is what a menu wants;
-    ; `anchor()` places one EDGE, which is what a badge hanging off a corner
-    ; wants, and there is no way to say that with an area.
-    def anchorLeftSide:string ""
-    def anchorLeftOffset:double 0.0
-    def anchorTopSide:string ""
-    def anchorTopOffset:double 0.0
-    def anchorRightSide:string ""
-    def anchorRightOffset:double 0.0
-    def anchorBottomSide:string ""
-    def anchorBottomOffset:double 0.0
 
     ; --- interaction state -------------------------------------------------------
     ; What is happening to this element right now, so a STYLESHEET can say what
@@ -1293,12 +1042,6 @@ class EVGElement {
     ; The pointer is down on it: CSS's `:active`.
     def isPressed:boolean false
 
-    ; --- transitions --------------------------------------------------------------
-    ; `transition: background-color 150ms` as the stylesheet declared it, and
-    ; the flights currently in the air. Both live on the element because a
-    ; transition is a fact about THIS box moving, not about the rule that
-    ; started it — the rule may not even match any more by the time it lands.
-    def transitionSpec:string ""
     def transitions:[EVGFlight]
 
     ; --- accessibility ---------------------------------------------------------
@@ -1437,25 +1180,6 @@ class EVGElement {
     ; `aria-level`, for a treeitem in a flat tree. 0 means unset.
     def a11yLevel:int 0
 
-    ; --- what the stylesheet last wrote here ---------------------------------
-    ;
-    ; The cascade's answer for an element is a function of four things, and
-    ; these remember which four produced what the element is holding now. When
-    ; they all still agree on the next pass, the element already contains
-    ; exactly what the sheet would write, and writing it again is pure cost —
-    ; on a 1600-row table a hover changes ONE row and the other 22,402 elements
-    ; were being re-declared regardless.
-    ;
-    ; `styleGen` is the sheet's own counter, so re-parsing or resizing
-    ; invalidates every element at once without touching any of them.
-    ; `EVGTransition.writeBack` sets it to -1, because after a flight has
-    ; written a showing value the element no longer holds what the sheet
-    ; declared — and the sheet has to re-declare it or the flight stops dead.
-    def styleClass:string ""
-    ; which descendant rules its ancestors satisfied (a standard-mode sheet
-    ; with descendant selectors; "" otherwise)
-    def styleAnc:string ""
-    def styleTheme:string ""
     def styleBits:int 0
     def styleGen:int 0
     ; Which plan produced it, so two passes can be compared for whether
@@ -1495,6 +1219,10 @@ class EVGElement {
     ; Inherited font size in pixels
     def inheritedFontSize:double 14.0
     
+    ; the members few elements set (EVGRare): one shared object until the
+    ; first is written (rareW)
+    def rare:EVGRare (EVGRare.none())
+
     Constructor () {
         tagName = "div"
         elementType = 0
@@ -2241,16 +1969,16 @@ class EVGElement {
     ; Any inset written as `anchor(…)`. The layout then places this element
     ; edge by edge instead of by an area.
     fn hasAnchorInsets:boolean () {
-        if ((strlen anchorLeftSide) > 0) {
+        if ((strlen rare.anchorLeftSide) > 0) {
             return true
         }
-        if ((strlen anchorTopSide) > 0) {
+        if ((strlen rare.anchorTopSide) > 0) {
             return true
         }
-        if ((strlen anchorRightSide) > 0) {
+        if ((strlen rare.anchorRightSide) > 0) {
             return true
         }
-        if ((strlen anchorBottomSide) > 0) {
+        if ((strlen rare.anchorBottomSide) > 0) {
             return true
         }
         return false
@@ -3406,18 +3134,19 @@ class EVGElement {
     fn markCss:void (name:string) {
         def prop:string (EVGElement.toKebab(name))
         if ((this.fromCss(prop)) == false) {
-            push cssProps prop
+            def rw1:EVGRare (this.rareW())
+            push rw1.cssProps prop
         }
     }
 
     fn fromCss:boolean (name:string) {
-        if ((array_length cssProps) == 0) {
+        if ((array_length rare.cssProps) == 0) {
             return false
         }
         def prop:string (EVGElement.toKebab(name))
         def i:int 0
-        while (i < (array_length cssProps)) {
-            if ((itemAt cssProps i) == prop) {
+        while (i < (array_length rare.cssProps)) {
+            if ((itemAt rare.cssProps i) == prop) {
                 return true
             }
             i = (i + 1)
@@ -3427,13 +3156,14 @@ class EVGElement {
 
     fn clearCssMarks:void () {
         def empty:[string]
-        cssProps = empty
+        this.setCssProps(empty)
     }
 
     fn markInline:void (name:string) {
         def prop:string (EVGElement.toKebab(name))
         if ((this.hasInline(prop)) == false) {
-            push inlineProps prop
+            def rw2:EVGRare (this.rareW())
+            push rw2.inlineProps prop
         }
     }
 
@@ -3447,14 +3177,14 @@ class EVGElement {
         def prop:string (EVGElement.toKebab(name))
         def kept:[string]
         def i:int 0
-        while (i < (array_length inlineProps)) {
-            def cur:string (itemAt inlineProps i)
+        while (i < (array_length rare.inlineProps)) {
+            def cur:string (itemAt rare.inlineProps i)
             if (cur != prop) {
                 push kept cur
             }
             i = (i + 1)
         }
-        inlineProps = kept
+        this.setInlineProps(kept)
     }
 
     fn hasInline:boolean (name:string) {
@@ -3463,13 +3193,13 @@ class EVGElement {
         ; frame — about 180,000 times on a 1600-row table — and almost every
         ; element has nothing inline at all, so paying for a kebab-case
         ; conversion in order to look in an empty list was most of what it cost.
-        if ((array_length inlineProps) == 0) {
+        if ((array_length rare.inlineProps) == 0) {
             return false
         }
         def prop:string (EVGElement.toKebab(name))
         def i:int 0
-        while (i < (array_length inlineProps)) {
-            if ((itemAt inlineProps i) == prop) {
+        while (i < (array_length rare.inlineProps)) {
+            if ((itemAt rare.inlineProps i) == prop) {
                 return true
             }
             i = (i + 1)
@@ -3602,6 +3332,9 @@ class EVGElement {
     }
 
     fn adoptFrom:void (other:EVGElement) {
+        ; the rare members (EVGRare) as one object: the element adopted
+        ; from is the freshly built one
+        rare = other.rare
         id = other.id
         key = other.key
         ; The link a subtree sits inside. A reconciled element that loses it
@@ -3611,12 +3344,10 @@ class EVGElement {
         href = other.href
         marginAutoTop = other.marginAutoTop
         baselineShift = other.baselineShift
-        justifySelf = other.justifySelf
         aspectRatio = other.aspectRatio
         contentBox = other.contentBox
         ; (shared: the element adopted from is the freshly built one)
         css = other.css
-        justifyItems = other.justifyItems
         marginAutoRight = other.marginAutoRight
         marginAutoBottom = other.marginAutoBottom
         marginAutoLeft = other.marginAutoLeft
@@ -3661,33 +3392,14 @@ class EVGElement {
         lineBreak = other.lineBreak
         overflow = other.overflow
         cursor = other.cursor
-        surfaceEffect = other.surfaceEffect
-        rippleSpeed = other.rippleSpeed
-        rippleWidth = other.rippleWidth
-        rippleStrength = other.rippleStrength
-        rippleDecay = other.rippleDecay
-        rippleHighlight = other.rippleHighlight
-        rippleRings = other.rippleRings
-        rippleStagger = other.rippleStagger
-        rippleFalloff = other.rippleFalloff
-        rippleShine = other.rippleShine
-        rippleGloss = other.rippleGloss
-        rippleBump = other.rippleBump
-        rippleLightX = other.rippleLightX
-        rippleLightY = other.rippleLightY
-        rippleLightZ = other.rippleLightZ
         rippleXs = other.rippleXs
         rippleYs = other.rippleYs
         rippleAges = other.rippleAges
-        effectTrigger = other.effectTrigger
-        fxNames = other.fxNames
-        fxValues = other.fxValues
         documentCss = other.documentCss
         ; The marks go with the values. An element that took another's
         ; cascaded properties and not the record of where they came from is
         ; an element that writes the whole stylesheet into itself the next
         ; time the tree is serialized.
-        cssProps = other.cssProps
         scrollTop = other.scrollTop
         scrollLeft = other.scrollLeft
         scrollWidth = other.scrollWidth
@@ -3710,8 +3422,6 @@ class EVGElement {
         lineFloats = other.lineFloats
         textDecorations = other.textDecorations
         textDecorationExtend = other.textDecorationExtend
-        strokeLineCap = other.strokeLineCap
-        strokeLineJoin = other.strokeLineJoin
         lineHeight = other.lineHeight
         lineHeightUnit = other.lineHeightUnit
         textAlign = other.textAlign
@@ -3745,19 +3455,8 @@ class EVGElement {
         columnGap = other.columnGap
         gridTemplateColumns = other.gridTemplateColumns
         gridTemplateRows = other.gridTemplateRows
-        subgridColumnSizes = other.subgridColumnSizes
-        subgridRowSizes = other.subgridRowSizes
-        subgridColumnGap = other.subgridColumnGap
-        subgridOwnColumnNames = other.subgridOwnColumnNames
-        subgridColumnSpec = other.subgridColumnSpec
-        subgridRowSpec = other.subgridRowSpec
-        subgridRowGap = other.subgridRowGap
-        computedRowSizes = other.computedRowSizes
-        subgridPending = other.subgridPending
         gridTemplateAreas = other.gridTemplateAreas
         gridAutoFlow = other.gridAutoFlow
-        gridAutoColumns = other.gridAutoColumns
-        gridAutoRows = other.gridAutoRows
         fullBleed = other.fullBleed
         gridArea = other.gridArea
         gridColumn = other.gridColumn
@@ -3779,7 +3478,6 @@ class EVGElement {
         borderColor = other.borderColor
         src = other.src
         alt = other.alt
-        preserveAspectRatio = other.preserveAspectRatio
         imageViewBox = other.imageViewBox
         imageViewBoxX = other.imageViewBoxX
         imageViewBoxY = other.imageViewBoxY
@@ -3869,10 +3567,8 @@ class EVGElement {
         intrinsicMax = other.intrinsicMax
         paintClean = other.paintClean
         paintStamp = (paintStamp + 1)
-        scrollbarWidth = other.scrollbarWidth
         scrollbarThumb = other.scrollbarThumb
         scrollbarTrack = other.scrollbarTrack
-        scrollbarLabel = other.scrollbarLabel
         viewBox = other.viewBox
         fillColor = other.fillColor
         strokeColor = other.strokeColor
@@ -3880,23 +3576,10 @@ class EVGElement {
         fillRule = other.fillRule
         strokeDashArray = other.strokeDashArray
         strokeDashOffset = other.strokeDashOffset
-        anchorName = other.anchorName
-        connectorFrom = other.connectorFrom
-        connectorTo = other.connectorTo
-        connectorFromSide = other.connectorFromSide
-        connectorToSide = other.connectorToSide
-        connectorRouting = other.connectorRouting
-        connectorFromOffset = other.connectorFromOffset
-        connectorToOffset = other.connectorToOffset
-        arrowStart = other.arrowStart
-        arrowEnd = other.arrowEnd
-        arrowSize = other.arrowSize
         arrowPath = other.arrowPath
-        connectorResolved = other.connectorResolved
         clipPath = other.clipPath
         className = other.className
         theme = other.theme
-        inlineProps = other.inlineProps
         imageQuality = other.imageQuality
         maxImageSize = other.maxImageSize
         rotate = other.rotate
@@ -3932,23 +3615,10 @@ class EVGElement {
         calculatedPage = other.calculatedPage
         isAbsolute = other.isAbsolute
         isOverlay = other.isOverlay
-        positionAnchor = other.positionAnchor
-        positionTryFallbacks = other.positionTryFallbacks
-        positionTryOrder = other.positionTryOrder
         presentation = other.presentation
         sheetBelow = other.sheetBelow
         fitViewport = other.fitViewport
-        anchorLeftSide = other.anchorLeftSide
-        anchorLeftOffset = other.anchorLeftOffset
-        anchorTopSide = other.anchorTopSide
-        anchorTopOffset = other.anchorTopOffset
-        anchorRightSide = other.anchorRightSide
-        anchorRightOffset = other.anchorRightOffset
-        anchorBottomSide = other.anchorBottomSide
-        anchorBottomOffset = other.anchorBottomOffset
         overlayPlacedAlign = other.overlayPlacedAlign
-        overlayPlacedPresentation = other.overlayPlacedPresentation
-        overlayClamped = other.overlayClamped
         overlayAnchor = other.overlayAnchor
         isOverlayAnchor = other.isOverlayAnchor
         overlaySide = other.overlaySide
@@ -3960,7 +3630,6 @@ class EVGElement {
         isHovered = other.isHovered
         isFocused = other.isFocused
         isPressed = other.isPressed
-        transitionSpec = other.transitionSpec
         role = other.role
         a11yLabel = other.a11yLabel
         a11yValue = other.a11yValue
@@ -3999,9 +3668,6 @@ class EVGElement {
         ; "the sheet has not written here", and re-styles. That is the honest
         ; answer: `adoptFrom` has just overwritten every value the sheet had
         ; put there.
-        styleClass = other.styleClass
-        styleAnc = other.styleAnc
-        styleTheme = other.styleTheme
         styleBits = other.styleBits
         styleGen = other.styleGen
         styleSlot = other.styleSlot
@@ -4098,24 +3764,27 @@ class EVGElement {
     ; ignore.
     fn setFx:void (key:string value:double) {
         def i:int 0
-        while (i < (array_length fxNames)) {
-            if ((itemAt fxNames i) == key) {
-                set fxValues i value
+        while (i < (array_length rare.fxNames)) {
+            if ((itemAt rare.fxNames i) == key) {
+                def rw3:EVGRare (this.rareW())
+                set rw3.fxValues i value
                 return
             }
             i = (i + 1)
         }
-        push fxNames key
-        push fxValues value
+        def rw4:EVGRare (this.rareW())
+        push rw4.fxNames key
+        def rw5:EVGRare (this.rareW())
+        push rw5.fxValues value
     }
 
     ; What was written under `key`, or the fallback. The plugin's defaults are
     ; the plugin's business — this only answers whether the page said anything.
     fn fxValue:double (key:string fallback:double) {
         def i:int 0
-        while (i < (array_length fxNames)) {
-            if ((itemAt fxNames i) == key) {
-                return (itemAt fxValues i)
+        while (i < (array_length rare.fxNames)) {
+            if ((itemAt rare.fxNames i) == key) {
+                return (itemAt rare.fxValues i)
             }
             i = (i + 1)
         }
@@ -4240,20 +3909,20 @@ class EVGElement {
             return
         }
         if ((name == "position-anchor") || (name == "positionAnchor")) {
-            positionAnchor = (trim value)
+            this.setPositionAnchor((trim value))
             ; Positioned against another box: out of flow, top layer. The
             ; property says the whole thing.
-            if ((strlen positionAnchor) > 0) {
+            if ((strlen rare.positionAnchor) > 0) {
                 isOverlay = true
             }
             return
         }
         if (((name == "position-try-fallbacks") || (name == "positionTryFallbacks")) || (name == "position-try")) {
-            positionTryFallbacks = (trim value)
+            this.setPositionTryFallbacks((trim value))
             return
         }
         if ((name == "position-try-order") || (name == "positionTryOrder")) {
-            positionTryOrder = (trim value)
+            this.setPositionTryOrder((trim value))
             return
         }
         if (name == "presentation") {
@@ -4285,7 +3954,7 @@ class EVGElement {
         }
 
         if (name == "transition") {
-            transitionSpec = (trim value)
+            this.setTransitionSpec((trim value))
             return
         }
 
@@ -4410,8 +4079,8 @@ class EVGElement {
         ; Position
         if (name == "left") {
             if (EVGElement.mentionsAnchor(value)) {
-                anchorLeftSide = (EVGElement.anchorFnSide(name value))
-                anchorLeftOffset = (EVGElement.anchorFnOffset(value))
+                this.setAnchorLeftSide((EVGElement.anchorFnSide(name value)))
+                this.setAnchorLeftOffset((EVGElement.anchorFnOffset(value)))
                 return
             }
             left = (this.unitOf(name value))
@@ -4419,8 +4088,8 @@ class EVGElement {
         }
         if (name == "top") {
             if (EVGElement.mentionsAnchor(value)) {
-                anchorTopSide = (EVGElement.anchorFnSide(name value))
-                anchorTopOffset = (EVGElement.anchorFnOffset(value))
+                this.setAnchorTopSide((EVGElement.anchorFnSide(name value)))
+                this.setAnchorTopOffset((EVGElement.anchorFnOffset(value)))
                 return
             }
             top = (this.unitOf(name value))
@@ -4428,8 +4097,8 @@ class EVGElement {
         }
         if (name == "right") {
             if (EVGElement.mentionsAnchor(value)) {
-                anchorRightSide = (EVGElement.anchorFnSide(name value))
-                anchorRightOffset = (EVGElement.anchorFnOffset(value))
+                this.setAnchorRightSide((EVGElement.anchorFnSide(name value)))
+                this.setAnchorRightOffset((EVGElement.anchorFnOffset(value)))
                 return
             }
             right = (this.unitOf(name value))
@@ -4437,8 +4106,8 @@ class EVGElement {
         }
         if (name == "bottom") {
             if (EVGElement.mentionsAnchor(value)) {
-                anchorBottomSide = (EVGElement.anchorFnSide(name value))
-                anchorBottomOffset = (EVGElement.anchorFnOffset(value))
+                this.setAnchorBottomSide((EVGElement.anchorFnSide(name value)))
+                this.setAnchorBottomOffset((EVGElement.anchorFnOffset(value)))
                 return
             }
             bottom = (this.unitOf(name value))
@@ -4711,7 +4380,7 @@ class EVGElement {
         ; boxes showing two halves of one screenshot come out as the same
         ; picture twice.
         if ((name == "preserve-aspect-ratio") || (name == "preserveAspectRatio")) {
-            preserveAspectRatio = value
+            this.setPreserveAspectRatio(value)
             return
         }
         if ((name == "image-view-box") || (name == "imageViewBox")) {
@@ -4788,11 +4457,11 @@ class EVGElement {
             return
         }
         if ((name == "stroke-linecap") || (name == "strokeLinecap")) {
-            strokeLineCap = value
+            this.setStrokeLineCap(value)
             return
         }
         if ((name == "stroke-linejoin") || (name == "strokeLinejoin")) {
-            strokeLineJoin = value
+            this.setStrokeLineJoin(value)
             return
         }
         if (name == "overflow") {
@@ -4819,7 +4488,7 @@ class EVGElement {
             return
         }
         if ((name == "scrollbar-width") || (name == "scrollbarWidth")) {
-            scrollbarWidth = value
+            this.setScrollbarWidth(value)
             return
         }
         if ((name == "scrollbar-color") || (name == "scrollbarColor")) {
@@ -4827,18 +4496,18 @@ class EVGElement {
             return
         }
         if (name == "evg-scrollbar-label") {
-            scrollbarLabel = value
+            this.setScrollbarLabel(value)
             return
         }
         ; The EVG effect family. Prefixed, because these are EXTENSIONS and not
         ; CSS: a reader who meets `evg-ripple-speed` should not go looking for
         ; it in a specification.
         if (name == "evg-surface-effect") {
-            surfaceEffect = value
+            this.setSurfaceEffect(value)
             return
         }
         if (name == "evg-effect-on") {
-            effectTrigger = value
+            this.setEffectTrigger(value)
             return
         }
         ; `evg-fx-<name>` — anything at all, under whatever name the plugin
@@ -4853,47 +4522,47 @@ class EVGElement {
             }
         }
         if (name == "evg-ripple-speed") {
-            rippleSpeed = (EVGElement.numberOr(value rippleSpeed))
+            this.setRippleSpeed((EVGElement.numberOr(value rare.rippleSpeed)))
             return
         }
         if (name == "evg-ripple-width") {
-            rippleWidth = (EVGElement.numberOr(value rippleWidth))
+            this.setRippleWidth((EVGElement.numberOr(value rare.rippleWidth)))
             return
         }
         if (name == "evg-ripple-strength") {
-            rippleStrength = (EVGElement.numberOr(value rippleStrength))
+            this.setRippleStrength((EVGElement.numberOr(value rare.rippleStrength)))
             return
         }
         if (name == "evg-ripple-decay") {
-            rippleDecay = (EVGElement.numberOr(value rippleDecay))
+            this.setRippleDecay((EVGElement.numberOr(value rare.rippleDecay)))
             return
         }
         if (name == "evg-ripple-highlight") {
-            rippleHighlight = (EVGElement.numberOr(value rippleHighlight))
+            this.setRippleHighlight((EVGElement.numberOr(value rare.rippleHighlight)))
             return
         }
         if (name == "evg-ripple-rings") {
-            rippleRings = (EVGElement.numberOr(value rippleRings))
+            this.setRippleRings((EVGElement.numberOr(value rare.rippleRings)))
             return
         }
         if (name == "evg-ripple-stagger") {
-            rippleStagger = (EVGElement.numberOr(value rippleStagger))
+            this.setRippleStagger((EVGElement.numberOr(value rare.rippleStagger)))
             return
         }
         if (name == "evg-ripple-ring-falloff") {
-            rippleFalloff = (EVGElement.numberOr(value rippleFalloff))
+            this.setRippleFalloff((EVGElement.numberOr(value rare.rippleFalloff)))
             return
         }
         if (name == "evg-ripple-shine") {
-            rippleShine = (EVGElement.numberOr(value rippleShine))
+            this.setRippleShine((EVGElement.numberOr(value rare.rippleShine)))
             return
         }
         if (name == "evg-ripple-gloss") {
-            rippleGloss = (EVGElement.numberOr(value rippleGloss))
+            this.setRippleGloss((EVGElement.numberOr(value rare.rippleGloss)))
             return
         }
         if (name == "evg-ripple-bump") {
-            rippleBump = (EVGElement.numberOr(value rippleBump))
+            this.setRippleBump((EVGElement.numberOr(value rare.rippleBump)))
             return
         }
         ; Three numbers, and they do not have to be normalised — the shader
@@ -4902,13 +4571,13 @@ class EVGElement {
         if (name == "evg-ripple-light") {
             def lp:[string] (EVGElement.splitWords(value))
             if ((array_length lp) > 0) {
-                rippleLightX = (EVGElement.numberOr((itemAt lp 0) rippleLightX))
+                this.setRippleLightX((EVGElement.numberOr((itemAt lp 0) rare.rippleLightX)))
             }
             if ((array_length lp) > 1) {
-                rippleLightY = (EVGElement.numberOr((itemAt lp 1) rippleLightY))
+                this.setRippleLightY((EVGElement.numberOr((itemAt lp 1) rare.rippleLightY)))
             }
             if ((array_length lp) > 2) {
-                rippleLightZ = (EVGElement.numberOr((itemAt lp 2) rippleLightZ))
+                this.setRippleLightZ((EVGElement.numberOr((itemAt lp 2) rare.rippleLightZ)))
             }
             return
         }
@@ -5060,11 +4729,11 @@ class EVGElement {
         }
         if ((name == "grid-template-columns") || (name == "gridTemplateColumns")) {
             gridTemplateColumns = value
-            subgridOwnColumnNames = ""
+            this.setSubgridOwnColumnNames("")
             def tvc:string (trim value)
             if (((strlen tvc) > 8) && ((substring tvc 0 8) == "subgrid ")) {
                 gridTemplateColumns = "subgrid"
-                subgridOwnColumnNames = (trim (substring tvc 8 (strlen tvc)))
+                this.setSubgridOwnColumnNames((trim (substring tvc 8 (strlen tvc))))
             }
             return
         }
@@ -5077,11 +4746,11 @@ class EVGElement {
             return
         }
         if ((name == "grid-auto-columns") || (name == "gridAutoColumns")) {
-            gridAutoColumns = value
+            this.setGridAutoColumns(value)
             return
         }
         if ((name == "grid-auto-rows") || (name == "gridAutoRows")) {
-            gridAutoRows = value
+            this.setGridAutoRows(value)
             return
         }
         if ((name == "grid-auto-flow") || (name == "gridAutoFlow")) {
@@ -5114,14 +4783,14 @@ class EVGElement {
         }
         if ((name == "justify-self") || (name == "justifySelf")) {
             if (value == "auto") {
-                justifySelf = ""
+                this.setJustifySelf("")
             } {
-                justifySelf = value
+                this.setJustifySelf(value)
             }
             return
         }
         if ((name == "justify-items") || (name == "justifyItems")) {
-            justifyItems = value
+            this.setJustifyItems(value)
             return
         }
         if ((name == "align-self") || (name == "alignSelf")) {
@@ -5279,55 +4948,55 @@ class EVGElement {
         ; the `connector` tag, which is EVG's own — CSS has no property that
         ; draws a line between two elements.
         if ((name == "anchor-name") || (name == "anchorName")) {
-            anchorName = (trim value)
+            this.setAnchorName((trim value))
             return
         }
         if (name == "from") {
-            connectorFrom = (trim value)
+            this.setConnectorFrom((trim value))
             return
         }
         if (name == "to") {
-            connectorTo = (trim value)
+            this.setConnectorTo((trim value))
             return
         }
         if ((name == "from-side") || (name == "fromSide")) {
-            connectorFromSide = (trim value)
+            this.setConnectorFromSide((trim value))
             return
         }
         if ((name == "to-side") || (name == "toSide")) {
-            connectorToSide = (trim value)
+            this.setConnectorToSide((trim value))
             return
         }
         if (name == "routing") {
-            connectorRouting = (trim value)
+            this.setConnectorRouting((trim value))
             return
         }
         if ((name == "from-offset") || (name == "fromOffset")) {
             def fou:EVGUnit (this.unitOf(name value))
             if fou.isSet {
-                connectorFromOffset = fou.pixels
+                this.setConnectorFromOffset(fou.pixels)
             }
             return
         }
         if ((name == "to-offset") || (name == "toOffset")) {
             def tou:EVGUnit (this.unitOf(name value))
             if tou.isSet {
-                connectorToOffset = tou.pixels
+                this.setConnectorToOffset(tou.pixels)
             }
             return
         }
         if ((name == "arrow-start") || (name == "arrowStart")) {
-            arrowStart = (trim value)
+            this.setArrowStart((trim value))
             return
         }
         if ((name == "arrow-end") || (name == "arrowEnd")) {
-            arrowEnd = (trim value)
+            this.setArrowEnd((trim value))
             return
         }
         if ((name == "arrow-size") || (name == "arrowSize")) {
             def asu:EVGUnit (this.unitOf(name value))
             if asu.isSet {
-                arrowSize = asu.pixels
+                this.setArrowSize(asu.pixels)
             }
             return
         }
@@ -5475,5 +5144,284 @@ class EVGElement {
     
     fn toString:string () {
         return ("<" + tagName + " id=\"" + id + "\" " + (this.getCalculatedBounds()) + ">")
+    }
+
+    ; the element's own EVGRare, made the first time one is written
+    fn rareW:EVGRare () {
+        if (rare.shared) {
+            def fresh:EVGRare (new EVGRare())
+            rare = fresh
+            return fresh
+        }
+        def r:EVGRare rare
+        return r
+    }
+    fn setScrollbarWidth:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.scrollbarWidth = v
+    }
+    fn setScrollbarLabel:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.scrollbarLabel = v
+    }
+    fn setSurfaceEffect:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.surfaceEffect = v
+    }
+    fn setEffectTrigger:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.effectTrigger = v
+    }
+    fn setFxNames:void (v:[string]) {
+        def r:EVGRare (this.rareW())
+        r.fxNames = v
+    }
+    fn setFxValues:void (v:[double]) {
+        def r:EVGRare (this.rareW())
+        r.fxValues = v
+    }
+    fn setStrokeLineCap:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.strokeLineCap = v
+    }
+    fn setStrokeLineJoin:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.strokeLineJoin = v
+    }
+    fn setJustifySelf:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.justifySelf = v
+    }
+    fn setJustifyItems:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.justifyItems = v
+    }
+    fn setSubgridColumnSizes:void (v:[double]) {
+        def r:EVGRare (this.rareW())
+        r.subgridColumnSizes = v
+    }
+    fn setSubgridRowSizes:void (v:[double]) {
+        def r:EVGRare (this.rareW())
+        r.subgridRowSizes = v
+    }
+    fn setSubgridOwnColumnNames:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.subgridOwnColumnNames = v
+    }
+    fn setSubgridColumnSpec:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.subgridColumnSpec = v
+    }
+    fn setSubgridRowSpec:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.subgridRowSpec = v
+    }
+    fn setComputedRowSizes:void (v:[double]) {
+        def r:EVGRare (this.rareW())
+        r.computedRowSizes = v
+    }
+    fn setGridAutoColumns:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.gridAutoColumns = v
+    }
+    fn setGridAutoRows:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.gridAutoRows = v
+    }
+    fn setPreserveAspectRatio:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.preserveAspectRatio = v
+    }
+    fn setAnchorName:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.anchorName = v
+    }
+    fn setConnectorFrom:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.connectorFrom = v
+    }
+    fn setConnectorTo:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.connectorTo = v
+    }
+    fn setConnectorFromSide:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.connectorFromSide = v
+    }
+    fn setConnectorToSide:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.connectorToSide = v
+    }
+    fn setConnectorRouting:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.connectorRouting = v
+    }
+    fn setArrowStart:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.arrowStart = v
+    }
+    fn setArrowEnd:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.arrowEnd = v
+    }
+    fn setInlineProps:void (v:[string]) {
+        def r:EVGRare (this.rareW())
+        r.inlineProps = v
+    }
+    fn setCssProps:void (v:[string]) {
+        def r:EVGRare (this.rareW())
+        r.cssProps = v
+    }
+    fn setOverlayPlacedPresentation:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.overlayPlacedPresentation = v
+    }
+    fn setPositionAnchor:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.positionAnchor = v
+    }
+    fn setPositionTryFallbacks:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.positionTryFallbacks = v
+    }
+    fn setPositionTryOrder:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.positionTryOrder = v
+    }
+    fn setAnchorLeftSide:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.anchorLeftSide = v
+    }
+    fn setAnchorTopSide:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.anchorTopSide = v
+    }
+    fn setAnchorRightSide:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.anchorRightSide = v
+    }
+    fn setAnchorBottomSide:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.anchorBottomSide = v
+    }
+    fn setTransitionSpec:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.transitionSpec = v
+    }
+    fn setStyleClass:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.styleClass = v
+    }
+    fn setStyleAnc:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.styleAnc = v
+    }
+    fn setStyleTheme:void (v:string) {
+        def r:EVGRare (this.rareW())
+        r.styleTheme = v
+    }
+    fn setRippleSpeed:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleSpeed = v
+    }
+    fn setRippleWidth:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleWidth = v
+    }
+    fn setRippleStrength:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleStrength = v
+    }
+    fn setRippleDecay:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleDecay = v
+    }
+    fn setRippleHighlight:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleHighlight = v
+    }
+    fn setRippleRings:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleRings = v
+    }
+    fn setRippleStagger:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleStagger = v
+    }
+    fn setRippleFalloff:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleFalloff = v
+    }
+    fn setRippleShine:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleShine = v
+    }
+    fn setRippleGloss:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleGloss = v
+    }
+    fn setRippleBump:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleBump = v
+    }
+    fn setRippleLightX:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleLightX = v
+    }
+    fn setRippleLightY:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleLightY = v
+    }
+    fn setRippleLightZ:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.rippleLightZ = v
+    }
+    fn setSubgridColumnGap:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.subgridColumnGap = v
+    }
+    fn setSubgridRowGap:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.subgridRowGap = v
+    }
+    fn setConnectorFromOffset:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.connectorFromOffset = v
+    }
+    fn setConnectorToOffset:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.connectorToOffset = v
+    }
+    fn setArrowSize:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.arrowSize = v
+    }
+    fn setAnchorLeftOffset:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.anchorLeftOffset = v
+    }
+    fn setAnchorTopOffset:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.anchorTopOffset = v
+    }
+    fn setAnchorRightOffset:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.anchorRightOffset = v
+    }
+    fn setAnchorBottomOffset:void (v:double) {
+        def r:EVGRare (this.rareW())
+        r.anchorBottomOffset = v
+    }
+    fn setSubgridPending:void (v:boolean) {
+        def r:EVGRare (this.rareW())
+        r.subgridPending = v
+    }
+    fn setConnectorResolved:void (v:boolean) {
+        def r:EVGRare (this.rareW())
+        r.connectorResolved = v
+    }
+    fn setOverlayClamped:void (v:boolean) {
+        def r:EVGRare (this.rareW())
+        r.overlayClamped = v
     }
 }

@@ -1,0 +1,304 @@
+; ==============================================================================
+; EVGRare — the members of an element that few elements set
+; ==============================================================================
+;
+; Effects, connectors, anchors, subgrid tracks, ripple parameters and the
+; like: most boxes of a page have none of them. They live here, and an
+; element holds the one shared EVGRare (EVGRare.none(), never written)
+; until one of them is set (EVGElement.rareW, the set* methods). A 10 000-row
+; table's 110 000 elements carried ~1.1 KB of them each.
+
+class EVGRareDefaults @singleton(true) {
+    def none:EVGRare (EVGRare.made())
+}
+
+class EVGRare {
+    ; the shared one (EVGRare.none): a writer makes its own (rareW)
+    def shared:boolean false
+    ; The scroll container's bar, as CSS styles it: `scrollbar-width` (auto,
+    ; thin, none), `scrollbar-color` (the thumb's colour, then the track's;
+    ; `auto` for either is ink on whatever the bar is over), and the EVG
+    ; extension `evg-scrollbar-label` (percent, none). Read by
+    ; `EVGDisplayList.addScrollbar`, which draws the bar when an app asks
+    ; the list to.
+    def scrollbarWidth:string ""
+    def scrollbarLabel:string ""
+    ; --- A SURFACE EFFECT ------------------------------------------------------
+    ;
+    ; `evg-surface-effect: ripple`, and the family of `evg-ripple-*` numbers
+    ; under it. The `evg-` prefix is not decoration: this is an EVG EXTENSION
+    ; and not a CSS property, so nothing in the gallery should ever measure it
+    ; against a browser and find a divergence — there is nothing to diverge
+    ; from. Every other property in this file is CSS and is measured; these are
+    ; ours, and they say so in their names.
+    ;
+    ; The effect belongs to a SURFACE, not to a box. It names a post-process
+    ; over everything that was drawn: the display list carries it beside the
+    ; commands rather than as one of them, and a backend that has never heard
+    ; of it draws the page and ignores the field.
+    def surfaceEffect:string ""
+    ; How fast the ring travels, in pixels a second.
+    def rippleSpeed:double 220.0
+    ; How wide the ring is — the Gaussian envelope's sigma, in pixels.
+    def rippleWidth:double 28.0
+    ; How far the surface is pushed at the crest, in pixels.
+    def rippleStrength:double 7.0
+    ; How fast the whole thing dies away, per second.
+    def rippleDecay:double 1.8
+    ; How much the crest lightens. Small: this is the difference between water
+    ; and a filter somebody put on a video.
+    def rippleHighlight:double 0.08
+    ; --- how many rings ONE touch sends -----------------------------------------
+    ;
+    ; A drop on water does not make one ring. It makes a TRAIN of them, born at
+    ; the same point a moment apart and travelling out together, each fainter
+    ; than the one in front: the shape is a single expanding target rather than
+    ; a single circle.
+    ;
+    ; This costs no state at all. The rings of one touch differ only in when
+    ; they started, and that is the touch's age minus a multiple of the stagger
+    ; — so the shader works them out from the one age it already has, and a
+    ; ring whose start is still in the future simply has not been born yet.
+    def rippleRings:double 3.0
+    ; Seconds between one wavefront and the next.
+    def rippleStagger:double 0.09
+    ; What each ring behind the front is worth. Below about a half the train
+    ; reads as one ring with a smudge behind it.
+    def rippleFalloff:double 0.62
+    ; --- and what makes it look WET ---------------------------------------------
+    ;
+    ; A brightness proportional to the wave's height is an AMBIENT term: every
+    ; part of a crest lights up by the same amount however it is tilted, which
+    ; is exactly what a matte surface does. Water is not matte. What makes it
+    ; read as water is a SPECULAR: a highlight that depends on the angle
+    ; between the light, the eye and the surface's own normal, so it lives on
+    ; the FLANK of a wave rather than on its top and slides along as the wave
+    ; moves.
+    ;
+    ; The normal comes from the height field the rings already sum to — its
+    ; screen-space gradient is the slope, and the slope is the normal. Nothing
+    ; new has to be computed or stored.
+    ;
+    ; How strong the glint is. 0 turns it off and leaves the ambient term.
+    def rippleShine:double 0.45
+    ; The Blinn-Phong exponent: how TIGHT the glint is. Low is a broad sheen
+    ; like wet stone, high is a sharp point like a bead of water. Past about
+    ; 200 the glint stops being an arc along the ring and breaks into
+    ; separate specks, because the surviving band gets narrower than a pixel.
+    def rippleGloss:double 120.0
+    ; How much the wave's height tilts the normal. This is the one number with
+    ; no physical meaning — the height field is in arbitrary units, so this is
+    ; what turns it into a slope.
+    def rippleBump:double 70.0
+    ; Where the light is. The default is over the viewer's left shoulder,
+    ; which is where every UI in this gallery already pretends its light is.
+    def rippleLightX:double -0.45
+    def rippleLightY:double -0.65
+    def rippleLightZ:double 0.62
+    ; --- WHICH BOX, AND WHAT STARTS IT ----------------------------------------
+    ;
+    ; `evg-surface-effect` above says WHAT to run. These two say WHERE and
+    ; WHEN, and they are the whole difference between an effect a page has and
+    ; an effect a page's code has to remember to drive.
+    ;
+    ; WHERE is this element's own border box: an effect declared on a card is
+    ; the card's, and the display list carries the box the layout gave it, so
+    ; nothing downstream has to be told a rectangle somebody typed.
+    ;
+    ; WHEN is `evg-effect-on`, a list of the pointer things that feed it —
+    ; `press`, `drag`, `hover` — or `always` for one that runs on its own
+    ; clock and needs no pointer at all. The default is EMPTY, which means the
+    ; application drives it, and that is what the original ripple did from the
+    ; page's own `pointerdown`: the property is how a page stops having to.
+    ;
+    ; Nothing in EVG reads this. It is written into the display list and read
+    ; by the host's effect driver, for the same reason `cursor` is: what a
+    ; pointer is belongs to whatever owns the pointer.
+    def effectTrigger:string ""
+    def fxNames:[string]
+    def fxValues:[double]
+    ; SVG's `stroke-linecap` and `stroke-linejoin` on a stroked path.
+    ; "butt" and "miter" are what the painter drew before either existed,
+    ; so a caller that says nothing keeps the picture it had.
+    def strokeLineCap:string "butt"
+    def strokeLineJoin:string "miter"
+    def justifySelf:string ""
+    def justifyItems:string ""
+    ; Per-item placement, e.g. "span 2" or "2 / 4". Empty means auto-flow.
+    ; grid-template-areas: rows of names, e.g.
+    ;   "hero hero" "left right"
+    ; An item claims a region with grid-area.
+    ; Track sizes handed down by an enclosing grid when this element declares
+    ; `grid-template-columns: subgrid` / `grid-template-rows: subgrid`. Filled
+    ; in by EVGLayout just before the child is laid out, because the parent is
+    ; the only thing that knows its own tracks.
+    def subgridColumnSizes:[double]
+    def subgridRowSizes:[double]
+    ; the enclosing grid's column and row gaps, which a subgrid's own
+    ; `normal` gap is (CSS Grid 2 9; -1 when not a subgrid)
+    def subgridColumnGap:double -1.0
+    ; the column line names a subgrid declares after the keyword
+    ; ("subgrid [a] []") and the template its enclosing grid hands it,
+    ; names and all
+    def subgridOwnColumnNames:string ""
+    def subgridColumnSpec:string ""
+    def subgridRowSpec:string ""
+    def subgridRowGap:double -1.0
+    ; The row heights this element's own grid worked out, left behind for an
+    ; enclosing grid to read. A row subgrid always spans several of its
+    ; parent's rows, and with subgrid it is the GRANDCHILDREN that have to size
+    ; those rows — so the parent measures the subgrid once and adopts the rows
+    ; it came up with, rather than trying to see through it.
+    def computedRowSizes:[double]
+    ; Set by the enclosing grid as soon as it has claimed this element, which
+    ; is well before it can size its tracks. It is what tells a subgrid child
+    ; laid out during the parent's content-measuring pass — where the sizes do
+    ; not exist yet — apart from one with no enclosing grid at all. Without it
+    ; the first kind reported "no enclosing grid", which was simply untrue.
+    def subgridPending:boolean false
+    ; the size of an implicit column, an implicit row ("" is auto)
+    def gridAutoColumns:string ""
+    def gridAutoRows:string ""
+    ; How the outline is fitted into the box, in SVG's own words. `meet`
+    ; keeps the shape and letterboxes it; `none` stretches. Everything here
+    ; is authored at its own size and so fits either way — until a shape is
+    ; RESIZED, and then the two are the difference between a wider shape and
+    ; the same shape in a wider frame.
+    def preserveAspectRatio:string "xMidYMid meet"
+    ; ---------------------------------------------------------------------
+    ; Anchors and connectors
+    ; ---------------------------------------------------------------------
+    ;
+    ; `anchor-name` is CSS Anchor Positioning's own property: a name other
+    ; elements can point at, written `--orders` by convention. It is kept as
+    ; written, so `--orders` and `orders` are two different names, the way the
+    ; CSS one is.
+    def anchorName:string ""
+    ; A `connector` is a path whose `d` the LAYOUT writes. The author says
+    ; which two boxes it joins and how it should look; where those boxes end
+    ; up is the layout's business, and it is re-solved on every layout pass,
+    ; which is the whole point — a hand-placed `left: 171px` arrow is wrong
+    ; the moment the grid it was measured against reflows.
+    ;
+    ; `from`/`to` name an anchor (`--orders`) or an id (`#orders`).
+    def connectorFrom:string ""
+    def connectorTo:string ""
+    ; Which edge of the box to leave from and arrive at: left, right, top,
+    ; bottom, center — or `auto`, which picks the pair facing each other. Auto
+    ; is what makes the same connector correct in both a two-column desktop
+    ; layout and a stacked phone one.
+    def connectorFromSide:string "auto"
+    def connectorToSide:string "auto"
+    ; straight | orthogonal | bezier
+    def connectorRouting:string "straight"
+    ; A gap left between the box edge and the line's end, along the side's
+    ; own normal.
+    def connectorFromOffset:double 0.0
+    def connectorToOffset:double 0.0
+    ; none | triangle | open. `triangle` is filled, `open` is two strokes;
+    ; both follow the direction of the segment they sit on.
+    def arrowStart:string "none"
+    def arrowEnd:string "none"
+    def arrowSize:double 10.0
+    ; Set by the layout when it could not resolve `from` or `to`; the draw is
+    ; skipped rather than pointed at the origin.
+    def connectorResolved:boolean false
+    ; Property names the authoring layer set directly on this element, in
+    ; kebab-case. A stylesheet must not overwrite these — inline wins the
+    ; cascade — so front-ends call markInline() for every attribute they apply.
+    def inlineProps:[string]
+    ; WHICH PROPERTIES CAME FROM THE DOCUMENT'S STYLESHEET.
+    ;
+    ; The sheet is applied by writing values onto elements, which makes a
+    ; cascaded value indistinguishable from an authored one the moment layout
+    ; has run — and anything that serializes the tree afterwards writes the
+    ; whole cascade into every node, turning a stylesheet into a one-time
+    ; macro. It happened: a page with six `.glass` cards came back with the
+    ; rule copied onto all six, class and all.
+    ;
+    ; So the sheet says so. `EVGStyleSheet` marks what it set, `EVGLayout`
+    ; clears the marks before re-applying, and `EVGTreeJson` leaves a marked
+    ; property out — the document keeps saying `class-name`, and the rule
+    ; stays one place. An inline property is never marked, because the sheet
+    ; does not touch one.
+    def cssProps:[string]
+    ; anchored | sheet | fullscreen — what the surface ended up being. A menu
+    ; that turned into a bottom sheet on a phone is a different widget, and a
+    ; stylesheet, a test and an accessibility tree all want to know.
+    def overlayPlacedPresentation:string ""
+    ; The placement had to make it smaller than it asked to be, so it clips and
+    ; has somewhere to scroll — `scrollHeight` is the extent, as everywhere.
+    def overlayClamped:boolean false
+    ; --- popover: anchoring by name, fallbacks, presentation ------------------
+    ;
+    ; CSS Anchor Positioning's own vocabulary, as far as this engine carries
+    ; it. The alternative was a second EVG-shaped spelling of the same idea,
+    ; which costs everyone who already knows the CSS one.
+    ;
+    ; `position-anchor` names the box to position against — an `anchor-name`
+    ; (`--file-menu`) or an `#id`. It also MARKS the element as a surface:
+    ; anything positioned against another box wants to be out of flow and in
+    ; the top layer, and making that follow from one property is the whole
+    ; ergonomic difference between this and writing four.
+    def positionAnchor:string ""
+    ; A comma-separated list of position-areas to try when the declared one
+    ; does not fit: "top start, right start, left start". CSS spells it
+    ; `position-try-fallbacks`; the shorter `position-try` is accepted too.
+    def positionTryFallbacks:string ""
+    ; "" tries them in order and takes the first that fits. "most-space" scores
+    ; them all and takes the roomiest, which is CSS's `position-try-order`
+    ; heading in the same direction.
+    def positionTryOrder:string ""
+    ; CSS's `anchor()` in an inset property: `left: anchor(right)` puts this
+    ; element's left edge on the anchor's right edge, and
+    ; `calc(anchor(right) + 8px)` puts it eight past. Each edge keeps which
+    ; edge of the ANCHOR it was given and how far off it sits; empty means the
+    ; edge was an ordinary length and `left`/`top` hold it as usual.
+    ;
+    ; This is the other half of `position-anchor`. `position-area` places a
+    ; whole surface on a side of its anchor, which is what a menu wants;
+    ; `anchor()` places one EDGE, which is what a badge hanging off a corner
+    ; wants, and there is no way to say that with an area.
+    def anchorLeftSide:string ""
+    def anchorLeftOffset:double 0.0
+    def anchorTopSide:string ""
+    def anchorTopOffset:double 0.0
+    def anchorRightSide:string ""
+    def anchorRightOffset:double 0.0
+    def anchorBottomSide:string ""
+    def anchorBottomOffset:double 0.0
+    ; --- transitions --------------------------------------------------------------
+    ; `transition: background-color 150ms` as the stylesheet declared it, and
+    ; the flights currently in the air. Both live on the element because a
+    ; transition is a fact about THIS box moving, not about the rule that
+    ; started it — the rule may not even match any more by the time it lands.
+    def transitionSpec:string ""
+    ; --- what the stylesheet last wrote here ---------------------------------
+    ;
+    ; The cascade's answer for an element is a function of four things, and
+    ; these remember which four produced what the element is holding now. When
+    ; they all still agree on the next pass, the element already contains
+    ; exactly what the sheet would write, and writing it again is pure cost —
+    ; on a 1600-row table a hover changes ONE row and the other 22,402 elements
+    ; were being re-declared regardless.
+    ;
+    ; `styleGen` is the sheet's own counter, so re-parsing or resizing
+    ; invalidates every element at once without touching any of them.
+    ; `EVGTransition.writeBack` sets it to -1, because after a flight has
+    ; written a showing value the element no longer holds what the sheet
+    ; declared — and the sheet has to re-declare it or the flight stops dead.
+    def styleClass:string ""
+    ; which descendant rules its ancestors satisfied (a standard-mode sheet
+    ; with descendant selectors; "" otherwise)
+    def styleAnc:string ""
+    def styleTheme:string ""
+
+    sfn made:EVGRare () {
+        def d (new EVGRare())
+        d.shared = true
+        return d
+    }
+    sfn none:EVGRare () {
+        return ((EVGRareDefaults.__singleton()).none)
+    }
+}

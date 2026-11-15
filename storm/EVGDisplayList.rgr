@@ -2079,7 +2079,7 @@ class EVGDisplayList {
         ; …and the FIT, which decides the matrix the rings were flattened
         ; through. Left out of the key, a shape that started stretching went
         ; on drawing the rings it had before it did.
-        def sameGeom:boolean ((((el.ringsSteps == steps) && (el.ringsPath == pathData)) && (el.ringsViewBox == el.viewBox)) && (el.ringsFit == el.preserveAspectRatio))
+        def sameGeom:boolean ((((el.ringsSteps == steps) && (el.ringsPath == pathData)) && (el.ringsViewBox == el.viewBox)) && (el.ringsFit == el.rare.preserveAspectRatio))
         def fresh:boolean ((el.ringsHave && sameBox) && sameGeom)
         if (fresh) {
         } {
@@ -2087,7 +2087,7 @@ class EVGDisplayList {
             parser.parse(pathData)
             def b:PathBounds (parser.getBounds())
             def vb:ViewBoxRect (VectorViewBox.effectiveViewBox(el.viewBox b.minX b.minY b.width b.height))
-            def m:Matrix2D (VectorViewBox.resolve(vb w h el.preserveAspectRatio))
+            def m:Matrix2D (VectorViewBox.resolve(vb w h el.rare.preserveAspectRatio))
             rings = (parser.flattenRings(steps m.a m.b m.c m.d (m.e + x) (m.f + y)))
             ; Kept for the next walk — see the note on `EVGElement.ringsCache`.
             el.ringsCache = rings
@@ -2100,7 +2100,7 @@ class EVGDisplayList {
             el.ringsSteps = steps
             el.ringsScale = m.a
             el.ringsViewBox = el.viewBox
-            el.ringsFit = el.preserveAspectRatio
+            el.ringsFit = el.rare.preserveAspectRatio
         }
         if ((array_length rings) == 0) {
             return
@@ -2147,7 +2147,7 @@ class EVGDisplayList {
                 hp.parse(el.arrowPath)
                 def hb:PathBounds (hp.getBounds())
                 def hvb:ViewBoxRect (VectorViewBox.effectiveViewBox(el.viewBox hb.minX hb.minY hb.width hb.height))
-                def hm:Matrix2D (VectorViewBox.resolve(hvb w h el.preserveAspectRatio))
+                def hm:Matrix2D (VectorViewBox.resolve(hvb w h el.rare.preserveAspectRatio))
                 def hrings:[PathRing] (hp.flattenRings(steps hm.a hm.b hm.c hm.d (hm.e + x) (hm.f + y)))
                 if ((array_length hrings) > 0) {
                     def ch (new EVGDrawCmd())
@@ -2184,8 +2184,8 @@ class EVGDisplayList {
                     scale = 1.0
                 }
                 cs.thickness = (el.strokeWidth * scale)
-                cs.strokeCap = (EVGDisplayList.capCode(el.strokeLineCap))
-                cs.strokeJoin = (EVGDisplayList.joinCode(el.strokeLineJoin))
+                cs.strokeCap = (EVGDisplayList.capCode(el.rare.strokeLineCap))
+                cs.strokeJoin = (EVGDisplayList.joinCode(el.rare.strokeLineJoin))
                 cs.strokeDash = el.strokeDashArray
                 cs.strokeDashOffset = el.strokeDashOffset
                 cs.r = (sc.red())
@@ -2573,10 +2573,10 @@ class EVGDisplayList {
                 state = 2
             }
         }
-        if (el.scrollbarWidth == "none") {
+        if (el.rare.scrollbarWidth == "none") {
             return
         }
-        def width:double (EVGDisplayList.barWidth(state (el.scrollbarWidth == "thin")))
+        def width:double (EVGDisplayList.barWidth(state (el.rare.scrollbarWidth == "thin")))
         def margin:double 3.0
         def trackX:double ((x + w) - (width + margin))
         def trackY:double (y + margin)
@@ -2702,7 +2702,7 @@ class EVGDisplayList {
         thumb.b2 = cb
         thumb.a2 = thumbA
         this.addCmd(thumb)
-        if ((state >= 1) && (el.scrollbarLabel != "none")) {
+        if ((state >= 1) && (el.rare.scrollbarLabel != "none")) {
             ; Where the page is, as a number beside the thumb: a pill in the
             ; bar's ink with the text in the backdrop's, so it reads on any
             ; page. It moves with the thumb — it is in the thumb's layer —
@@ -3926,7 +3926,7 @@ class EVGDisplayList {
             ; An ELEMENT-SCOPED EFFECT rides the element's own background,
             ; which is where it belongs in paint order: the element's picture
             ; first, then the effect, then its children on top.
-            if ((strlen el.surfaceEffect) > 0) {
+            if ((strlen el.rare.surfaceEffect) > 0) {
                 c.effectId = el.effectRuntimeId
             }
             ; (more than two stops along an axis: the background is the
@@ -4006,7 +4006,7 @@ class EVGDisplayList {
             ; the background. Same transparent carrier the filter above uses,
             ; and a backend that has never heard of effects draws nothing,
             ; which is exactly right.
-            if ((strlen el.surfaceEffect) > 0) {
+            if ((strlen el.rare.surfaceEffect) > 0) {
                 def cf (new EVGDrawCmd())
                 cf.kind = 0
                 cf.x = x
@@ -4863,31 +4863,31 @@ class EVGDisplayList {
         if ((strlen effectKind) > 0) {
             return
         }
-        if ((strlen el.surfaceEffect) > 0) {
-            effectKind = el.surfaceEffect
+        if ((strlen el.rare.surfaceEffect) > 0) {
+            effectKind = el.rare.surfaceEffect
             effectXs = el.rippleXs
             effectYs = el.rippleYs
             effectAges = el.rippleAges
-            effectSpeed = el.rippleSpeed
-            effectWidth = el.rippleWidth
-            effectStrength = el.rippleStrength
-            effectDecay = el.rippleDecay
-            effectHighlight = el.rippleHighlight
-            effectRings = el.rippleRings
-            effectStagger = el.rippleStagger
-            effectFalloff = el.rippleFalloff
-            effectShine = el.rippleShine
-            effectGloss = el.rippleGloss
-            effectBump = el.rippleBump
-            effectLightX = el.rippleLightX
-            effectLightY = el.rippleLightY
-            effectLightZ = el.rippleLightZ
+            effectSpeed = el.rare.rippleSpeed
+            effectWidth = el.rare.rippleWidth
+            effectStrength = el.rare.rippleStrength
+            effectDecay = el.rare.rippleDecay
+            effectHighlight = el.rare.rippleHighlight
+            effectRings = el.rare.rippleRings
+            effectStagger = el.rare.rippleStagger
+            effectFalloff = el.rare.rippleFalloff
+            effectShine = el.rare.rippleShine
+            effectGloss = el.rare.rippleGloss
+            effectBump = el.rare.rippleBump
+            effectLightX = el.rare.rippleLightX
+            effectLightY = el.rare.rippleLightY
+            effectLightZ = el.rare.rippleLightZ
         }
         ; Nothing below carries one, so there is nothing to find down there.
         ; `paintHasEffect` is the layout's answer for the whole subtree; an
         ; element whose own effect was set since the layout is still read
         ; above, so only the search is short-circuited, never the element.
-        if ((el.paintHasEffect == false) && ((strlen el.surfaceEffect) == 0)) {
+        if ((el.paintHasEffect == false) && ((strlen el.rare.surfaceEffect) == 0)) {
             return
         }
         def i:int 0
@@ -4903,10 +4903,10 @@ class EVGDisplayList {
     ; layout gave it. Pruned by `paintHasEffect` exactly as `readEffect` above
     ; is: a page with no effect on it pays one comparison at the root.
     fn collectEffects:void (el:EVGElement) {
-        if ((strlen el.surfaceEffect) > 0) {
+        if ((strlen el.rare.surfaceEffect) > 0) {
             this.addEffect(el)
         }
-        if ((el.paintHasEffect == false) && ((strlen el.surfaceEffect) == 0)) {
+        if ((el.paintHasEffect == false) && ((strlen el.rare.surfaceEffect) == 0)) {
             return
         }
         def i:int 0
@@ -4944,8 +4944,8 @@ class EVGDisplayList {
         }
         el.effectRuntimeId = id
         push fxIds id
-        push fxKinds el.surfaceEffect
-        push fxTriggers el.effectTrigger
+        push fxKinds el.rare.surfaceEffect
+        push fxTriggers el.rare.effectTrigger
         push fxX el.calculatedX
         push fxY el.calculatedY
         push fxW el.calculatedWidth
@@ -4954,8 +4954,8 @@ class EVGDisplayList {
         def start:int (array_length fxParamNames)
         push fxParamStart start
         def i:int 0
-        while (i < (array_length el.fxNames)) {
-            this.pushParam(start (itemAt el.fxNames i) (itemAt el.fxValues i))
+        while (i < (array_length el.rare.fxNames)) {
+            this.pushParam(start (itemAt el.rare.fxNames i) (itemAt el.rare.fxValues i))
             i = (i + 1)
         }
         ; THE RIPPLE'S OWN PROPERTIES, AS PARAMETERS. `evg-ripple-speed` was
@@ -4963,21 +4963,21 @@ class EVGDisplayList {
         ; An element-scoped ripple reads the same numbers through the generic
         ; channel, so a page that already styles a ripple keeps styling it the
         ; way it always did and the plugin sees one kind of parameter.
-        if (el.surfaceEffect == "ripple") {
-            this.pushParam(start "speed" el.rippleSpeed)
-            this.pushParam(start "width" el.rippleWidth)
-            this.pushParam(start "strength" el.rippleStrength)
-            this.pushParam(start "decay" el.rippleDecay)
-            this.pushParam(start "highlight" el.rippleHighlight)
-            this.pushParam(start "rings" el.rippleRings)
-            this.pushParam(start "stagger" el.rippleStagger)
-            this.pushParam(start "falloff" el.rippleFalloff)
-            this.pushParam(start "shine" el.rippleShine)
-            this.pushParam(start "gloss" el.rippleGloss)
-            this.pushParam(start "bump" el.rippleBump)
-            this.pushParam(start "lightX" el.rippleLightX)
-            this.pushParam(start "lightY" el.rippleLightY)
-            this.pushParam(start "lightZ" el.rippleLightZ)
+        if (el.rare.surfaceEffect == "ripple") {
+            this.pushParam(start "speed" el.rare.rippleSpeed)
+            this.pushParam(start "width" el.rare.rippleWidth)
+            this.pushParam(start "strength" el.rare.rippleStrength)
+            this.pushParam(start "decay" el.rare.rippleDecay)
+            this.pushParam(start "highlight" el.rare.rippleHighlight)
+            this.pushParam(start "rings" el.rare.rippleRings)
+            this.pushParam(start "stagger" el.rare.rippleStagger)
+            this.pushParam(start "falloff" el.rare.rippleFalloff)
+            this.pushParam(start "shine" el.rare.rippleShine)
+            this.pushParam(start "gloss" el.rare.rippleGloss)
+            this.pushParam(start "bump" el.rare.rippleBump)
+            this.pushParam(start "lightX" el.rare.rippleLightX)
+            this.pushParam(start "lightY" el.rare.rippleLightY)
+            this.pushParam(start "lightZ" el.rare.rippleLightZ)
         }
         push fxParamCount ((array_length fxParamNames) - start)
     }

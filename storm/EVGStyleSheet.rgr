@@ -1788,7 +1788,7 @@ class EVGStyleSheet {
         ; longer holding what the sheet declared.
         if (((((el.styleGen == generation) && (el.styleBits == bits))
              && (el.styleKids == (array_length el.children)))
-             && (el.styleTheme == theme)) && ((el.styleClass == el.className) && (el.styleAnc == anc))) {
+             && (el.rare.styleTheme == theme)) && ((el.rare.styleClass == el.className) && (el.rare.styleAnc == anc))) {
             passSkipped = (passSkipped + 1)
             return
         }
@@ -1821,7 +1821,7 @@ class EVGStyleSheet {
         passStyled = (passStyled + 1)
         def layoutMoved:boolean true
         if (((el.styleSlot >= 0) && (el.styleGen == generation)) && (el.styleKids == (array_length el.children))) {
-            if ((array_length el.inlineProps) == 0) {
+            if ((array_length el.rare.inlineProps) == 0) {
                 if ((itemAt planLayoutSig el.styleSlot) == (itemAt planLayoutSig slot)) {
                     layoutMoved = false
                 }
@@ -1832,9 +1832,9 @@ class EVGStyleSheet {
         } {
             passPaintDirty = (passPaintDirty + 1)
         }
-        el.styleClass = el.className
-        el.styleAnc = anc
-        el.styleTheme = theme
+        el.setStyleClass(el.className)
+        el.setStyleAnc(anc)
+        el.setStyleTheme(theme)
         el.styleBits = bits
         el.styleGen = generation
         el.styleSlot = slot
