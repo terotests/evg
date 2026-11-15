@@ -1448,6 +1448,9 @@ class EVGElement {
     ; written a showing value the element no longer holds what the sheet
     ; declared — and the sheet has to re-declare it or the flight stops dead.
     def styleClass:string ""
+    ; which descendant rules its ancestors satisfied (a standard-mode sheet
+    ; with descendant selectors; "" otherwise)
+    def styleAnc:string ""
     def styleTheme:string ""
     def styleBits:int 0
     def styleGen:int 0
@@ -3993,6 +3996,7 @@ class EVGElement {
         ; answer: `adoptFrom` has just overwritten every value the sheet had
         ; put there.
         styleClass = other.styleClass
+        styleAnc = other.styleAnc
         styleTheme = other.styleTheme
         styleBits = other.styleBits
         styleGen = other.styleGen

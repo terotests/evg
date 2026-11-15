@@ -58,6 +58,25 @@
 ; the applier skips any property the authoring layer already set, which
 ; EVGElement records in `inlineProps`.
 ;
+; STANDARD MODE. A sheet that starts with
+;
+;   @evg mode standard;
+;
+; reads more like browser CSS, for a UI written fresh rather than a print
+; document:
+;
+;   .btn.primary      { ... }   ; compound: the element wears both classes
+;   .list .row        { ... }   ; descendant: under a .list, at any depth
+;   .theme-x .list .row { ... } ; a leading .theme-x still means the theme
+;
+; Inside each of the four groups below, rules go by specificity (how many
+; classes the selector names) and then source order. And a flex container
+; that no rule or inline attribute gave a direction or a wrap gets the CSS
+; ones, `row` and `nowrap`, instead of EVG's `column` and `wrap`. The
+; directive has to come before the rules it governs. A sheet without it is
+; parsed, applied and written down exactly as before: it is how an existing
+; UI (the M-Files window's sheet) is kept as it is.
+;
 ; Properties are not interpreted here. Every declaration is handed to
 ; `EVGElement.setAttribute`, which already accepts both `font-size` and
 ; `fontSize` spellings for the whole EVG property surface, so the stylesheet
@@ -193,6 +212,17 @@ class EVGStyleRule {
     ; The `@media` block this rule was written inside, if any. It gates the
     ; rule; it does not change how strong it is.
     def media:EVGMediaQuery (new EVGMediaQuery())
+    ; STANDARD MODE ONLY (`@evg mode standard;`, see the sheet's header):
+    ; the other classes the element must also wear (`.a.b` is className "a"
+    ; and extra ["b"]), and the ancestors it must sit under, outermost first,
+    ; each a compound written without its leading dot ("card", "list.open").
+    ; Empty in every rule of a sheet without the directive.
+    def extra:[string]
+    def ancestors:[string]
+    ; How many classes the selector names: the order rules of one group are
+    ; applied in, weakest first (CSS specificity, counting classes only).
+    ; 1 for every rule of a sheet without the directive.
+    def spec:int 1
 
     Constructor () {
         theme = ""
@@ -207,6 +237,21 @@ class EVGStyleRule {
 
 class EVGStyleSheet {
     def rules:[EVGStyleRule]
+    ; `@evg mode standard;` was written: compound and descendant selectors,
+    ; specificity by class count, and the CSS defaults of a flex container
+    ; (row, nowrap). Off, the sheet behaves exactly as it always has.
+    def standard:boolean false
+    ; The highest `spec` of any rule, so a sheet whose rules all name one
+    ; class orders its groups in one pass, as before.
+    def maxSpec:int 1
+    ; Some rule needs ancestors: an element's plan then depends on what it
+    ; sits under, and the key says so.
+    def hasDescendant:boolean false
+    ; The class strings of the elements above the one being styled,
+    ; outermost first, kept by `applyIn` / `applyTreeDirect` while they walk
+    ; down (an EVGElement has no parent reference). Only kept when
+    ; `hasDescendant`.
+    def ancClasses:[string]
     ; --- the palette ----------------------------------------------------------
     ;
     ; Every `@vars` declaration in source order, as four parallel arrays: the
@@ -440,6 +485,9 @@ class EVGStyleSheet {
         def vr:[string:int]
         varReported = vr
         ruleCounter = 0
+        standard = false
+        maxSpec = 1
+        hasDescendant = false
         this.parse(css)
     }
 
@@ -483,6 +531,9 @@ class EVGStyleSheet {
         def vr:[string:int]
         varReported = vr
         ruleCounter = from.ruleCounter
+        standard = from.standard
+        maxSpec = from.maxSpec
+        hasDescendant = from.hasDescendant
         this.dropPlans()
     }
 
@@ -610,6 +661,17 @@ class EVGStyleSheet {
         while (i < len) {
             ; Selector text runs up to the next '{'
             def braceAt:int (this.findChar(src i 123))
+            ; `@evg mode standard;` — a statement, not a block: it ends at its
+            ; semicolon, before any brace.
+            def semiAt:int (this.findChar(src i 59))
+            if ((semiAt >= 0) && ((braceAt < 0) || (semiAt < braceAt))) {
+                def stmt:string (trim (substring src i semiAt))
+                if (this.startsWith(stmt "@evg")) {
+                    this.directive(stmt)
+                    i = (semiAt + 1)
+                    continue
+                }
+            }
             if (braceAt < 0) {
                 ; Trailing text with no block — ignore unless it has content
                 def tail:string (trim (substring src i len))
@@ -666,6 +728,19 @@ class EVGStyleSheet {
                 i = (closeAt + 1)
             }
         }
+    }
+
+    ; `@evg mode standard;` and nothing else yet. An unknown directive is an
+    ; error, not a guess.
+    fn directive:void (stmt:string) {
+        def parts:[string] (this.splitWhitespace(stmt))
+        if ((array_length parts) == 3) {
+            if (((itemAt parts 1) == "mode") && ((itemAt parts 2) == "standard")) {
+                standard = true
+                return
+            }
+        }
+        push errors ("Unsupported @evg directive: " + stmt)
     }
 
     ; The index of the `}` that closes the `{` at `open`, or -1.
@@ -1222,6 +1297,10 @@ class EVGStyleSheet {
     ; ".caption" -> class rule; ".theme-classic .caption" -> theme-scoped rule.
     ; Anything else is outside the subset and is reported rather than guessed at.
     fn addRuleForSelector:void (sel:string decls:[EVGStyleDecl]) {
+        if standard {
+            this.addStandardSelector(sel decls)
+            return
+        }
         def parts:[string] (this.splitWhitespace(sel))
         def n:int (array_length parts)
 
@@ -1285,6 +1364,115 @@ class EVGStyleSheet {
         }
 
         push errors ("Unsupported selector (too many parts): " + sel)
+    }
+
+    ; Standard mode: `.a`, `.a.b`, `.a .b`, `.a.b .c .d.e:hover`, with an
+    ; optional `.theme-x` first part still meaning the theme. Each part is a
+    ; compound of classes; only the last may carry a pseudo-class. A
+    ; one-class selector makes the same rule the legacy path makes.
+    fn addStandardSelector:void (sel:string decls:[EVGStyleDecl]) {
+        def parts:[string] (this.splitWhitespace(sel))
+        def n:int (array_length parts)
+        def rule (new EVGStyleRule())
+        def first:int 0
+        if (n >= 2) {
+            def scope:string (itemAt parts 0)
+            def scopeClasses:[string] (this.compoundClasses(scope))
+            if ((array_length scopeClasses) == 1) {
+                def scopeName:string (itemAt scopeClasses 0)
+                if (this.startsWith(scopeName "theme-")) {
+                    rule.theme = (substring scopeName 6 (strlen scopeName))
+                    first = 1
+                }
+            }
+        }
+        def target:string (itemAt parts (n - 1))
+        def tbits:[string] (this.splitPseudo(target))
+        def targetClasses:[string] (this.compoundClasses((itemAt tbits 0)))
+        if ((array_length targetClasses) == 0) {
+            push errors ("Unsupported selector (classes only: .a, .a.b, .a .b): " + sel)
+            return
+        }
+        def pseudoName:string (itemAt tbits 1)
+        if ((strlen pseudoName) > 0) {
+            def code:int (EVGPseudo.parse(pseudoName))
+            if (code < 0) {
+                push errors ("Unsupported pseudo-class (hover, focus, active, disabled): " + sel)
+                return
+            }
+            rule.pseudo = code
+        }
+        rule.className = (itemAt targetClasses 0)
+        def spec:int (array_length targetClasses)
+        def k:int 1
+        while (k < (array_length targetClasses)) {
+            push rule.extra (itemAt targetClasses k)
+            k = (k + 1)
+        }
+        def j:int first
+        while (j < (n - 1)) {
+            def part:string (itemAt parts j)
+            def cls:[string] (this.compoundClasses(part))
+            if ((array_length cls) == 0) {
+                push errors ("Unsupported selector (classes only: .a, .a.b, .a .b): " + sel)
+                return
+            }
+            push rule.ancestors (this.joinDots(cls))
+            spec = (spec + (array_length cls))
+            j = (j + 1)
+        }
+        rule.spec = spec
+        if (spec > maxSpec) {
+            maxSpec = spec
+        }
+        if ((array_length rule.ancestors) > 0) {
+            hasDescendant = true
+        }
+        this.pushRule(rule decls)
+    }
+
+    ; ".a.b" -> ["a" "b"]; anything that is not a run of `.name` -> [].
+    fn compoundClasses:[string] (tok:string) {
+        def out:[string]
+        def len:int (strlen tok)
+        if (len < 2) {
+            return out
+        }
+        if ((charAt tok 0) != 46) {
+            return out
+        }
+        def start:int 1
+        def i:int 1
+        while (i <= len) {
+            def atEnd:boolean (i == len)
+            def isDot:boolean false
+            if (atEnd == false) {
+                isDot = ((charAt tok i) == 46)
+            }
+            if (atEnd || isDot) {
+                if (i == start) {
+                    def none:[string]
+                    return none
+                }
+                push out (substring tok start i)
+                start = (i + 1)
+            }
+            i = (i + 1)
+        }
+        return out
+    }
+
+    fn joinDots:string (parts:[string]) {
+        def out:string ""
+        def i:int 0
+        while (i < (array_length parts)) {
+            if (i > 0) {
+                out = (out + ".")
+            }
+            out = (out + (itemAt parts i))
+            i = (i + 1)
+        }
+        return out
     }
 
     fn pushRule:void (rule:EVGStyleRule decls:[EVGStyleDecl]) {
@@ -1521,6 +1709,9 @@ class EVGStyleSheet {
         def kidsPaintClean@(mutable):boolean true
         def i:int 0
         def n:int (root.getChildCount())
+        if hasDescendant {
+            push ancClasses root.className
+        }
         while (i < n) {
             def kid:EVGElement (root.getChild(i))
             this.applyIn(kid theme)
@@ -1531,6 +1722,9 @@ class EVGStyleSheet {
                 kidsPaintClean = false
             }
             i = (i + 1)
+        }
+        if hasDescendant {
+            removeLast ancClasses
         }
         root.layoutClean = ((ownClean && kidsClean) && root.hasLayout)
         root.paintClean = (ownPaintClean && kidsPaintClean)
@@ -1568,9 +1762,19 @@ class EVGStyleSheet {
 
     fn applyTo:void (el:EVGElement theme:string) {
         if ((strlen el.className) == 0) {
+            if standard {
+                this.standardDefaults(el (0 - 1))
+            }
             return
         }
         def bits:int (EVGStyleSheet.stateBits(el))
+        ; Standard mode with descendant rules: which of them the ancestors
+        ; satisfy is part of what the element holds. "" otherwise, so the
+        ; comparison below is one more equality of two empty strings.
+        def anc:string ""
+        if hasDescendant {
+            anc = (this.ancestorKey((this.splitWhitespace(el.className))))
+        }
 
         ; Already holding exactly this. Four scalar comparisons and no
         ; allocation, and on a hover it is the answer for every element but
@@ -1584,12 +1788,15 @@ class EVGStyleSheet {
         ; longer holding what the sheet declared.
         if (((((el.styleGen == generation) && (el.styleBits == bits))
              && (el.styleKids == (array_length el.children)))
-             && (el.styleTheme == theme)) && (el.styleClass == el.className)) {
+             && (el.styleTheme == theme)) && ((el.styleClass == el.className) && (el.styleAnc == anc))) {
             passSkipped = (passSkipped + 1)
             return
         }
 
         def key:string ((((el.className + "|") + theme) + "|") + (to_string bits))
+        if hasDescendant {
+            key = ((key + "|") + anc)
+        }
         def at@(optional):int (get planIndex key)
         def slot:int 0
         if (null? at) {
@@ -1626,6 +1833,7 @@ class EVGStyleSheet {
             passPaintDirty = (passPaintDirty + 1)
         }
         el.styleClass = el.className
+        el.styleAnc = anc
         el.styleTheme = theme
         el.styleBits = bits
         el.styleGen = generation
@@ -1648,6 +1856,48 @@ class EVGStyleSheet {
             }
             i = (i + 1)
         }
+        if standard {
+            this.standardDefaults(el slot)
+        }
+    }
+
+    ; Standard mode: a flex container nobody gave a direction or a wrap gets
+    ; the CSS ones, row and nowrap, instead of EVG's column and wrap. Only
+    ; what neither the plan (`slot`, -1 for none) nor an inline attribute
+    ; wrote; a value already right is not written again.
+    fn standardDefaults:void (el:EVGElement slot:int) {
+        if ((el.display != "flex") && (el.display != "inline-flex")) {
+            return
+        }
+        if ((this.planWrites(slot "flex-direction" "flexDirection") == false) && ((el.hasInline("flex-direction")) == false)) {
+            if (el.flexDirection != "row") {
+                el.setAttribute("flex-direction" "row")
+                passLayoutDirty = (passLayoutDirty + 1)
+            }
+        }
+        if ((this.planWrites(slot "flex-wrap" "flexWrap") == false) && ((el.hasInline("flex-wrap")) == false)) {
+            if ((el.flexWrapSet == false) || (el.flexWrap != "nowrap")) {
+                el.setAttribute("flex-wrap" "nowrap")
+                passLayoutDirty = (passLayoutDirty + 1)
+            }
+        }
+    }
+
+    fn planWrites:boolean (slot:int kebab:string camel:string) {
+        if (slot < 0) {
+            return false
+        }
+        def from:int (itemAt planStart slot)
+        def n:int (itemAt planCount slot)
+        def i:int 0
+        while (i < n) {
+            def nm:string (itemAt planNames (from + i))
+            if ((nm == kebab) || (nm == camel)) {
+                return true
+            }
+            i = (i + 1)
+        }
+        return false
     }
 
     ; The original, direct implementation. Kept — not as dead code but as the
@@ -1656,6 +1906,9 @@ class EVGStyleSheet {
     ; rather than against a description of it.
     fn applyToDirect:void (el:EVGElement theme:string) {
         if ((strlen el.className) == 0) {
+            if standard {
+                this.directDefaults(el (this.splitWhitespace("")) theme)
+            }
             return
         }
         def classes:[string] (this.splitWhitespace(el.className))
@@ -1671,15 +1924,68 @@ class EVGStyleSheet {
         this.applyGroup(el classes theme true false)
         this.applyGroup(el classes theme false true)
         this.applyGroup(el classes theme true true)
+        if standard {
+            this.directDefaults(el classes theme)
+        }
+    }
+
+    ; `standardDefaults` for the direct path, which has no plan to ask: what
+    ; the matching rules declared is read off the rules themselves.
+    fn directDefaults:void (el:EVGElement classes:[string] theme:string) {
+        if ((el.display != "flex") && (el.display != "inline-flex")) {
+            return
+        }
+        def dir:boolean (el.hasInline("flex-direction"))
+        def wrap:boolean (el.hasInline("flex-wrap"))
+        def i:int 0
+        while (i < (array_length rules)) {
+            def rule:EVGStyleRule (itemAt rules i)
+            def applies:boolean true
+            if (rule.isThemeScoped()) {
+                applies = (EVGStyleSheet.themeOn(rule.theme theme))
+            }
+            if applies {
+                applies = (rule.media.matches(viewportW viewportH coarsePointer))
+            }
+            if applies {
+                applies = (EVGPseudo.holds(rule.pseudo el))
+            }
+            if applies {
+                applies = (this.ruleMatches(rule classes))
+            }
+            if applies {
+                for rule.decls d:EVGStyleDecl k {
+                    if ((d.name == "flex-direction") || (d.name == "flexDirection")) {
+                        dir = true
+                    }
+                    if ((d.name == "flex-wrap") || (d.name == "flexWrap")) {
+                        wrap = true
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        if (dir == false) {
+            el.setAttribute("flex-direction" "row")
+        }
+        if (wrap == false) {
+            el.setAttribute("flex-wrap" "nowrap")
+        }
     }
 
     fn applyTreeDirect:void (root:EVGElement theme:string) {
         this.applyToDirect(root theme)
         def i:int 0
         def n:int (root.getChildCount())
+        if hasDescendant {
+            push ancClasses root.className
+        }
         while (i < n) {
             this.applyTreeDirect((root.getChild(i)) theme)
             i = (i + 1)
+        }
+        if hasDescendant {
+            removeLast ancClasses
         }
     }
 
@@ -1732,7 +2038,7 @@ class EVGStyleSheet {
                     applies = (rule.media.matches(viewportW viewportH coarsePointer))
                 }
                 if applies {
-                    applies = (this.matchesClass(classes rule.className))
+                    applies = (this.ruleMatches(rule classes))
                 }
                 if applies {
                     def d:int 0
@@ -1756,12 +2062,23 @@ class EVGStyleSheet {
 
     ; `applyGroup`, recorded.
     fn planGroup:void (el:EVGElement classes:[string] theme:string themeScoped:boolean stateful:boolean) {
+        ; One pass per specificity, weakest first; a sheet whose rules all
+        ; name one class (every sheet without `@evg mode standard;`) makes
+        ; exactly the one pass it always made.
+        def spec:int 1
+        while (spec <= maxSpec) {
+            this.planGroupSpec(el classes theme themeScoped stateful spec)
+            spec = (spec + 1)
+        }
+    }
+
+    fn planGroupSpec:void (el:EVGElement classes:[string] theme:string themeScoped:boolean stateful:boolean spec:int) {
         def i:int 0
         def n:int (array_length rules)
         while (i < n) {
             def rule:EVGStyleRule (itemAt rules i)
             def isStateful:boolean (rule.pseudo != 0)
-            if ((isStateful == stateful) && ((rule.isThemeScoped()) == themeScoped)) {
+            if (((isStateful == stateful) && ((rule.isThemeScoped()) == themeScoped)) && (rule.spec == spec)) {
                 def applies:boolean true
                 if themeScoped {
                     applies = (EVGStyleSheet.themeOn(rule.theme theme))
@@ -1773,7 +2090,7 @@ class EVGStyleSheet {
                     applies = (EVGPseudo.holds(rule.pseudo el))
                 }
                 if applies {
-                    if (this.matchesClass(classes rule.className)) {
+                    if (this.ruleMatches(rule classes)) {
                         def d:int 0
                         while (d < (array_length rule.decls)) {
                             def decl:EVGStyleDecl (itemAt rule.decls d)
@@ -1827,7 +2144,7 @@ class EVGStyleSheet {
                     applies = (rule.media.matches(viewportW viewportH coarsePointer))
                 }
                 if applies {
-                    applies = (this.matchesClass(classes rule.className))
+                    applies = (this.ruleMatches(rule classes))
                 }
                 if applies {
                     def d:int 0
@@ -1903,12 +2220,20 @@ class EVGStyleSheet {
     }
 
     fn applyGroup:void (el:EVGElement classes:[string] theme:string themeScoped:boolean stateful:boolean) {
+        def spec:int 1
+        while (spec <= maxSpec) {
+            this.applyGroupSpec(el classes theme themeScoped stateful spec)
+            spec = (spec + 1)
+        }
+    }
+
+    fn applyGroupSpec:void (el:EVGElement classes:[string] theme:string themeScoped:boolean stateful:boolean spec:int) {
         def i:int 0
         def n:int (array_length rules)
         while (i < n) {
             def rule:EVGStyleRule (itemAt rules i)
             def isStateful:boolean (rule.pseudo != 0)
-            if ((isStateful == stateful) && ((rule.isThemeScoped()) == themeScoped)) {
+            if (((isStateful == stateful) && ((rule.isThemeScoped()) == themeScoped)) && (rule.spec == spec)) {
                 def applies:boolean true
                 if themeScoped {
                     applies = (EVGStyleSheet.themeOn(rule.theme theme))
@@ -1920,13 +2245,82 @@ class EVGStyleSheet {
                     applies = (EVGPseudo.holds(rule.pseudo el))
                 }
                 if applies {
-                    if (this.matchesClass(classes rule.className)) {
+                    if (this.ruleMatches(rule classes)) {
                         this.applyDecls(el rule theme)
                     }
                 }
             }
             i = (i + 1)
         }
+    }
+
+    ; The element wears the rule's classes and, for a descendant rule, sits
+    ; under its ancestors. Without `@evg mode standard;` every rule has one
+    ; class and no ancestors, and this is `matchesClass`.
+    fn ruleMatches:boolean (rule:EVGStyleRule classes:[string]) {
+        if ((this.matchesClass(classes rule.className)) == false) {
+            return false
+        }
+        def k:int 0
+        while (k < (array_length rule.extra)) {
+            if ((this.matchesClass(classes (itemAt rule.extra k))) == false) {
+                return false
+            }
+            k = (k + 1)
+        }
+        if ((array_length rule.ancestors) == 0) {
+            return true
+        }
+        return (this.ancestorsMatch(rule))
+    }
+
+    ; Right to left, nearest ancestor first: each compound is taken by the
+    ; closest element above the previous match that wears all its classes.
+    ; Greedy is exact for descendant combinators.
+    fn ancestorsMatch:boolean (rule:EVGStyleRule) {
+        def j:int ((array_length rule.ancestors) - 1)
+        def a:int ((array_length ancClasses) - 1)
+        while ((j >= 0) && (a >= 0)) {
+            def want:[string] (this.splitOn((itemAt rule.ancestors j) 46))
+            def have:[string] (this.splitWhitespace((itemAt ancClasses a)))
+            def all:boolean true
+            def w:int 0
+            while (w < (array_length want)) {
+                if ((this.matchesClass(have (itemAt want w))) == false) {
+                    all = false
+                }
+                w = (w + 1)
+            }
+            if all {
+                j = (j - 1)
+            }
+            a = (a - 1)
+        }
+        return (j < 0)
+    }
+
+    ; Which descendant rules this element's ancestors satisfy, as a string:
+    ; part of the plan key, because two elements of one class string under
+    ; different ancestors get different plans. "" when no rule has ancestors.
+    fn ancestorKey:string (classes:[string]) {
+        if (hasDescendant == false) {
+            return ""
+        }
+        def out:string ""
+        def i:int 0
+        def n:int (array_length rules)
+        while (i < n) {
+            def rule:EVGStyleRule (itemAt rules i)
+            if ((array_length rule.ancestors) > 0) {
+                if (this.matchesClass(classes rule.className)) {
+                    if (this.ancestorsMatch(rule)) {
+                        out = ((out + (to_string i)) + ",")
+                    }
+                }
+            }
+            i = (i + 1)
+        }
+        return out
     }
 
     fn matchesClass:boolean (classes:[string] want:string) {
@@ -2135,12 +2529,29 @@ class EVGStyleSheet {
     ; `loadText` wants and the order the parser produced.
     fn toText:string () {
         def out@(mutable):string ((EVGStyleSheet.sheetHeader()) + "\n")
+        ; Standard mode adds a line and three columns per rule; a sheet
+        ; without the directive is written exactly as before.
+        if standard {
+            out = (out + "M\tstandard\n")
+        }
         for rules r:EVGStyleRule i {
             def line@(mutable):string ("R\t" + ((EVGStyleSheet.escText(r.theme)) + "\t"))
             line = (line + ((EVGStyleSheet.escText(r.className)) + "\t"))
             line = (line + ((to_string r.pseudo) + "\t"))
             line = (line + ((to_string r.order) + "\t"))
             line = (line + (EVGStyleSheet.writeMedia(r.media)))
+            if standard {
+                line = (line + (("\t" + (EVGStyleSheet.escText((this.joinDots(r.extra))))) + "\t"))
+                def anc@(mutable):string ""
+                for r.ancestors a:string ai {
+                    if (ai > 0) {
+                        anc = (anc + " ")
+                    }
+                    anc = (anc + a)
+                }
+                line = (line + ((EVGStyleSheet.escText(anc)) + "\t"))
+                line = (line + (to_string r.spec))
+            }
             out = (out + (line + "\n"))
             for r.decls d:EVGStyleDecl j {
                 def dl:string (("D\t" + (EVGStyleSheet.escText(d.name))) + ("\t" + (EVGStyleSheet.escText(d.value))))
@@ -2194,10 +2605,33 @@ class EVGStyleSheet {
                 r.pseudo = (EVGStyleSheet.readInt((itemAt parts 3)))
                 r.order = (EVGStyleSheet.readInt((itemAt parts 4)))
                 r.media = (EVGStyleSheet.readMedia(parts 5))
+                if ((array_length parts) >= 15) {
+                    def ex:string (EVGStyleSheet.unescText((itemAt parts 12)))
+                    if ((strlen ex) > 0) {
+                        r.extra = (this.splitOn(ex 46))
+                    }
+                    def an:string (EVGStyleSheet.unescText((itemAt parts 13)))
+                    if ((strlen an) > 0) {
+                        r.ancestors = (this.splitWhitespace(an))
+                        hasDescendant = true
+                    }
+                    r.spec = (EVGStyleSheet.readInt((itemAt parts 14)))
+                    if (r.spec > maxSpec) {
+                        maxSpec = r.spec
+                    }
+                }
                 push rules r
                 current = r
                 if (r.order >= ruleCounter) {
                     ruleCounter = (r.order + 1)
+                }
+                continue
+            }
+            if (kind == "M") {
+                if ((array_length parts) >= 2) {
+                    if ((itemAt parts 1) == "standard") {
+                        standard = true
+                    }
                 }
                 continue
             }
