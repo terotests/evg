@@ -252,6 +252,12 @@ class EVGDrawCmd {
         if (kind == 6) {
             return "PATH"
         }
+        if (kind == 8) {
+            return "GROUP_OPEN"
+        }
+        if (kind == 9) {
+            return "GROUP_CLOSE"
+        }
         return "STROKE"
     }
 }
@@ -322,6 +328,12 @@ class EVGDisplayList {
     ; tile (a React Flow background: ~2000 dots). Off: every painter draws
     ; the tiles.
     def keepPatterns:boolean false
+    ; `opacity` on a subtree as CSS has it: the subtree drawn as one picture
+    ; and faded as one, a GROUP_OPEN of kind 8 with the alpha and a
+    ; GROUP_CLOSE of kind 9 around its commands, not each command faded on
+    ; its own as fadeFrom does. For a painter that composites a group
+    ; offscreen, evg-webgl; off, the list is what it was.
+    def groupOpacity:boolean false
     def maxPatternTiles:int 4000
     ; Attribution, off by default. On, every command records the element that
     ; emitted it — see `addCmd` and `walk`.
@@ -3694,6 +3706,14 @@ class EVGDisplayList {
         def inl0:int (array_length inlEls)
         def esc0:int (array_length escEls)
         def ovl0:int (array_length deferredOverlays)
+        def groupAt:int (0 - 1)
+        if (groupOpacity && (el.opacity < 1.0)) {
+            groupAt = (array_length cmds)
+            def gOpen:EVGDrawCmd (new EVGDrawCmd())
+            gOpen.kind = 8
+            gOpen.a = el.opacity
+            push cmds gOpen
+        }
         this.walkOpaque(el)
         turnedDepth = hadTurned
         drawScale = hadScale
@@ -3703,7 +3723,22 @@ class EVGDisplayList {
         cullRight = hadCullR
         cullBottom = hadCullB
         curNode = prevNode
-        this.fadeFrom(emitStart el.opacity)
+        if (groupAt >= 0) {
+            ; (one command or none: its own alpha is the group's, and the
+            ; open becomes a box of nothing)
+            if (((array_length cmds) - groupAt) <= 2) {
+                def gNone:EVGDrawCmd (itemAt cmds groupAt)
+                gNone.kind = 0
+                gNone.a = 0.0
+                this.fadeFrom((groupAt + 1) el.opacity)
+            } {
+                def gClose:EVGDrawCmd (new EVGDrawCmd())
+                gClose.kind = 9
+                push cmds gClose
+            }
+        } {
+            this.fadeFrom(emitStart el.opacity)
+        }
         this.transformFrom(emitStart el)
         ; (only a subtree drawn whole is kept: one that left an atomic
         ; inline, a box out of its clips or a surface to be drawn later by
