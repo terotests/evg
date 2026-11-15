@@ -56,6 +56,8 @@ class EVGLayout {
     ; the CSS conformance layer, when one is installed (EVGLayoutExt); else
     ; the core's own answers
     def ext:EVGLayoutExt
+    ; (this layout's number, EVGLayoutExt.pass)
+    def passNow:int 0
     ; the border-box width of the child the column pass is placing, for the
     ; extension's clearance
     def curChildWidth:double 0.0
@@ -183,6 +185,7 @@ class EVGLayout {
         ; (the CSS layer installed since this layout was made counts too)
         ext = (EVGLayoutExtDefault.ext())
         ext.newPass()
+        passNow = (ext.pass())
         this.applyDocumentCss(root)
 
         ; Start from a clean slate. `resolveUnits` refuses to run twice on the
@@ -575,7 +578,26 @@ class EVGLayout {
             element.calculatedFlexHeight = flexH
             element.calculatedX = bx
             element.calculatedY = by
+        } {
+            ; A box laid out a second time in one pass, in other inputs (a
+            ; table cell for its content height, then stretched to its
+            ; row's): the first layout is what it holds in the other inputs,
+            ; as for a kept box. Kept in the next pass, it answers both from
+            ; what it holds. Without this the first pass that kept a table's
+            ; cells laid every one of them out twice more.
+            if (element.hasLayout && (element.laidPass == passNow)) {
+                element.keepResults()
+                element.altParentW = element.lastParentW
+                element.altParentH = element.lastParentH
+                element.altFlex = element.lastFlex
+                element.altFlexW = element.lastFlexW
+                element.altFlexH = element.lastFlexH
+                element.copyResultsToAlt()
+                element.ownSizeToAlt()
+                element.altKept = true
+            }
         }
+        element.laidPass = passNow
         element.hasLayout = true
         element.layoutSkipped = false
         element.paintStamp = (element.paintStamp + 1)
@@ -584,9 +606,7 @@ class EVGLayout {
         element.lastFlex = element.hasFlexWidth
         element.lastFlexW = element.calculatedFlexWidth
         element.lastFlexH = element.calculatedFlexHeight
-        if element.keepLayout {
-            element.keepOwnSize((this.layoutMode()))
-        }
+        element.keepOwnSize((this.layoutMode()))
         element.resolveUnits(parentWidth parentHeight)
         ; `display: none` has no box and lays out nothing under it.
         if (element.isHidden()) {
@@ -8067,7 +8087,13 @@ class EVGLayout {
             def ownW:EVGUnit element.width
             element.width = (EVGUnit.unset())
             def kMn:double ((this.intrinsicWidthNow(element true)) - kOut)
-            def kMx:double ((this.intrinsicWidthNow(element false)) - kOut)
+            ; (min-content on each side that has a keyword asks for the
+            ; min-content size alone: a table's minimum, and the second
+            ; walk over all its cells was for nothing)
+            def kMx:double kMn
+            if ((kMax && (kxT != 7)) || (kMin && (knT != 7))) {
+                kMx = ((this.intrinsicWidthNow(element false)) - kOut)
+            }
             element.width = ownW
             if (kMx < kMn) {
                 kMx = kMn
