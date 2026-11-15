@@ -397,6 +397,29 @@ void main() {
 }`;
 
 /** The rings of a path command, as flat [x,y,…] arrays. */
+// What one command can paint, in scene units (x0, y0, x1, y1), with room for
+// a glyph's ink past its line box and a shadow's blur; a turned box is the
+// circle it can sweep about its pivot. null: not known (a path, an effect).
+function groupBoxOf(c) {
+  if (c.k === KIND.PUSH_CLIP || c.k === KIND.POP_CLIP) return [Infinity, Infinity, -Infinity, -Infinity];
+  if (c.k !== KIND.RECT && c.k !== KIND.BORDER && c.k !== KIND.IMAGE && c.k !== KIND.TEXT) return null;
+  if (c.efx || !(isFinite(c.x) && isFinite(c.y) && isFinite(c.w) && isFinite(c.h))) return null;
+  let x0 = c.x, y0 = c.y, x1 = c.x + c.w, y1 = c.y + c.h;
+  if (c.k === KIND.TEXT) { const p = Math.max(c.h || 0, 8); x0 -= p; y0 -= p; x1 += p; y1 += p; }
+  if (c.sh) {
+    const b = Math.max(c.sh.blur || 0, 0) * 2 + Math.abs(c.sh.spread || 0);
+    x0 = Math.min(x0, c.x + (c.sh.x || 0) - b); y0 = Math.min(y0, c.y + (c.sh.y || 0) - b);
+    x1 = Math.max(x1, c.x + c.w + (c.sh.x || 0) + b); y1 = Math.max(y1, c.y + c.h + (c.sh.y || 0) + b);
+  }
+  if (c.rot) {
+    const px = c.rox === undefined ? c.x + c.w / 2 : c.rox, py = c.rox === undefined ? c.y + c.h / 2 : c.roy;
+    const r = Math.max(Math.hypot(x0 - px, y0 - py), Math.hypot(x1 - px, y0 - py), Math.hypot(x0 - px, y1 - py), Math.hypot(x1 - px, y1 - py));
+    if (!isFinite(r)) return null;
+    x0 = px - r; y0 = py - r; x1 = px + r; y1 = py + r;
+  }
+  return [x0, y0, x1, y1];
+}
+
 function ringsOf(c) {
   const out = [];
   const pts = c.pts || [];
@@ -4766,6 +4789,20 @@ function buildFrame(gl, doc, opts = {}) {
   // becomes a run of its own — which is what keeps the paint order intact.
   const pushPath = (op) => { flush(); runs.push(Object.assign(op, { clip, layer })); };
 
+  // The groups open at this command, each with what its commands cover in
+  // scene units (x0, y0, x1, y1; null: not known, the whole surface). A
+  // group's target is cleared and laid down over that box only: 500 boxes
+  // fading each cleared and composited the whole canvas 500 times a frame,
+  // seconds a frame on a phone.
+  const openGroups = [];
+  const growGroups = (b) => {
+    for (const g of openGroups) {
+      if (!g.b) continue;
+      if (!b) { g.b = null; continue; }
+      g.b[0] = Math.min(g.b[0], b[0]); g.b[1] = Math.min(g.b[1], b[1]);
+      g.b[2] = Math.max(g.b[2], b[2]); g.b[3] = Math.max(g.b[3], b[3]);
+    }
+  };
   for (const c of cmds) {
     // A GROUP: everything between OPEN and CLOSE is drawn into a target of
     // its own and laid on the page at the group's alpha (CSS opacity, which
@@ -4773,9 +4810,20 @@ function buildFrame(gl, doc, opts = {}) {
     // as legible as the background is faded). See `GROUP_FRAG`.
     if (c.k === KIND.GROUP_OPEN || c.k === KIND.GROUP_CLOSE) {
       flush();
-      runs.push({ kind: c.k === KIND.GROUP_OPEN ? "group-open" : "group-close", a: c.c ? c.c[3] : 1, clip: null, layer: 0 });
+      const gr = { kind: c.k === KIND.GROUP_OPEN ? "group-open" : "group-close", a: c.c ? c.c[3] : 1, clip: null, layer: 0, box: null };
+      runs.push(gr);
+      if (c.k === KIND.GROUP_OPEN) openGroups.push({ run: gr, b: [Infinity, Infinity, -Infinity, -Infinity] });
+      else if (openGroups.length) {
+        const g = openGroups.pop();
+        const b = g.b;
+        // (the close gets it too: it lays the target down over the same box)
+        if (b && b[2] > b[0] && b[3] > b[1]) { g.run.box = b; gr.box = b; }
+        else if (b) { g.run.box = [0, 0, 0, 0]; gr.box = g.run.box; }
+        if (openGroups.length) growGroups(b);
+      }
       continue;
     }
+    if (openGroups.length) growGroups(layer || c.layer > 0 ? null : groupBoxOf(c));
     // A command of its own layer starts its own run and ends it after — see
     // `ownLayer` above. Only the ring uses this; everything else takes the
     // layer of the clip it is inside.
@@ -5361,19 +5409,31 @@ function buildFrame(gl, doc, opts = {}) {
       const x1 = Math.min(r.x + r.w, b.x + b.w), y1 = Math.min(r.y + r.h, b.y + b.h);
       r = { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
     }
-    // Through the camera and then into framebuffer pixels. A clip is scene
-    // geometry like everything else in the list, and a scissor is not a thing
-    // the shader can apply — so this is the one place the view is multiplied
-    // by hand rather than by the card.
+    const sr = scissorOf(r, 0);
+    gl.scissor(sr[0], sr[1], sr[2], sr[3]);
+  };
+  // A scene rectangle as a scissor box (x, y, w, h in framebuffer pixels,
+  // pad pixels around it). Through the camera and then into framebuffer
+  // pixels: a clip is scene geometry like everything else in the list, and
+  // a scissor is not a thing the shader can apply, so this is the one place
+  // the view is multiplied by hand rather than by the card.
+  const scissorOf = (r, pad) => {
     const px = r.x * vsx + vtx;
     const py = r.y * vsy + vty;
     const pw = r.w * vsx;
     const ph = r.h * vsy;
-    const x = Math.round(px * sxScale);
-    const y = Math.round((doc.height - (py + ph)) * syScale);
-    const w = Math.max(0, Math.round(pw * sxScale));
-    const h = Math.max(0, Math.round(ph * syScale));
-    gl.scissor(x, y, w, h);
+    const x = Math.floor(px * sxScale) - pad;
+    const y = Math.floor((doc.height - (py + ph)) * syScale) - pad;
+    const w = Math.max(0, Math.ceil(pw * sxScale) + 2 * pad);
+    const h = Math.max(0, Math.ceil(ph * syScale) + 2 * pad);
+    return [x, y, w, h];
+  };
+  // a group's box as a scissor (null: the whole surface; a camera that
+  // turns or a box not known)
+  const groupScissor = (run) => {
+    const b = run.box;
+    if (!b || !(vsx > 0) || !(vsy > 0)) return null;
+    return scissorOf({ x: b[0], y: b[1], w: b[2] - b[0], h: b[3] - b[1] }, 2);
   };
 
   // One blurred backdrop: copy what is behind, soften it, put it back.
@@ -5597,11 +5657,14 @@ function buildFrame(gl, doc, opts = {}) {
       // draws the group straight through, at full strength)
       const t = rippleTargetFor(gl, gl.canvas.width, gl.canvas.height, 8 + groups.length);
       if (!t.complete) { groups.push(null); continue; }
-      groups.push({ t, a: run.a, prev: curTarget });
+      const gs = groupScissor(run);
+      groups.push({ t, a: run.a, prev: curTarget, sc: gs });
       curTarget = t;
       gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
       gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
       gl.clearColor(0, 0, 0, 0);
+      // (only the box its commands cover: they draw nowhere else)
+      if (gs) { if (!scissorOn) { gl.enable(gl.SCISSOR_TEST); scissorOn = true; } gl.scissor(gs[0], gs[1], gs[2], gs[3]); }
       gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
       // (making the target left its texture bound: the atlas again, see
       // the note where the frame binds it)
@@ -5611,7 +5674,10 @@ function buildFrame(gl, doc, opts = {}) {
     }
     if (run.kind === "group-close") {
       const g = groups.pop();
-      if (g) closeGroup(g);
+      if (g) {
+        if (g.sc) { if (!scissorOn) { gl.enable(gl.SCISSOR_TEST); scissorOn = true; } gl.scissor(g.sc[0], g.sc[1], g.sc[2], g.sc[3]); }
+        closeGroup(g);
+      }
       continue;
     }
     if (run.kind === "backdrop") { drawBackdrop(run.cmd); continue; }
