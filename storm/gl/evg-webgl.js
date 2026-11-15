@@ -60,7 +60,7 @@
 
 const KIND = {
   RECT: 0, BORDER: 1, IMAGE: 2, TEXT: 3, PUSH_CLIP: 4, POP_CLIP: 5,
-  PATH: 6, STROKE: 7,
+  PATH: 6, STROKE: 7, GROUP_OPEN: 8, GROUP_CLOSE: 9,
 };
 
 // aShape.z — what the fragment shader should do with this instance.
@@ -2119,6 +2119,17 @@ uniform sampler2D uSrc;
 in vec2 vUV;
 out vec4 outColor;
 void main() { outColor = texture(uSrc, vUV); }`;
+
+// A group (CSS opacity on a subtree, GROUP_OPEN .. GROUP_CLOSE): what the
+// subtree drew into its own target, laid on the one under it at the group's
+// alpha. The target holds premultiplied pixels, so every channel scales.
+const GROUP_FRAG = `#version 300 es
+precision highp float;
+uniform sampler2D uSrc;
+uniform float uAlpha;
+in vec2 vUV;
+out vec4 outColor;
+void main() { outColor = texture(uSrc, vUV) * uAlpha; }`;
 
 const FX_VERT = `#version 300 es
 in vec2 aPos;
@@ -4474,6 +4485,13 @@ function programsFor(gl) {
   if (!gl.getProgramParameter(blurProg, gl.LINK_STATUS)) {
     throw new Error("link blur: " + gl.getProgramInfoLog(blurProg));
   }
+  const groupProg = gl.createProgram();
+  gl.attachShader(groupProg, compile(gl, gl.VERTEX_SHADER, FX_VERT));
+  gl.attachShader(groupProg, compile(gl, gl.FRAGMENT_SHADER, GROUP_FRAG));
+  gl.linkProgram(groupProg);
+  if (!gl.getProgramParameter(groupProg, gl.LINK_STATUS)) {
+    throw new Error("link group: " + gl.getProgramInfoLog(groupProg));
+  }
   const presentProg = gl.createProgram();
   gl.attachShader(presentProg, compile(gl, gl.VERTEX_SHADER, FX_VERT));
   gl.attachShader(presentProg, compile(gl, gl.FRAGMENT_SHADER, FX_PRESENT_FRAG));
@@ -4530,6 +4548,10 @@ function programsFor(gl) {
     blurWidth: gl.getUniformLocation(blurProg, "uWidth"),
     blurOffset: gl.getUniformLocation(blurProg, "uOffset"),
     presentProg,
+    groupProg,
+    groupPosLoc: gl.getAttribLocation(groupProg, "aPos"),
+    groupSrc: gl.getUniformLocation(groupProg, "uSrc"),
+    groupAlpha: gl.getUniformLocation(groupProg, "uAlpha"),
     presentPosLoc: gl.getAttribLocation(presentProg, "aPos"),
     presentSrc: gl.getUniformLocation(presentProg, "uSrc"),
     rippleProg,
@@ -4745,6 +4767,15 @@ function buildFrame(gl, doc, opts = {}) {
   const pushPath = (op) => { flush(); runs.push(Object.assign(op, { clip, layer })); };
 
   for (const c of cmds) {
+    // A GROUP: everything between OPEN and CLOSE is drawn into a target of
+    // its own and laid on the page at the group's alpha (CSS opacity, which
+    // fades the subtree as one picture: a text on its own background stays
+    // as legible as the background is faded). See `GROUP_FRAG`.
+    if (c.k === KIND.GROUP_OPEN || c.k === KIND.GROUP_CLOSE) {
+      flush();
+      runs.push({ kind: c.k === KIND.GROUP_OPEN ? "group-open" : "group-close", a: c.c ? c.c[3] : 1, clip: null, layer: 0 });
+      continue;
+    }
     // A command of its own layer starts its own run and ends it after — see
     // `ownLayer` above. Only the ring uses this; everything else takes the
     // layer of the clip it is inside.
@@ -5193,6 +5224,9 @@ function buildFrame(gl, doc, opts = {}) {
   // makes about path fills: say what could not be done, do the rest.
   if (target && !target.complete) target = null;
   if (target) gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+  // The surface being drawn into: the frame's target, or an open group's.
+  let curTarget = target;
+  const groups = [];
 
   // THE ATLAS IS BOUND HERE, AFTER THE TARGET, AND THE ORDER IS THE WHOLE
   // POINT. Creating the target's texture leaves it bound to the active unit,
@@ -5413,7 +5447,7 @@ function buildFrame(gl, doc, opts = {}) {
     // surface effect is running: a dialog on a rippling page would otherwise
     // put its softened backdrop straight on the canvas, under everything the
     // post-pass is about to draw over it.
-    gl.bindFramebuffer(gl.FRAMEBUFFER, target ? target.fbo : null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, curTarget ? curTarget.fbo : null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.enable(gl.BLEND);
     gl.useProgram(built.backdropProg);
@@ -5535,9 +5569,51 @@ function buildFrame(gl, doc, opts = {}) {
     return true;
   };
 
+  // a group's target laid on the surface under it at its alpha
+  const closeGroup = (g) => {
+    curTarget = g.prev;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, curTarget ? curTarget.fbo : null);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.bindVertexArray(null);
+    gl.useProgram(built.groupProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, fxQuadBuf);
+    gl.enableVertexAttribArray(built.groupPosLoc);
+    gl.vertexAttribPointer(built.groupPosLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, g.t.tex);
+    gl.uniform1i(built.groupSrc, 0);
+    gl.uniform1f(built.groupAlpha, g.a);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, atlas);
+  };
   for (const run of runs) {
     curShift = shiftOf(run.layer);
     applyClip(run.clip);
+    if (run.kind === "group-open") {
+      // (a target per depth, kept like the others; one that cannot be had
+      // draws the group straight through, at full strength)
+      const t = rippleTargetFor(gl, gl.canvas.width, gl.canvas.height, 8 + groups.length);
+      if (!t.complete) { groups.push(null); continue; }
+      groups.push({ t, a: run.a, prev: curTarget });
+      curTarget = t;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, t.fbo);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
+      // (making the target left its texture bound: the atlas again, see
+      // the note where the frame binds it)
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, atlas);
+      continue;
+    }
+    if (run.kind === "group-close") {
+      const g = groups.pop();
+      if (g) closeGroup(g);
+      continue;
+    }
     if (run.kind === "backdrop") { drawBackdrop(run.cmd); continue; }
     // A SOURCE EFFECT, at the element's own background, under everything the
     // element contains — and a BACKDROP, which reads the surface as it stands
@@ -5580,6 +5656,8 @@ function buildFrame(gl, doc, opts = {}) {
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, run.count);
   }
   applyClip(null);
+  // (a list that left a group open: closed here, so the frame lands)
+  while (groups.length) { const g = groups.pop(); if (g) closeGroup(g); }
 
   // THE SECOND PASS, and the third if the page asked for one. Everything above
   // drew into a texture; each filter reads that texture and writes another,
