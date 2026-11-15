@@ -863,6 +863,8 @@ class EVGElement {
     def gridArea:string ""
     def gridColumn:string ""
     def gridRow:string ""
+    ; (EVGLayoutFull.implicitColumns' mark)
+    def icMark:int -1
     ; `gridColumn` and `gridRow` parsed (placeCol, placeRow): a grid lays
     ; its items out several times a pass, and a table's cells are many
     def colPlaceOf:string ""
