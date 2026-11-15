@@ -533,6 +533,8 @@ class EVGElement {
     def altAnswered:boolean false
     ; (set while the layout lays an answered subtree out in those inputs)
     def altForce:boolean false
+    ; (the layout pass that laid this box out last, EVGLayoutExt.pass)
+    def laidPass:int -1
     ; (where the display list keeps this box's fragment, see `EVGDisplayList.fragmentOf`)
     def fragSlot:int -1
     def altParentW:double 0.0

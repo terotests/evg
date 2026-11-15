@@ -60,6 +60,7 @@ class EVGLayoutFull {
 
     fn newPass:void () {
         icSeq = (icSeq + 1)
+        passNo = (passNo + 1)
     }
 
     ; a sticky box keeps its insets from its scrollport's edges, the

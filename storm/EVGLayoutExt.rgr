@@ -222,7 +222,13 @@ class EVGLayoutExt {
     }
 
     ; a layout of a tree starts: what was remembered of the last is void
+    ; (passNo: the layouts counted, one number for each)
+    def passNo:int 0
     fn newPass:void () {
+        passNo = (passNo + 1)
+    }
+    fn pass:int () {
+        return passNo
     }
 
     ; the column tracks with the implicit ones the items' placements make
