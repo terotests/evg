@@ -458,7 +458,7 @@ class EVGInspect {
         n = (this.prop(n "text-align" el.textAlign))
         n = (this.prop(n "overflow" el.overflow))
         n = (this.prop(n "cursor" el.cursor))
-        n = (this.prop(n "transition" el.transitionSpec))
+        n = (this.prop(n "transition" el.rare.transitionSpec))
         n = (this.prop(n "transform" el.transformSpec))
         n = (this.numProp(n "rotate" el.rotate))
         n = (this.numProp(n "scale" el.scale))
@@ -473,11 +473,11 @@ class EVGInspect {
         ; every stylesheet rule and that is why the cascade keeps the list.
         out = (out + ",\"inline\":[")
         def k:int 0
-        while (k < (array_length el.inlineProps)) {
+        while (k < (array_length el.rare.inlineProps)) {
             if (k > 0) {
                 out = (out + ",")
             }
-            out = (out + (EVGInspect.jsonString((itemAt el.inlineProps k))))
+            out = (out + (EVGInspect.jsonString((itemAt el.rare.inlineProps k))))
             k = (k + 1)
         }
         out = (out + "]")
@@ -499,7 +499,7 @@ class EVGInspect {
         out = (out + (this.cascadeJson(el)))
         out = (out + ",\"forced\":" + (to_string (EVGInspect.forcedState(path))))
         out = (out + ",\"styleSlot\":" + (to_string el.styleSlot))
-        out = (out + ",\"styleClass\":" + (EVGInspect.jsonString(el.styleClass)))
+        out = (out + ",\"styleClass\":" + (EVGInspect.jsonString(el.rare.styleClass)))
         out = (out + ",\"page\":" + (to_string el.calculatedPage))
         def full:string (EVGInspect.clip(el.textContent 400))
         out = (out + ",\"textFull\":" + (EVGInspect.jsonString(full)))

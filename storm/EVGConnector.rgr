@@ -86,8 +86,8 @@ class EVGConnector {
     ; Both vocabularies in one table: `anchor-name` as written, and `#id` for
     ; a document that never adopted anchor names.
     sfn collectAnchors:void (el:EVGElement names:[string] nodes:[EVGElement]) {
-        if ((strlen el.anchorName) > 0) {
-            push names el.anchorName
+        if ((strlen el.rare.anchorName) > 0) {
+            push names el.rare.anchorName
             push nodes el
         }
         if ((strlen el.id) > 0) {
@@ -283,29 +283,29 @@ class EVGConnector {
     }
 
     sfn solve:void (c:EVGElement names:[string] nodes:[EVGElement] warnings:[string]) {
-        c.connectorResolved = false
-        if ((strlen c.connectorFrom) == 0) {
+        c.setConnectorResolved(false)
+        if ((strlen c.rare.connectorFrom) == 0) {
             push warnings "connector: `from` names no element"
             c.svgPath = ""
             c.arrowPath = ""
             return
         }
-        if ((strlen c.connectorTo) == 0) {
+        if ((strlen c.rare.connectorTo) == 0) {
             push warnings "connector: `to` names no element"
             c.svgPath = ""
             c.arrowPath = ""
             return
         }
-        def fromEl@(optional):EVGElement (EVGConnector.lookup(c.connectorFrom names nodes))
-        def toEl@(optional):EVGElement (EVGConnector.lookup(c.connectorTo names nodes))
+        def fromEl@(optional):EVGElement (EVGConnector.lookup(c.rare.connectorFrom names nodes))
+        def toEl@(optional):EVGElement (EVGConnector.lookup(c.rare.connectorTo names nodes))
         if (null? fromEl) {
-            push warnings (("connector: nothing is called \"" + c.connectorFrom) + "\" — give the target an anchor-name or an id")
+            push warnings (("connector: nothing is called \"" + c.rare.connectorFrom) + "\" — give the target an anchor-name or an id")
             c.svgPath = ""
             c.arrowPath = ""
             return
         }
         if (null? toEl) {
-            push warnings (("connector: nothing is called \"" + c.connectorTo) + "\" — give the target an anchor-name or an id")
+            push warnings (("connector: nothing is called \"" + c.rare.connectorTo) + "\" — give the target an anchor-name or an id")
             c.svgPath = ""
             c.arrowPath = ""
             return
@@ -324,21 +324,21 @@ class EVGConnector {
         ; `auto` is the whole responsive story: the same connector leaves the
         ; right edge when the cards sit side by side and the bottom edge when
         ; the same layout stacks them.
-        def fs:string (EVGConnector.resolveSide(c.connectorFromSide horizontal dx dy false warnings))
-        def ts:string (EVGConnector.resolveSide(c.connectorToSide horizontal dx dy true warnings))
+        def fs:string (EVGConnector.resolveSide(c.rare.connectorFromSide horizontal dx dy false warnings))
+        def ts:string (EVGConnector.resolveSide(c.rare.connectorToSide horizontal dx dy true warnings))
 
         def p0:ConnPt (EVGConnector.pointOn(a fs))
         def p1:ConnPt (EVGConnector.pointOn(b ts))
-        p0.x = (p0.x + (p0.nx * c.connectorFromOffset))
-        p0.y = (p0.y + (p0.ny * c.connectorFromOffset))
-        p1.x = (p1.x + (p1.nx * c.connectorToOffset))
-        p1.y = (p1.y + (p1.ny * c.connectorToOffset))
+        p0.x = (p0.x + (p0.nx * c.rare.connectorFromOffset))
+        p0.y = (p0.y + (p0.ny * c.rare.connectorFromOffset))
+        p1.x = (p1.x + (p1.nx * c.rare.connectorToOffset))
+        p1.y = (p1.y + (p1.ny * c.rare.connectorToOffset))
 
         ; The vertices, in page coordinates. Bezier keeps its two controls
         ; beside them: they are not on the line, but they bound it.
         def xs:[double]
         def ys:[double]
-        def routing:string c.connectorRouting
+        def routing:string c.rare.connectorRouting
         if ((strlen routing) == 0) {
             routing = "straight"
         }
@@ -396,8 +396,8 @@ class EVGConnector {
             startDy = (p0.y - c0y)
         }
 
-        def headEnd:boolean (EVGConnector.wantsArrow(c.arrowEnd))
-        def headStart:boolean (EVGConnector.wantsArrow(c.arrowStart))
+        def headEnd:boolean (EVGConnector.wantsArrow(c.rare.arrowEnd))
+        def headStart:boolean (EVGConnector.wantsArrow(c.rare.arrowStart))
         ; The shaft: stroked, never filled. The heads are built below into
         ; `arrowPath`, which is the element's filled half — see
         ; `EVGElement.arrowPath` for why the two cannot share one `d`.
@@ -412,7 +412,7 @@ class EVGConnector {
             }
         }
 
-        def size:double c.arrowSize
+        def size:double c.rare.arrowSize
         if (size <= 0.0) {
             size = 10.0
         }
@@ -421,7 +421,7 @@ class EVGConnector {
         ; goes on the filled path beside it.
         def heads:string ""
         if headEnd {
-            def kindE:string (EVGConnector.headKind(c.arrowEnd))
+            def kindE:string (EVGConnector.headKind(c.rare.arrowEnd))
             def head:string (EVGConnector.arrowHead(kindE p1.x p1.y endDx endDy size))
             if ((strlen head) > 0) {
                 if (kindE == "triangle") {
@@ -432,7 +432,7 @@ class EVGConnector {
             }
         }
         if headStart {
-            def kindS:string (EVGConnector.headKind(c.arrowStart))
+            def kindS:string (EVGConnector.headKind(c.rare.arrowStart))
             def head2:string (EVGConnector.arrowHead(kindS p0.x p0.y startDx startDy size))
             if ((strlen head2) > 0) {
                 if (kindS == "triangle") {
@@ -494,7 +494,7 @@ class EVGConnector {
         c.calculatedHeight = bh
         c.calculatedInnerWidth = bw
         c.calculatedInnerHeight = bh
-        c.connectorResolved = true
+        c.setConnectorResolved(true)
     }
 
     sfn curveTo:string (ax:double ay:double bx:double by:double ex:double ey:double) {

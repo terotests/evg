@@ -691,8 +691,8 @@ class EVGPatch {
     sfn fxNamesOf:[string] (el:EVGElement) {
         def out:[string]
         def i:int 0
-        while (i < (array_length el.fxNames)) {
-            push out ("evg-fx-" + (itemAt el.fxNames i))
+        while (i < (array_length el.rare.fxNames)) {
+            push out ("evg-fx-" + (itemAt el.rare.fxNames i))
             i = (i + 1)
         }
         return out
@@ -985,7 +985,7 @@ class EVGPatch {
         if (n == "transform-origin")       { return el.transformOriginSpec }
         if (n == "white-space")            { return el.whiteSpace }
         if (n == "text-overflow")          { return el.textOverflow }
-        if (n == "transition")             { return el.transitionSpec }
+        if (n == "transition")             { return el.rare.transitionSpec }
         if (n == "background-gradient")    { return el.backgroundGradient }
         if (n == "svg")                    { return el.svgSource }
         ; A CONNECTOR'S `d` AND `view-box` ARE THE LAYOUT'S, not the
@@ -1025,25 +1025,25 @@ class EVGPatch {
         if (n == "overlay-side")           { return el.overlaySide }
         if (n == "overlay-align")          { return el.overlayAlign }
         if (n == "overlay-gap")            { return (EVGDisplayList.num(el.overlayGap)) }
-        if (n == "position-anchor")        { return el.positionAnchor }
-        if (n == "position-try-fallbacks") { return el.positionTryFallbacks }
-        if (n == "position-try-order")     { return el.positionTryOrder }
+        if (n == "position-anchor")        { return el.rare.positionAnchor }
+        if (n == "position-try-fallbacks") { return el.rare.positionTryFallbacks }
+        if (n == "position-try-order")     { return el.rare.positionTryOrder }
         if (n == "presentation")           { return el.presentation }
         if (n == "sheet-below")            { return (EVGDisplayList.num(el.sheetBelow)) }
-        if (n == "anchor-name")            { return el.anchorName }
-        if (n == "from")                   { return el.connectorFrom }
-        if (n == "to")                     { return el.connectorTo }
-        if (n == "from-side")              { return el.connectorFromSide }
-        if (n == "to-side")                { return el.connectorToSide }
-        if (n == "routing")                { return el.connectorRouting }
-        if (n == "arrow-start")            { return el.arrowStart }
-        if (n == "arrow-end")              { return el.arrowEnd }
-        if (n == "arrow-size")             { return (EVGDisplayList.num(el.arrowSize)) }
-        if (n == "from-offset")            { return (EVGDisplayList.num(el.connectorFromOffset)) }
-        if (n == "to-offset")              { return (EVGDisplayList.num(el.connectorToOffset)) }
+        if (n == "anchor-name")            { return el.rare.anchorName }
+        if (n == "from")                   { return el.rare.connectorFrom }
+        if (n == "to")                     { return el.rare.connectorTo }
+        if (n == "from-side")              { return el.rare.connectorFromSide }
+        if (n == "to-side")                { return el.rare.connectorToSide }
+        if (n == "routing")                { return el.rare.connectorRouting }
+        if (n == "arrow-start")            { return el.rare.arrowStart }
+        if (n == "arrow-end")              { return el.rare.arrowEnd }
+        if (n == "arrow-size")             { return (EVGDisplayList.num(el.rare.arrowSize)) }
+        if (n == "from-offset")            { return (EVGDisplayList.num(el.rare.connectorFromOffset)) }
+        if (n == "to-offset")              { return (EVGDisplayList.num(el.rare.connectorToOffset)) }
         if (n == "fill-rule")              { return el.fillRule }
-        if (n == "stroke-linecap")         { return el.strokeLineCap }
-        if (n == "stroke-linejoin")        { return el.strokeLineJoin }
+        if (n == "stroke-linecap")         { return el.rare.strokeLineCap }
+        if (n == "stroke-linejoin")        { return el.rare.strokeLineJoin }
         if (n == "stroke-dasharray")       { return el.strokeDashArray }
         if (n == "alt")                    { return el.alt }
         if (n == "href")                   { return el.href }
@@ -1058,28 +1058,28 @@ class EVGPatch {
         ; length is empty — which would have written the document back with
         ; the badge unpositioned and nothing to say it had been dropped.
         if (n == "left") {
-            def la:string (EVGPatch.anchorInsetText(el.anchorLeftSide el.anchorLeftOffset))
+            def la:string (EVGPatch.anchorInsetText(el.rare.anchorLeftSide el.rare.anchorLeftOffset))
             if ((strlen la) > 0) {
                 return la
             }
             return (EVGPatch.unitText(el.left))
         }
         if (n == "top") {
-            def ta:string (EVGPatch.anchorInsetText(el.anchorTopSide el.anchorTopOffset))
+            def ta:string (EVGPatch.anchorInsetText(el.rare.anchorTopSide el.rare.anchorTopOffset))
             if ((strlen ta) > 0) {
                 return ta
             }
             return (EVGPatch.unitText(el.top))
         }
         if (n == "right") {
-            def ra:string (EVGPatch.anchorInsetText(el.anchorRightSide el.anchorRightOffset))
+            def ra:string (EVGPatch.anchorInsetText(el.rare.anchorRightSide el.rare.anchorRightOffset))
             if ((strlen ra) > 0) {
                 return ra
             }
             return (EVGPatch.unitText(el.right))
         }
         if (n == "bottom") {
-            def ba:string (EVGPatch.anchorInsetText(el.anchorBottomSide el.anchorBottomOffset))
+            def ba:string (EVGPatch.anchorInsetText(el.rare.anchorBottomSide el.rare.anchorBottomOffset))
             if ((strlen ba) > 0) {
                 return ba
             }
@@ -1098,14 +1098,14 @@ class EVGPatch {
         if (n == "gradient-from")    { return (EVGPatch.gradientText(el.gradientFrom el.gradientSet)) }
         if (n == "gradient-to")      { return (EVGPatch.gradientText(el.gradientTo el.gradientSet)) }
 
-        if (n == "evg-surface-effect") { return el.surfaceEffect }
-        if (n == "evg-effect-on")      { return el.effectTrigger }
+        if (n == "evg-surface-effect") { return el.rare.surfaceEffect }
+        if (n == "evg-effect-on")      { return el.rare.effectTrigger }
         if (EVGPatch.isFx(n)) {
             def key:string (substring n 7 (strlen n))
             def i:int 0
-            while (i < (array_length el.fxNames)) {
-                if ((itemAt el.fxNames i) == key) {
-                    return (EVGDisplayList.num((itemAt el.fxValues i)))
+            while (i < (array_length el.rare.fxNames)) {
+                if ((itemAt el.rare.fxNames i) == key) {
+                    return (EVGDisplayList.num((itemAt el.rare.fxValues i)))
                 }
                 i = (i + 1)
             }
@@ -1263,7 +1263,7 @@ class EVGPatch {
             return true
         }
         if (n == "transition") {
-            el.transitionSpec = ""
+            el.setTransitionSpec("")
             return true
         }
         if (n == "background-gradient") {
@@ -1287,11 +1287,11 @@ class EVGPatch {
             return true
         }
         if (n == "stroke-linecap") {
-            el.strokeLineCap = "butt"
+            el.setStrokeLineCap("butt")
             return true
         }
         if (n == "stroke-linejoin") {
-            el.strokeLineJoin = "miter"
+            el.setStrokeLineJoin("miter")
             return true
         }
         if (n == "stroke-dasharray") {
@@ -1319,15 +1319,15 @@ class EVGPatch {
             return true
         }
         if (n == "position-anchor") {
-            el.positionAnchor = ""
+            el.setPositionAnchor("")
             return true
         }
         if (n == "position-try-fallbacks") {
-            el.positionTryFallbacks = ""
+            el.setPositionTryFallbacks("")
             return true
         }
         if (n == "position-try-order") {
-            el.positionTryOrder = ""
+            el.setPositionTryOrder("")
             return true
         }
         if (n == "presentation") {
@@ -1343,47 +1343,47 @@ class EVGPatch {
             return true
         }
         if (n == "anchor-name") {
-            el.anchorName = ""
+            el.setAnchorName("")
             return true
         }
         if (n == "from") {
-            el.connectorFrom = ""
+            el.setConnectorFrom("")
             return true
         }
         if (n == "to") {
-            el.connectorTo = ""
+            el.setConnectorTo("")
             return true
         }
         if (n == "from-side") {
-            el.connectorFromSide = "auto"
+            el.setConnectorFromSide("auto")
             return true
         }
         if (n == "to-side") {
-            el.connectorToSide = "auto"
+            el.setConnectorToSide("auto")
             return true
         }
         if (n == "routing") {
-            el.connectorRouting = "straight"
+            el.setConnectorRouting("straight")
             return true
         }
         if (n == "arrow-start") {
-            el.arrowStart = "none"
+            el.setArrowStart("none")
             return true
         }
         if (n == "arrow-end") {
-            el.arrowEnd = "none"
+            el.setArrowEnd("none")
             return true
         }
         if (n == "arrow-size") {
-            el.arrowSize = 10.0
+            el.setArrowSize(10.0)
             return true
         }
         if (n == "from-offset") {
-            el.connectorFromOffset = 0.0
+            el.setConnectorFromOffset(0.0)
             return true
         }
         if (n == "to-offset") {
-            el.connectorToOffset = 0.0
+            el.setConnectorToOffset(0.0)
             return true
         }
         if (n == "alt") {
@@ -1422,26 +1422,26 @@ class EVGPatch {
         }
         if (n == "left") {
             el.left = u
-            el.anchorLeftSide = ""
-            el.anchorLeftOffset = 0.0
+            el.setAnchorLeftSide("")
+            el.setAnchorLeftOffset(0.0)
             return true
         }
         if (n == "top") {
             el.top = u
-            el.anchorTopSide = ""
-            el.anchorTopOffset = 0.0
+            el.setAnchorTopSide("")
+            el.setAnchorTopOffset(0.0)
             return true
         }
         if (n == "right") {
             el.right = u
-            el.anchorRightSide = ""
-            el.anchorRightOffset = 0.0
+            el.setAnchorRightSide("")
+            el.setAnchorRightOffset(0.0)
             return true
         }
         if (n == "bottom") {
             el.bottom = u
-            el.anchorBottomSide = ""
-            el.anchorBottomOffset = 0.0
+            el.setAnchorBottomSide("")
+            el.setAnchorBottomOffset(0.0)
             return true
         }
         if (n == "gap") {
@@ -1503,11 +1503,11 @@ class EVGPatch {
         }
 
         if (n == "evg-surface-effect") {
-            el.surfaceEffect = ""
+            el.setSurfaceEffect("")
             return true
         }
         if (n == "evg-effect-on") {
-            el.effectTrigger = ""
+            el.setEffectTrigger("")
             return true
         }
         ; Clearing an fx parameter takes it OUT rather than zeroing it: zero is
@@ -1518,16 +1518,16 @@ class EVGPatch {
             def names:[string]
             def values:[double]
             def i:int 0
-            while (i < (array_length el.fxNames)) {
-                if ((itemAt el.fxNames i) == key) {
+            while (i < (array_length el.rare.fxNames)) {
+                if ((itemAt el.rare.fxNames i) == key) {
                 } {
-                    push names (itemAt el.fxNames i)
-                    push values (itemAt el.fxValues i)
+                    push names (itemAt el.rare.fxNames i)
+                    push values (itemAt el.rare.fxValues i)
                 }
                 i = (i + 1)
             }
-            el.fxNames = names
-            el.fxValues = values
+            el.setFxNames(names)
+            el.setFxValues(values)
             return true
         }
         if (n == "opacity") {

@@ -3360,7 +3360,7 @@ class EVGLayoutFull {
     fn spanRowsPass:void (lay:EVGLayout parent:EVGElement items:[EVGElement] placedRow:[int] rowSpans:[int] placedCol:[int] colSpans:[int] cols:EVGGridTemplate colGap:double rowSpec:string rowGap:double innerHeight:double rowSizes:[double] pctFree:boolean) {
         def nr:int (array_length rowSizes)
         def declared:EVGGridTemplate (EVGGridTemplate.parse(rowSpec))
-        def autoRows:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
+        def autoRows:EVGGridTemplate (EVGGridTemplate.parse(parent.rare.gridAutoRows))
         def maxSpan:int 1
         for rowSpans sp0:int si0 {
             if (sp0 > maxSpan) {
@@ -3936,7 +3936,7 @@ class EVGLayoutFull {
             c.inheritProperties(parent)
             c.resolveUnits(innerWidth innerHeight)
             if ((c.gridTemplateColumns == "subgrid") || (c.gridTemplateRows == "subgrid")) {
-                c.subgridPending = true
+                c.setSubgridPending(true)
             }
             if (c.isAbsolute == false) {
                 push items c
@@ -4104,9 +4104,9 @@ class EVGLayoutFull {
                     al = parent.alignItems
                 }
                 if rowDir {
-                    al = lel.justifySelf
+                    al = lel.rare.justifySelf
                     if (((strlen al) == 0) || (al == "auto")) {
-                        al = parent.justifyItems
+                        al = parent.rare.justifyItems
                     }
                 }
                 def ld:double 0.0
@@ -4259,9 +4259,9 @@ class EVGLayoutFull {
     fn laneTracks:EVGGridTemplate (lay:EVGLayout parent:EVGElement rowDir:boolean spec0:string laneRoom:double laneGap:double items:[EVGElement] starts:[int] spans:[int]) {
         def itemCount:int (array_length items)
         def spec:string spec0
-        def autoSpec:string parent.gridAutoColumns
+        def autoSpec:string parent.rare.gridAutoColumns
         if rowDir {
-            autoSpec = parent.gridAutoRows
+            autoSpec = parent.rare.gridAutoRows
         }
         if (((strlen autoSpec) == 0) || (autoSpec == "none")) {
             autoSpec = "auto"
@@ -4442,7 +4442,8 @@ class EVGLayoutFull {
                     def rAt:int (itemAt starts m3)
                     def rN:int (itemAt spans m3)
                     if (((rAt >= 0) && (rN > 1)) && (rsg.gridTemplateRows == "subgrid")) {
-                        clear rsg.subgridRowSizes
+                        def rw6:EVGRare (rsg.rareW())
+                        clear rw6.subgridRowSizes
                         this.laneItemHeight(lay rsg)
                         def rOwn:double laneGap
                         if rsg.gap.isSet {
@@ -4453,8 +4454,8 @@ class EVGLayoutFull {
                         }
                         def rHalf:double ((rOwn - laneGap) / 2.0)
                         def rk:int 0
-                        while ((rk < rN) && (rk < (array_length rsg.computedRowSizes))) {
-                            def rh:double (itemAt rsg.computedRowSizes rk)
+                        while ((rk < rN) && (rk < (array_length rsg.rare.computedRowSizes))) {
+                            def rh:double (itemAt rsg.rare.computedRowSizes rk)
                             if (rk == 0) {
                                 rh = (((rh + rsg.box.marginTopPx) + rsg.box.borderWidthPx) + rsg.box.paddingTopPx)
                             } {
@@ -4805,9 +4806,9 @@ class EVGLayoutFull {
             if (bw2 < 0.0) {
                 bw2 = 0.0
             }
-            def gj:string el.justifySelf
+            def gj:string el.rare.justifySelf
             if (((strlen gj) == 0) || (gj == "auto")) {
-                gj = parent.justifyItems
+                gj = parent.rare.justifyItems
             }
             def placedH:boolean ((gj == "center") || ((gj == "end") || ((gj == "flex-end") || ((gj == "start") || ((gj == "flex-start") || ((gj == "left") || ((gj == "right") || ((gj == "self-start") || (gj == "self-end")))))))))
             el.calculatedX = ((startX + off) + el.box.marginLeftPx)
@@ -4958,9 +4959,11 @@ class EVGLayoutFull {
         }
         def half:double ((own - laneGap) / 2.0)
         if rows {
-            clear el.subgridRowSizes
+            def rw7:EVGRare (el.rareW())
+            clear rw7.subgridRowSizes
         } {
-            clear el.subgridColumnSizes
+            def rw8:EVGRare (el.rareW())
+            clear rw8.subgridColumnSizes
         }
         def k:int 0
         while (k < span) {
@@ -4990,9 +4993,11 @@ class EVGLayoutFull {
                 w = 0.0
             }
             if rows {
-                push el.subgridRowSizes w
+                def rw9:EVGRare (el.rareW())
+                push rw9.subgridRowSizes w
             } {
-                push el.subgridColumnSizes w
+                def rw10:EVGRare (el.rareW())
+                push rw10.subgridColumnSizes w
             }
             k = (k + 1)
         }
@@ -5031,7 +5036,7 @@ class EVGLayoutFull {
         def rTpl:string parent.gridTemplateRows
         ; (a column subgrid's lines are the ones its enclosing grid handed
         ; it, names and all; it has none before them, CSS Grid 2 9)
-        def subC:boolean ((cTpl == "subgrid") && ((strlen parent.subgridColumnSpec) > 0))
+        def subC:boolean ((cTpl == "subgrid") && ((strlen parent.rare.subgridColumnSpec) > 0))
         if (rTpl == "subgrid") {
             return -1.0
         }
@@ -5041,7 +5046,7 @@ class EVGLayoutFull {
         ; (lines are counted on the auto repeats as the core expands them)
         def cLines:string cTpl
         if subC {
-            cLines = parent.subgridColumnSpec
+            cLines = parent.rare.subgridColumnSpec
         }
         def rLines:string rTpl
         if (((indexOf cTpl "auto-f") >= 0) || ((indexOf rTpl "auto-f") >= 0)) {
@@ -5158,7 +5163,7 @@ class EVGLayoutFull {
             j = (j + 1)
         }
         if (leadC > 0) {
-            def lc:string (EVGLayoutFull.leadingTracks(parent.gridAutoColumns leadC))
+            def lc:string (EVGLayoutFull.leadingTracks(parent.rare.gridAutoColumns leadC))
             if ((strlen cTpl) > 0) {
                 parent.gridTemplateColumns = ((lc + " ") + cTpl)
             } {
@@ -5166,7 +5171,7 @@ class EVGLayoutFull {
             }
         }
         if (leadR > 0) {
-            def lr:string (EVGLayoutFull.leadingTracks(parent.gridAutoRows leadR))
+            def lr:string (EVGLayoutFull.leadingTracks(parent.rare.gridAutoRows leadR))
             if (nr > 0) {
                 parent.gridTemplateRows = ((lr + " ") + rTpl)
             } {
@@ -5234,7 +5239,7 @@ class EVGLayoutFull {
     ; implicit rows past the template are grid-auto-rows' auto (CSS Grid
     ; 7.6), content-sized and stretched, not copies of the last track
     fn implicitRows:string (parent:EVGElement rowSpec:string rowsUsed:int) {
-        if (((strlen parent.gridAutoRows) > 0) && (parent.gridAutoRows != "auto")) {
+        if (((strlen parent.rare.gridAutoRows) > 0) && (parent.rare.gridAutoRows != "auto")) {
             return rowSpec
         }
         def have:int ((EVGGridTemplate.parse(rowSpec)).count())
@@ -5291,7 +5296,7 @@ class EVGLayoutFull {
                 li = (li + 1)
             }
             if (minL < 1) {
-                colSpec = (((EVGLayoutFull.leadingTracks(parent.gridAutoColumns (1 - minL))) + " ") + colSpec)
+                colSpec = (((EVGLayoutFull.leadingTracks(parent.rare.gridAutoColumns (1 - minL))) + " ") + colSpec)
             }
         }
         ; an item placed past the explicit columns makes implicit ones, as
@@ -5487,7 +5492,7 @@ class EVGLayoutFull {
                 fj = (fj + 1)
             }
         }
-        def autoCol:string parent.gridAutoColumns
+        def autoCol:string parent.rare.gridAutoColumns
         if ((strlen autoCol) == 0) {
             autoCol = "auto"
         }
@@ -6263,9 +6268,9 @@ class EVGLayoutFull {
                     def alongY:boolean ((EVGLayoutFull.cx(c)).staticFlex || ((EVGLayoutFull.cx(c)).staticAxis == "y"))
                     def outW:double ((c.calculatedWidth + c.box.marginLeftPx) + c.box.marginRightPx)
                     def outH:double ((c.calculatedHeight + c.box.marginTopPx) + c.box.marginBottomPx)
-                    def gj:string c.justifySelf
+                    def gj:string c.rare.justifySelf
                     if ((strlen gj) == 0) {
-                        gj = parent.justifyItems
+                        gj = parent.rare.justifyItems
                     }
                     def ga:string c.alignSelf
                     if ((strlen ga) == 0) {

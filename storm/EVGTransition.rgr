@@ -307,7 +307,7 @@ class EVGTransition {
     }
 
     fn reconcileColor:void (el:EVGElement property:string target:EVGColor) {
-        def spec:EVGTimingSpec (EVGTransition.specFor(el.transitionSpec property))
+        def spec:EVGTimingSpec (EVGTransition.specFor(el.rare.transitionSpec property))
         if ((spec.found == false) || (spec.durationMs <= 0.0)) {
             ; Not transitioned: the target IS what shows, and any flight for it
             ; is abandoned rather than left to land on a value nobody asked for.
@@ -413,7 +413,7 @@ class EVGTransition {
     ; They differ only where one CSS property animates several numbers.
     fn reconcileNumberAs:void (el:EVGElement key:string cssName:string target:double) {
         def property:string key
-        def spec:EVGTimingSpec (EVGTransition.specFor(el.transitionSpec cssName))
+        def spec:EVGTimingSpec (EVGTransition.specFor(el.rare.transitionSpec cssName))
         if ((spec.found == false) || (spec.durationMs <= 0.0)) {
             this.drop(el property)
             return

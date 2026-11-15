@@ -341,7 +341,7 @@ class EVGLayout {
         def maxY:double (el.calculatedY + el.calculatedHeight)
         def started:boolean has
         def unbounded:boolean (el.hasTransform())
-        def effect:boolean ((strlen el.surfaceEffect) > 0)
+        def effect:boolean ((strlen el.rare.surfaceEffect) > 0)
 
         def i:int 0
         while (i < (el.getChildCount())) {
@@ -4657,8 +4657,8 @@ class EVGLayout {
         if surface.overlayAnchor {
             return surface.overlayAnchor
         }
-        if ((strlen surface.positionAnchor) > 0) {
-            def named@(optional):EVGElement (EVGConnector.lookup(surface.positionAnchor anchorNames anchorNodes))
+        if ((strlen surface.rare.positionAnchor) > 0) {
+            def named@(optional):EVGElement (EVGConnector.lookup(surface.rare.positionAnchor anchorNames anchorNodes))
             if (null? named) {
             } {
                 return named
@@ -4792,7 +4792,7 @@ class EVGLayout {
         }
         if (h > pageHeight) {
             h = pageHeight
-            surface.overlayClamped = true
+            surface.setOverlayClamped(true)
         }
         this.setSurfaceHeight(surface h)
         return h
@@ -4808,7 +4808,7 @@ class EVGLayout {
     fn tryCandidates:void (surface:EVGElement sides:[string] aligns:[string]) {
         push sides surface.overlaySide
         push aligns surface.overlayAlign
-        def spec:string surface.positionTryFallbacks
+        def spec:string surface.rare.positionTryFallbacks
         if ((strlen spec) > 0) {
             def parts:[string] (EVGLayout.splitList(spec))
             def i:int 0
@@ -4942,14 +4942,14 @@ class EVGLayout {
         def x:double surface.calculatedX
         def y:double surface.calculatedY
 
-        def hasL:boolean ((strlen surface.anchorLeftSide) > 0)
-        def hasR:boolean ((strlen surface.anchorRightSide) > 0)
-        def hasT:boolean ((strlen surface.anchorTopSide) > 0)
-        def hasB:boolean ((strlen surface.anchorBottomSide) > 0)
-        def lx:double ((EVGLayout.anchorEdgeX(a surface.anchorLeftSide)) + surface.anchorLeftOffset)
-        def rx:double ((EVGLayout.anchorEdgeX(a surface.anchorRightSide)) + surface.anchorRightOffset)
-        def ty:double ((EVGLayout.anchorEdgeY(a surface.anchorTopSide)) + surface.anchorTopOffset)
-        def by:double ((EVGLayout.anchorEdgeY(a surface.anchorBottomSide)) + surface.anchorBottomOffset)
+        def hasL:boolean ((strlen surface.rare.anchorLeftSide) > 0)
+        def hasR:boolean ((strlen surface.rare.anchorRightSide) > 0)
+        def hasT:boolean ((strlen surface.rare.anchorTopSide) > 0)
+        def hasB:boolean ((strlen surface.rare.anchorBottomSide) > 0)
+        def lx:double ((EVGLayout.anchorEdgeX(a surface.rare.anchorLeftSide)) + surface.rare.anchorLeftOffset)
+        def rx:double ((EVGLayout.anchorEdgeX(a surface.rare.anchorRightSide)) + surface.rare.anchorRightOffset)
+        def ty:double ((EVGLayout.anchorEdgeY(a surface.rare.anchorTopSide)) + surface.rare.anchorTopOffset)
+        def by:double ((EVGLayout.anchorEdgeY(a surface.rare.anchorBottomSide)) + surface.rare.anchorBottomOffset)
 
         if (hasL && hasR) {
             x = lx
@@ -4984,7 +4984,7 @@ class EVGLayout {
 
         surface.overlayPlacedSide = "anchor"
         surface.overlayPlacedAlign = ""
-        surface.overlayPlacedPresentation = "anchored"
+        surface.setOverlayPlacedPresentation("anchored")
         this.finishOverlay(surface x y)
     }
 
@@ -4993,7 +4993,7 @@ class EVGLayout {
         def h:double surface.calculatedHeight
         def x:double 0.0
         def y:double 0.0
-        surface.overlayClamped = false
+        surface.setOverlayClamped(false)
         surface.overlayPlacedAlign = surface.overlayAlign
 
         ; EDGES BEFORE SIDES. `anchor()` in an inset is a different statement
@@ -5011,7 +5011,7 @@ class EVGLayout {
         if (pres == "fullscreen") {
             this.resizeSurface(surface pageWidth pageHeight)
             surface.overlayPlacedSide = "cover"
-            surface.overlayPlacedPresentation = "fullscreen"
+            surface.setOverlayPlacedPresentation("fullscreen")
             this.finishOverlay(surface 0.0 0.0)
             return
         }
@@ -5019,11 +5019,11 @@ class EVGLayout {
             def sheetH:double (this.sheetHeight(surface))
             surface.overlayPlacedSide = "bottom"
             surface.overlayPlacedAlign = "start"
-            surface.overlayPlacedPresentation = "sheet"
+            surface.setOverlayPlacedPresentation("sheet")
             this.finishOverlay(surface 0.0 (pageHeight - sheetH))
             return
         }
-        surface.overlayPlacedPresentation = "anchored"
+        surface.setOverlayPlacedPresentation("anchored")
 
         if (surface.overlaySide == "cover") {
             ; The page itself: a modal's backdrop. It is sized here rather than
@@ -5045,7 +5045,7 @@ class EVGLayout {
                 if (h > pageHeight) {
                     h = pageHeight
                     this.setSurfaceHeight(surface h)
-                    surface.overlayClamped = true
+                    surface.setOverlayClamped(true)
                 }
             }
             x = ((pageWidth - w) / 2.0)
@@ -5089,7 +5089,7 @@ class EVGLayout {
             def sides:[string]
             def aligns:[string]
             this.tryCandidates(surface sides aligns)
-            def mostSpace:boolean (surface.positionTryOrder == "most-space")
+            def mostSpace:boolean (surface.rare.positionTryOrder == "most-space")
             def bestFit:int (0 - 1)
             def bestFitRoom:double 0.0
             def bestOver:int 0
@@ -5144,7 +5144,7 @@ class EVGLayout {
                         h = 0.0
                     }
                     this.setSurfaceHeight(surface h)
-                    surface.overlayClamped = true
+                    surface.setOverlayClamped(true)
                     spot = (this.overlaySpot(side align ax ay aw ah w h gap))
                 }
             }
@@ -5527,8 +5527,8 @@ class EVGLayout {
             spec = "1fr"
             ; (the one implicit column is grid-auto-columns'; with no item
             ; there is none)
-            if ((strlen el.gridAutoColumns) > 0) {
-                spec = el.gridAutoColumns
+            if ((strlen el.rare.gridAutoColumns) > 0) {
+                spec = el.rare.gridAutoColumns
             }
             def inFlowG:int 0
             def gk:int 0
@@ -6291,8 +6291,8 @@ class EVGLayout {
     ; the column template placement reads: a subgrid's is the one its
     ; enclosing grid handed it, with the line names
     sfn colTemplateOf:string (el:EVGElement) {
-        if ((el.gridTemplateColumns == "subgrid") && ((strlen el.subgridColumnSpec) > 0)) {
-            return el.subgridColumnSpec
+        if ((el.gridTemplateColumns == "subgrid") && ((strlen el.rare.subgridColumnSpec) > 0)) {
+            return el.rare.subgridColumnSpec
         }
         return el.gridTemplateColumns
     }
@@ -6437,11 +6437,11 @@ class EVGLayout {
             rowGapPx = parent.rowGap.pixels
         }
         ; (a subgrid's normal gap is its enclosing grid's, CSS Grid 2 9)
-        if ((parent.gridTemplateColumns == "subgrid") && ((parent.subgridColumnGap >= 0.0) && ((parent.gap.isSet == false) && (parent.columnGap.isSet == false)))) {
-            colGapPx = parent.subgridColumnGap
+        if ((parent.gridTemplateColumns == "subgrid") && ((parent.rare.subgridColumnGap >= 0.0) && ((parent.gap.isSet == false) && (parent.columnGap.isSet == false)))) {
+            colGapPx = parent.rare.subgridColumnGap
         }
-        if ((parent.gridTemplateRows == "subgrid") && ((parent.subgridRowGap >= 0.0) && ((parent.gap.isSet == false) && (parent.rowGap.isSet == false)))) {
-            rowGapPx = parent.subgridRowGap
+        if ((parent.gridTemplateRows == "subgrid") && ((parent.rare.subgridRowGap >= 0.0) && ((parent.gap.isSet == false) && (parent.rowGap.isSet == false)))) {
+            rowGapPx = parent.rare.subgridRowGap
         }
         def out:[double]
         push out colGapPx
@@ -6466,8 +6466,8 @@ class EVGLayout {
         if ((strlen colSpec) == 0) {
             colSpec = "auto"
             ; (no explicit column: the implicit ones are grid-auto-columns)
-            if ((strlen parent.gridAutoColumns) > 0) {
-                colSpec = parent.gridAutoColumns
+            if ((strlen parent.rare.gridAutoColumns) > 0) {
+                colSpec = parent.rare.gridAutoColumns
             }
         }
 
@@ -6477,26 +6477,26 @@ class EVGLayout {
         ; parent filled these in before laying this element out; with no
         ; enclosing grid there is nothing to inherit and it falls back to 1fr.
         if (colSpec == "subgrid") {
-            if ((array_length parent.subgridColumnSizes) > 0) {
+            if ((array_length parent.rare.subgridColumnSizes) > 0) {
                 def sgSpec:string ""
                 def sg:int 0
-                while (sg < (array_length parent.subgridColumnSizes)) {
+                while (sg < (array_length parent.rare.subgridColumnSizes)) {
                     if (sg > 0) {
                         sgSpec = sgSpec + " "
                     }
-                    sgSpec = sgSpec + (to_string (itemAt parent.subgridColumnSizes sg)) + "px"
+                    sgSpec = sgSpec + (to_string (itemAt parent.rare.subgridColumnSizes sg)) + "px"
                     sg = (sg + 1)
                 }
                 colSpec = sgSpec
-                if ((strlen parent.subgridColumnSpec) > 0) {
-                    colSpec = parent.subgridColumnSpec
+                if ((strlen parent.rare.subgridColumnSpec) > 0) {
+                    colSpec = parent.rare.subgridColumnSpec
                 }
             } {
                 ; During an enclosing grid's content-measuring pass the sizes
                 ; do not exist yet, and falling back is correct rather than
                 ; wrong — subgridPending is what tells that apart from having
                 ; no enclosing grid at all.
-                if (parent.subgridPending == false) {
+                if (parent.rare.subgridPending == false) {
                     this.warn("grid-template-columns: subgrid has no enclosing grid to inherit tracks from; it has none")
                     colSpec = ""
                 } {
@@ -6517,12 +6517,12 @@ class EVGLayout {
                         sgx = (sgx + 1)
                     }
                     ; (and the line names it declares itself)
-                    if ((strlen parent.subgridOwnColumnNames) > 0) {
+                    if ((strlen parent.rare.subgridOwnColumnNames) > 0) {
                         def noSizes:[double]
-                        def ms:string (EVGLayout.subgridSpec((EVGGridTemplate.parse("")) 0 sgn noSizes parent.subgridOwnColumnNames))
+                        def ms:string (EVGLayout.subgridSpec((EVGGridTemplate.parse("")) 0 sgn noSizes parent.rare.subgridOwnColumnNames))
                         if ((strlen ms) > 0) {
                             colSpec = ms
-                            parent.subgridColumnSpec = ms
+                            parent.setSubgridColumnSpec(ms)
                         }
                     }
                 }
@@ -6545,8 +6545,8 @@ class EVGLayout {
                         if (dc > 0) {
                             derived = derived + " "
                         }
-                        if ((strlen parent.gridAutoColumns) > 0) {
-                            derived = derived + parent.gridAutoColumns
+                        if ((strlen parent.rare.gridAutoColumns) > 0) {
+                            derived = derived + parent.rare.gridAutoColumns
                         } {
                             derived = derived + "1fr"
                         }
@@ -6557,7 +6557,7 @@ class EVGLayout {
                     ; more columns in the picture than the template has:
                     ; the rest are grid-auto-columns
                     def have0:int ((EVGGridTemplate.parse(colSpec)).count())
-                    def ac0:string parent.gridAutoColumns
+                    def ac0:string parent.rare.gridAutoColumns
                     if ((strlen ac0) == 0) {
                         ac0 = "auto"
                     }
@@ -6630,7 +6630,7 @@ class EVGLayout {
         if (rowTemplateSpec == "subgrid") {
             ; (the names of the enclosing grid's lines it spans, CSS Grid 2
             ; 9; "" when they have none)
-            rowTemplateSpec = parent.subgridRowSpec
+            rowTemplateSpec = parent.rare.subgridRowSpec
         }
         ; repeat(auto-fill / auto-fit) down the rows: as many as the height
         ; holds, a definite one, else max-height, else min-height
@@ -6673,7 +6673,7 @@ class EVGLayout {
             ; sized, but the child needs to know an enclosing grid exists long
             ; before that — it may be laid out during the measuring pass below.
             if ((c.gridTemplateColumns == "subgrid") || (c.gridTemplateRows == "subgrid")) {
-                c.subgridPending = true
+                c.setSubgridPending(true)
             }
             if (c.isAbsolute == false) {
                 ; Named lines live on the container's template, so the
@@ -6897,8 +6897,8 @@ class EVGLayout {
         }
         ; (a row subgrid has no implicit rows: an item placed past its
         ; tracks is clamped into the last ones, CSS Grid 2 9)
-        if ((parent.gridTemplateRows == "subgrid") && ((array_length parent.subgridRowSizes) > 0)) {
-            def sgN:int (array_length parent.subgridRowSizes)
+        if ((parent.gridTemplateRows == "subgrid") && ((array_length parent.rare.subgridRowSizes) > 0)) {
+            def sgN:int (array_length parent.rare.subgridRowSizes)
             def sk:int 0
             while (sk < itemCount) {
                 def srs:int (itemAt rowSpans sk)
@@ -7090,20 +7090,20 @@ class EVGLayout {
         ; in place: it needs the parent's rows to be settled, and they are.
         def usingRowSubgrid:boolean false
         if (rowSpec == "subgrid") {
-            if ((array_length parent.subgridRowSizes) > 0) {
+            if ((array_length parent.rare.subgridRowSizes) > 0) {
                 usingRowSubgrid = true
                 def sgrSpec:string ""
                 def sgr:int 0
-                while (sgr < (array_length parent.subgridRowSizes)) {
+                while (sgr < (array_length parent.rare.subgridRowSizes)) {
                     if (sgr > 0) {
                         sgrSpec = sgrSpec + " "
                     }
-                    sgrSpec = sgrSpec + (to_string (itemAt parent.subgridRowSizes sgr)) + "px"
+                    sgrSpec = sgrSpec + (to_string (itemAt parent.rare.subgridRowSizes sgr)) + "px"
                     sgr = (sgr + 1)
                 }
                 rowSpec = sgrSpec
             } {
-                if (parent.subgridPending == false) {
+                if (parent.rare.subgridPending == false) {
                     this.warn("grid-template-rows: subgrid has no enclosing grid to inherit tracks from; falling back to content-sized rows")
                 }
                 rowSpec = ""
@@ -7151,8 +7151,8 @@ class EVGLayout {
                 rows.percentOf = innerHeight
             }
             ; (fixed implicit rows past the template take their room first)
-            if ((rowsUsed > (rows.count())) && ((strlen parent.gridAutoRows) > 0)) {
-                def iar:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
+            if ((rowsUsed > (rows.count())) && ((strlen parent.rare.gridAutoRows) > 0)) {
+                def iar:EVGGridTemplate (EVGGridTemplate.parse(parent.rare.gridAutoRows))
                 if ((iar.hadError == false) && ((iar.count()) > 0)) {
                     def ira:int (rows.count())
                     while (ira < rowsUsed) {
@@ -7313,9 +7313,9 @@ class EVGLayout {
                         it.minHeight.isSet = false
                     }
                     if isRowSubgrid {
-                        it.subgridRowGap = rowGapPx
+                        it.setSubgridRowGap(rowGapPx)
                         def noRows:[double]
-                        it.subgridRowSpec = (EVGLayout.subgridSpec(rowTemplate ri rspanM noRows ""))
+                        it.setSubgridRowSpec((EVGLayout.subgridSpec(rowTemplate ri rspanM noRows "")))
                     }
                     this.layoutElement(it 0.0 0.0 avail 0.0)
                     if pctH {
@@ -7331,8 +7331,8 @@ class EVGLayout {
                         def mHalf:double (((itemAt (this.gridGaps(it avail 0.0)) 1) - rowGapPx) / 2.0)
                         def sub:int 0
                         while (sub < rspanM) {
-                            if (sub < (array_length it.computedRowSizes)) {
-                                def sh:double (itemAt it.computedRowSizes sub)
+                            if (sub < (array_length it.rare.computedRowSizes)) {
+                                def sh:double (itemAt it.rare.computedRowSizes sub)
                                 if (sub > 0) {
                                     sh = (sh + mHalf)
                                 }
@@ -7413,8 +7413,8 @@ class EVGLayout {
         if ((strlen rowSpec) > 0) {
             tplRows = ((EVGGridTemplate.parse(rowSpec)).count())
         }
-        if ((rowsUsed > tplRows) && ((strlen parent.gridAutoRows) > 0)) {
-            def ar:EVGGridTemplate (EVGGridTemplate.parse(parent.gridAutoRows))
+        if ((rowsUsed > tplRows) && ((strlen parent.rare.gridAutoRows) > 0)) {
+            def ar:EVGGridTemplate (EVGGridTemplate.parse(parent.rare.gridAutoRows))
             if ((ar.hadError == false) && ((ar.count()) > 0)) {
                 def at0:EVGGridTrack (ar.trackAt(0))
                 if (at0.kind == 0) {
@@ -7615,9 +7615,9 @@ class EVGLayout {
             }
             ; justify-self / justify-items, and auto margins, along the row:
             ; the item keeps its fit-content width and is placed in the cell
-            def gj:string el.justifySelf
+            def gj:string el.rare.justifySelf
             if (((strlen gj) == 0) || (gj == "auto")) {
-                gj = parent.justifyItems
+                gj = parent.rare.justifyItems
             }
             def placedH:boolean ((gj == "center") || ((gj == "end") || ((gj == "flex-end") || ((gj == "start") || ((gj == "flex-start") || ((gj == "left") || ((gj == "right") || ((gj == "self-start") || (gj == "self-end")))))))))
             if (el.marginAutoLeft || el.marginAutoRight) {
@@ -7674,7 +7674,7 @@ class EVGLayout {
             }
             ; an explicit justify-self: stretch fills the area also when the
             ; ratio would give the width from a set height (CSS Align 3 6.1)
-            if (((el.aspectRatio > 0.0) && (el.justifySelf == "stretch")) && ((el.width.isSet == false) && (el.height.isSet && (boxW > 0.0)))) {
+            if (((el.aspectRatio > 0.0) && (el.rare.justifySelf == "stretch")) && ((el.width.isSet == false) && (el.height.isSet && (boxW > 0.0)))) {
                 el.hasFlexWidth = true
                 el.calculatedFlexWidth = boxW
             }
@@ -7683,8 +7683,9 @@ class EVGLayout {
             ; itself out. Both axes work the same way; the rows are simply
             ; known later, which is the only reason columns landed first.
             if (el.gridTemplateColumns == "subgrid") {
-                clear el.subgridColumnSizes
-                el.subgridColumnGap = colGapPx
+                def rw11:EVGRare (el.rareW())
+                clear rw11.subgridColumnSizes
+                el.setSubgridColumnGap(colGapPx)
                 ; (a gap of its own: each inner line moves half the
                 ; difference into the tracks on both sides of it)
                 def sgOwn:double (itemAt (this.gridGaps(el boxW boxH)) 0)
@@ -7710,17 +7711,19 @@ class EVGLayout {
                     if (tkw < 0.0) {
                         tkw = 0.0
                     }
-                    push el.subgridColumnSizes tkw
+                    def rw12:EVGRare (el.rareW())
+                    push rw12.subgridColumnSizes tkw
                     sgi = (sgi + 1)
                 }
                 ; (with the names of the lines it spans, its enclosing
                 ; grid's and its own, CSS Grid 2 9)
-                el.subgridColumnSpec = (EVGLayout.subgridSpec(cols cIdx cSpan el.subgridColumnSizes el.subgridOwnColumnNames))
+                el.setSubgridColumnSpec((EVGLayout.subgridSpec(cols cIdx cSpan el.rare.subgridColumnSizes el.rare.subgridOwnColumnNames)))
             }
             if (el.gridTemplateRows == "subgrid") {
-                clear el.subgridRowSizes
-                el.subgridRowGap = rowGapPx
-                el.subgridRowSpec = ""
+                def rw13:EVGRare (el.rareW())
+                clear rw13.subgridRowSizes
+                el.setSubgridRowGap(rowGapPx)
+                el.setSubgridRowSpec("")
                 def sgOwnR:double (itemAt (this.gridGaps(el boxW boxH)) 1)
                 def sgHalfR:double ((sgOwnR - rowGapPx) / 2.0)
                 def sgj:int 0
@@ -7743,11 +7746,12 @@ class EVGLayout {
                         if (rkw < 0.0) {
                             rkw = 0.0
                         }
-                        push el.subgridRowSizes rkw
+                        def rw14:EVGRare (el.rareW())
+                        push rw14.subgridRowSizes rkw
                     }
                     sgj = (sgj + 1)
                 }
-                el.subgridRowSpec = (EVGLayout.subgridSpec(rowTemplate rIdx rSpan el.subgridRowSizes ""))
+                el.setSubgridRowSpec((EVGLayout.subgridSpec(rowTemplate rIdx rSpan el.rare.subgridRowSizes "")))
             }
 
 
@@ -7895,10 +7899,12 @@ class EVGLayout {
 
         ; Leave the rows behind for an enclosing grid that has to size its own
         ; rows around this one.
-        clear parent.computedRowSizes
+        def rw15:EVGRare (parent.rareW())
+        clear rw15.computedRowSizes
         def cr:int 0
         while (cr < rowsUsed) {
-            push parent.computedRowSizes (itemAt rowSizes cr)
+            def rw16:EVGRare (parent.rareW())
+            push rw16.computedRowSizes (itemAt rowSizes cr)
             cr = (cr + 1)
         }
 

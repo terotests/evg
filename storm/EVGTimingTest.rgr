@@ -344,7 +344,7 @@ class EVGTimingTest {
     ; value rather than animating to it out of nowhere.
     sfn probe:EVGElement (spec:string from:string) {
         def el (new EVGElement())
-        el.transitionSpec = spec
+        el.setTransitionSpec(spec)
         el.backgroundColor = (EVGColor.parse(from))
         return el
     }
@@ -1103,7 +1103,7 @@ class EVGTimingTest {
     sfn checkTransformTransition:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "transform 200ms linear"
+        el.setTransitionSpec("transform 200ms linear")
         el.setAttribute("transform" "rotate(0deg) scale(1)")
         tr.reconcile(el)
         el.setAttribute("transform" "rotate(20deg) scale(1.5)")
@@ -1271,7 +1271,7 @@ class EVGTimingTest {
     sfn checkOriginTransition:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "transform-origin 200ms linear"
+        el.setTransitionSpec("transform-origin 200ms linear")
         el.setAttribute("transform-origin" "0% 0%")
         tr.reconcile(el)
         el.setAttribute("transform-origin" "100% 100%")
@@ -1298,7 +1298,7 @@ class EVGTimingTest {
     sfn checkOriginUnitChangeJumps:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "transform-origin 200ms linear"
+        el.setTransitionSpec("transform-origin 200ms linear")
         el.setAttribute("transform-origin" "0% 0%")
         tr.reconcile(el)
         el.setAttribute("transform-origin" "80px 0%")
@@ -1318,7 +1318,7 @@ class EVGTimingTest {
     sfn checkOriginIsItsOwnProperty:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "transform 200ms linear"
+        el.setTransitionSpec("transform 200ms linear")
         el.setAttribute("transform-origin" "0% 0%")
         tr.reconcile(el)
         el.setAttribute("transform-origin" "100% 100%")
@@ -1337,7 +1337,7 @@ class EVGTimingTest {
     sfn checkTransparentFade:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "background-color 200ms linear"
+        el.setTransitionSpec("background-color 200ms linear")
         el.backgroundColor = (EVGColor.parse("transparent"))
         tr.reconcile(el)
         el.backgroundColor = (EVGColor.parse("rgb(244,241,254)"))
@@ -1391,7 +1391,7 @@ class EVGTimingTest {
     sfn checkReconcileIsIdempotent:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "transform 200ms linear"
+        el.setTransitionSpec("transform 200ms linear")
         el.setAttribute("transform" "translate(0, 0)")
         tr.reconcile(el)
         el.setAttribute("transform" "translate(0, 100px)")
@@ -1411,7 +1411,7 @@ class EVGTimingTest {
     sfn checkColourReconcileIsIdempotent:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "background-color 200ms linear"
+        el.setTransitionSpec("background-color 200ms linear")
         el.backgroundColor = (EVGColor.parse("rgb(0,0,0)"))
         tr.reconcile(el)
         el.backgroundColor = (EVGColor.parse("rgb(200,200,200)"))
@@ -1430,7 +1430,7 @@ class EVGTimingTest {
     sfn checkStillReactsToARealChange:void (c:TimingCheck) {
         def tr (new EVGTransition())
         def el (new EVGElement())
-        el.transitionSpec = "transform 200ms linear"
+        el.setTransitionSpec("transform 200ms linear")
         el.setAttribute("transform" "translate(0, 0)")
         tr.reconcile(el)
         el.setAttribute("transform" "translate(0, 100px)")

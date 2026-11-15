@@ -417,8 +417,14 @@ class EVGStyleVarTest {
         def el:EVGElement (EVGStyleVarTest.boxWith("box"))
         s.applyTree(el "")
         c.eqInt("the variable is not mistaken for a timing function" (s.getErrorCount()) 0)
-        c.eqStr("and the resolved transition reached the element" el.transitionSpec
+        c.eqStr("and the resolved transition reached the element" el.rare.transitionSpec
             "background-color 150ms ease")
+        ; (transition is one of the rare members, EVGRare: the element made
+        ; its own, the shared one every other element reads is untouched)
+        def none:EVGRare (EVGRare.none())
+        c.eqStr("written to the element's own rare members" none.transitionSpec "")
+        def plain:EVGElement (EVGStyleVarTest.boxWith("plain"))
+        c.eqStr("which an element that set none does not see" plain.rare.transitionSpec "")
 
         ; And a timing function that really is unsupported is still reported,
         ; now that the check happens later: `spring()` is CSS-shaped and is not

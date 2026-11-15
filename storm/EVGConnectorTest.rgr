@@ -177,7 +177,7 @@ class EVGConnectorTest {
         def page:EVGElement (EVGConnectorTest.buildCards(600.0 "1fr 1fr"))
         def lay:EVGLayout (EVGConnectorTest.laidOut(page 600.0 320.0))
         def conn:EVGElement (page.getChild(2))
-        c.ok("it resolved" conn.connectorResolved)
+        c.ok("it resolved" conn.rare.connectorResolved)
         ; The cells are 252 wide: 600 less two 24 paddings and one 48 gap,
         ; halved. So the line runs from x=276 to x=324 at the cells' middle.
         c.eqStr("the shaft joins the facing edges" conn.svgPath "M 276 84 L 324 84")
@@ -196,7 +196,7 @@ class EVGConnectorTest {
         def page:EVGElement (EVGConnectorTest.buildCards(320.0 "1fr"))
         def lay:EVGLayout (EVGConnectorTest.laidOut(page 320.0 420.0))
         def conn:EVGElement (page.getChild(2))
-        c.ok("it resolved" conn.connectorResolved)
+        c.ok("it resolved" conn.rare.connectorResolved)
         ; Stacked, `auto` picks the bottom of the first card and the top of
         ; the second — the whole reason the sides are not written down.
         c.eqStr("it leaves the bottom edge and arrives at the top" conn.svgPath "M 160 144 L 160 192")
@@ -253,7 +253,7 @@ class EVGConnectorTest {
         conn.setAttribute("stroke" "rgb(0,0,0)")
         page.addChild(conn)
         def lay:EVGLayout (EVGConnectorTest.laidOut(page 400.0 200.0))
-        c.ok("it did not resolve" (conn.connectorResolved == false))
+        c.ok("it did not resolve" (conn.rare.connectorResolved == false))
         c.eqStr("and drew nothing rather than a line to the origin" conn.svgPath "")
         def said:boolean false
         def i:int 0
@@ -282,7 +282,7 @@ class EVGConnectorTest {
         conn.setAttribute("stroke" "rgb(0,0,0)")
         page.addChild(conn)
         def lay:EVGLayout (EVGConnectorTest.laidOut(page 400.0 200.0))
-        c.ok("resolved by id" conn.connectorResolved)
+        c.ok("resolved by id" conn.rare.connectorResolved)
         c.eqStr("across the gap between them" conn.svgPath "M 100 30 L 140 30")
     }
 
