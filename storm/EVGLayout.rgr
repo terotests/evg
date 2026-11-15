@@ -3203,7 +3203,19 @@ class EVGLayout {
                     if c.width.isSet {
                         b = c.width.pixels
                     } {
-                        b = (this.estimateChildWidth(c ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx) true))
+                        if (c.flex > 0.0) {
+                            ; A growing item with no basis and no width starts
+                            ; from its max-content size (CSS Flexbox 9.2 3e),
+                            ; 0 for an empty box. The row estimate is the whole
+                            ; line for a block, so two `flex-grow` boxes in a
+                            ; wrapping row each took a line of their own.
+                            b = ((this.intrinsicWidth(c false)) - (c.box.marginLeftPx + c.box.marginRightPx))
+                            if (b < 0.0) {
+                                b = 0.0
+                            }
+                        } {
+                            b = (this.estimateChildWidth(c ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx) true))
+                        }
                     }
                 }
                 ; (clampMain of 0 is the min it holds)
@@ -3390,7 +3402,19 @@ class EVGLayout {
                     if c.width.isSet {
                         b = c.width.pixels
                     } {
-                        b = (this.estimateChildWidth(c ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx) true))
+                        if (c.flex > 0.0) {
+                            ; A growing item with no basis and no width starts
+                            ; from its max-content size (CSS Flexbox 9.2 3e),
+                            ; 0 for an empty box. The row estimate is the whole
+                            ; line for a block, so two `flex-grow` boxes in a
+                            ; wrapping row each took a line of their own.
+                            b = ((this.intrinsicWidth(c false)) - (c.box.marginLeftPx + c.box.marginRightPx))
+                            if (b < 0.0) {
+                                b = 0.0
+                            }
+                        } {
+                            b = (this.estimateChildWidth(c ((innerWidth - c.box.marginLeftPx) - c.box.marginRightPx) true))
+                        }
                     }
                 }
                 def hi:double -1.0
