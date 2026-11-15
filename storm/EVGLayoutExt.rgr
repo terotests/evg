@@ -221,6 +221,10 @@ class EVGLayoutExt {
         return false
     }
 
+    ; a layout of a tree starts: what was remembered of the last is void
+    fn newPass:void () {
+    }
+
     ; the column tracks with the implicit ones the items' placements make
     fn implicitColumns:string (parent:EVGElement colSpec:string) {
         return colSpec

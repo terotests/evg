@@ -13,6 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = path.join(ROOT, "storm/EVGElement.rgr");
 
 const EXPECTED_SKIPS = {
+  icMark: "derived — the mark of the layout pass's last implicitColumns answer, void in the next pass",
   parent: "structure — a back-reference the reconciler owns",
   children: "structure — EVGReconcile decides the child list",
   transitions: "the in-flight animations, which are the reason the element is kept",

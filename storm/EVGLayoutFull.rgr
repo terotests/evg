@@ -51,6 +51,16 @@ class EVGLayoutFull {
     def sawSticky:boolean false
     ; (laneTracks: an auto-fill count that must reach the room, a min-width)
     def laneAtLeast:boolean false
+    ; implicitColumns' last answer: the grid it was for carries icSeq in
+    ; its icMark; a new pass, or a placement written into the items, takes
+    ; a new number, so no earlier answer is found again
+    def icSeq:int 0
+    def icIn:string ""
+    def icOut:string ""
+
+    fn newPass:void () {
+        icSeq = (icSeq + 1)
+    }
 
     ; a sticky box keeps its insets from its scrollport's edges, the
     ; nearest scroll container's padding box (the root's when none), at
@@ -3852,6 +3862,7 @@ class EVGLayoutFull {
         if (moved == false) {
             return (this.gridLeadingLines(lay parent))
         }
+        icSeq = (icSeq + 1)
         def h:double (this.gridLeadingLines(lay parent))
         if (h < 0.0) {
             h = (lay.layoutGridPlaced(parent))
@@ -3864,6 +3875,7 @@ class EVGLayoutFull {
             c.gridRow = (itemAt sR z)
             z = (z + 1)
         }
+        icSeq = (icSeq + 1)
         return h
     }
 
@@ -5054,15 +5066,31 @@ class EVGLayoutFull {
         def needC:boolean false
         def needR:boolean false
         def n:int (parent.getChildCount())
+        ; (rawFirstLine's answer for a placement of numbers alone, the
+        ; templates looked at once)
+        def autoC:boolean (((indexOf cLines "auto-fill") >= 0) || ((indexOf cLines "auto-fit") >= 0))
+        def autoR:boolean (((indexOf rLines "auto-fill") >= 0) || ((indexOf rLines "auto-fit") >= 0))
         def i:int 0
         while (i < n) {
             def c:EVGElement (parent.getChild(i))
             if ((c.hasAbsolutePosition()) == false) {
-                def fc:int (EVGLayoutFull.rawFirstLine(c.gridColumn cLines parent.gridTemplateAreas false))
+                def fc:int 0
+                if (autoC == false) {
+                    fc = (EVGLayoutFull.plainFirstLine(c.gridColumn))
+                }
+                if (fc <= 0) {
+                    fc = (EVGLayoutFull.rawFirstLine(c.gridColumn cLines parent.gridTemplateAreas false))
+                }
                 if (fc < minC) {
                     minC = fc
                 }
-                def fr:int (EVGLayoutFull.rawFirstLine(c.gridRow rLines parent.gridTemplateAreas true))
+                def fr:int 0
+                if (autoR == false) {
+                    fr = (EVGLayoutFull.plainFirstLine(c.gridRow))
+                }
+                if (fr <= 0) {
+                    fr = (EVGLayoutFull.rawFirstLine(c.gridRow rLines parent.gridTemplateAreas true))
+                }
                 if (fr < minR) {
                     minR = fr
                 }
@@ -5096,6 +5124,7 @@ class EVGLayoutFull {
         if (leadR < 0) {
             leadR = 0
         }
+        icSeq = (icSeq + 1)
         def savedC:[string]
         def savedR:[string]
         def j:int 0
@@ -5153,6 +5182,7 @@ class EVGLayoutFull {
             c.gridRow = (itemAt savedR z)
             z = (z + 1)
         }
+        icSeq = (icSeq + 1)
         return h
     }
 
@@ -5180,6 +5210,7 @@ class EVGLayoutFull {
         def rs:[int]
         def rsp:[int]
         this.columnFlowPlace(parent kids cs csp rs rsp)
+        icSeq = (icSeq + 1)
         def q:int 0
         while (q < (array_length kids)) {
             def el:EVGElement (itemAt kids q)
@@ -5195,6 +5226,7 @@ class EVGLayoutFull {
             c.gridRow = (itemAt savedRows z)
             z = (z + 1)
         }
+        icSeq = (icSeq + 1)
         return h
     }
 
@@ -5218,16 +5250,39 @@ class EVGLayoutFull {
     }
 
     fn implicitColumns:string (parent:EVGElement colSpec0:string) {
+        ; (asked for a grid's min-content and max-content widths and again
+        ; when it is laid out, each a walk over all its items)
+        if ((parent.icMark == icSeq) && (colSpec0 == icIn)) {
+            return icOut
+        }
+        def got:string (this.implicitColumnsNow(parent colSpec0))
+        icSeq = (icSeq + 1)
+        parent.icMark = icSeq
+        icIn = colSpec0
+        icOut = got
+        return got
+    }
+
+    fn implicitColumnsNow:string (parent:EVGElement colSpec0:string) {
         def colSpec:string colSpec0
         def minL:int 1
         ; (and tracks before the explicit ones, gridLeading's, when they
         ; are not yet there)
         if (((strlen parent.gridTemplateColumns) > 0) && (parent.gridTemplateColumns != "subgrid")) {
             def li:int 0
+            ; (rawFirstLine's answer for a placement of numbers alone, the
+            ; template looked at once)
+            def autoRep:boolean (((indexOf parent.gridTemplateColumns "auto-fill") >= 0) || ((indexOf parent.gridTemplateColumns "auto-fit") >= 0))
             while (li < (parent.getChildCount())) {
                 def lc:EVGElement (parent.getChild(li))
                 if ((lc.hasAbsolutePosition()) == false) {
-                    def fl:int (EVGLayoutFull.rawFirstLine(lc.gridColumn parent.gridTemplateColumns parent.gridTemplateAreas false))
+                    def fl:int 0
+                    if (autoRep == false) {
+                        fl = (EVGLayoutFull.plainFirstLine(lc.gridColumn))
+                    }
+                    if (fl <= 0) {
+                        fl = (EVGLayoutFull.rawFirstLine(lc.gridColumn parent.gridTemplateColumns parent.gridTemplateAreas false))
+                    }
                     if (fl < minL) {
                         minL = fl
                     }

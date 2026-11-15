@@ -182,6 +182,7 @@ class EVGLayout {
         currentPage = 0
         ; (the CSS layer installed since this layout was made counts too)
         ext = (EVGLayoutExtDefault.ext())
+        ext.newPass()
         this.applyDocumentCss(root)
 
         ; Start from a clean slate. `resolveUnits` refuses to run twice on the
