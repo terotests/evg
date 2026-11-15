@@ -85,6 +85,23 @@ sheet.applyTreeIn(root theme w h coarse)
 
 `transition` is a CSS property on the element, not a keyframe language. The engine interpolates layout and paint values between trees. See `storm/README.md` under Interaction.
 
+## Standard mode
+
+A sheet that starts with `@evg mode standard;` reads more like browser CSS:
+
+```css
+@evg mode standard;
+.btn.primary   { background-color: #14b8a6; }  /* the element wears both classes */
+.list .row     { padding: 4px 8px; }           /* under a .list, at any depth */
+.row           { display: flex; }              /* a row that does not wrap */
+```
+
+- Compound (`.a.b`) and descendant (`.a .b`, any number of parts) selectors. A leading `.theme-x` still scopes the rule to a theme.
+- Inside each group of the resolution order, rules go by specificity (how many classes the selector names), then source order: `.card .title` beats a later `.title`.
+- A flex container that no rule or inline attribute gave a direction or a wrap is `row` and `nowrap`, as in a browser, instead of EVG's `column` and `wrap`.
+
+The directive must come before the rules. A sheet without it behaves exactly as described above, which is how existing UIs keep their look.
+
 ## What this is not
 
 EVG does not run in a browser layout engine. `display: flex` is EVG's flex, measured with EVG's text engine. A property the engine cannot use is not dropped in silence: [`EVGReject`](https://github.com/terotests/evg/blob/master/storm/EVGReject.rgr) records it, and `layout()` drains the list into warnings.

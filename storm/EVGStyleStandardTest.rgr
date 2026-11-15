@@ -1,0 +1,267 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGStyleStandardTest — `@evg mode standard;`
+; ==============================================================================
+;
+; The directive is opt-in, and both halves of that are tested:
+;
+;   WITHOUT IT nothing changes: `.card .x` is still an error and `.a.b` still
+;   matches nothing, a
+;   flex container is still a column that wraps, and the written-down sheet
+;   is byte for byte what it was.
+;
+;   WITH IT a sheet reads like browser CSS for what EVG UIs write most:
+;   compound (`.a.b`) and descendant (`.list .row`) selectors, the stronger
+;   selector winning over a later weaker one, and `display: flex` meaning a
+;   row that does not wrap unless it says otherwise.
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGUnit.rgr"
+Import "EVGStyleSheet.rgr"
+Import "EVGLayout.rgr"
+
+class StdCheck {
+    def passed:int 0
+    def failed:int 0
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn eqStr:void (name:string got:string want:string) {
+        def good:boolean (got == want)
+        if (good == false) {
+            print ((("       got '" + got) + "' want '") + want + "'")
+        }
+        this.ok(name good)
+    }
+
+    fn eqInt:void (name:string got:int want:int) {
+        def good:boolean (got == want)
+        if (good == false) {
+            print (("       got " + (to_string got)) + " want " + (to_string want))
+        }
+        this.ok(name good)
+    }
+}
+
+class EVGStyleStandardTest {
+
+    sfn sheetOf:EVGStyleSheet (css:string) {
+        def s (new EVGStyleSheet())
+        s.parse(css)
+        s.setViewport(800.0 600.0 false)
+        return s
+    }
+
+    sfn div:EVGElement (id:string cls:string) {
+        def el (EVGElement.createDiv())
+        el.id = id
+        el.className = cls
+        return el
+    }
+
+    ; The width a rule wrote, or -1 when none did.
+    sfn w:int (el:EVGElement) {
+        if (el.width.isSet == false) {
+            return (0 - 1)
+        }
+        return (to_int el.width.pixels)
+    }
+
+    sfn testOffByDefault:void (c:StdCheck) {
+        print "--- without the directive nothing changes ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf(".a.b { width: 10px; } .card .x { width: 20px; } .row { display: flex; }"))
+        ; `.a.b` was always read as one class named "a.b", which nothing
+        ; wears; only the descendant selector is reported. Both stay so.
+        c.eqInt("the descendant selector is still an error" (s.getErrorCount()) 1)
+        def ab:EVGElement (EVGStyleStandardTest.div("ab" "a b"))
+        s.applyTree(ab "")
+        c.eqInt("and .a.b still matches nothing" (EVGStyleStandardTest.w(ab)) (0 - 1))
+        c.ok("the sheet is not standard" (s.standard == false))
+        def row:EVGElement (EVGStyleStandardTest.div("r" "row"))
+        s.applyTree(row "")
+        c.eqStr("a flex container is still a column" row.flexDirection "column")
+        c.ok("and its wrap is still EVG's own" (row.flexWrapSet == false))
+        c.ok("the artifact has no mode line" ((indexOf (s.toText()) "M\tstandard") < 0))
+    }
+
+    sfn testDirective:void (c:StdCheck) {
+        print "--- the directive ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode standard;\n.a { width: 1px; }"))
+        c.ok("is read" s.standard)
+        c.eqInt("is not a rule" (s.getRuleCount()) 1)
+        c.eqInt("and not an error" (s.getErrorCount()) 0)
+        def bad:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode quirky; .a { width: 1px; }"))
+        c.ok("an unknown mode is not taken" (bad.standard == false))
+        c.eqInt("and is reported" (bad.getErrorCount()) 1)
+    }
+
+    sfn testCompound:void (c:StdCheck) {
+        print "--- .a.b needs both classes ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode standard; .btn.primary { width: 30px; } .btn { height: 5px; }"))
+        c.eqInt("no errors" (s.getErrorCount()) 0)
+        def root:EVGElement (EVGStyleStandardTest.div("root" ""))
+        def both:EVGElement (EVGStyleStandardTest.div("both" "btn primary"))
+        def one:EVGElement (EVGStyleStandardTest.div("one" "btn"))
+        def other:EVGElement (EVGStyleStandardTest.div("other" "primary"))
+        root.addChild(both)
+        root.addChild(one)
+        root.addChild(other)
+        s.applyTree(root "")
+        c.eqInt("both classes: styled" (EVGStyleStandardTest.w(both)) 30)
+        c.eqInt("only .btn: not" (EVGStyleStandardTest.w(one)) (0 - 1))
+        c.eqInt("only .primary: not" (EVGStyleStandardTest.w(other)) (0 - 1))
+        c.ok("the plain rule still applies" one.height.isSet)
+    }
+
+    sfn testDescendant:void (c:StdCheck) {
+        print "--- .list .item needs the ancestor ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode standard; .list .item { width: 40px; } .list.open .item .label { width: 7px; }"))
+        c.eqInt("no errors" (s.getErrorCount()) 0)
+        def root:EVGElement (EVGStyleStandardTest.div("root" "page"))
+        def list:EVGElement (EVGStyleStandardTest.div("list" "list"))
+        def mid:EVGElement (EVGStyleStandardTest.div("mid" "wrap"))
+        def inside:EVGElement (EVGStyleStandardTest.div("in" "item"))
+        def outside:EVGElement (EVGStyleStandardTest.div("out" "item"))
+        root.addChild(list)
+        list.addChild(mid)
+        mid.addChild(inside)
+        root.addChild(outside)
+        def label:EVGElement (EVGStyleStandardTest.div("lab" "label"))
+        inside.addChild(label)
+        s.applyTree(root "")
+        c.eqInt("under .list (not directly): styled" (EVGStyleStandardTest.w(inside)) 40)
+        c.eqInt("the same class elsewhere: not" (EVGStyleStandardTest.w(outside)) (0 - 1))
+        c.eqInt("a three-part rule whose compound ancestor is not there: not" (EVGStyleStandardTest.w(label)) (0 - 1))
+
+        ; The ancestor changes and nothing about the item does: the item's
+        ; plan depends on what it sits under, so it is styled again.
+        list.className = "list open"
+        s.applyTree(root "")
+        c.eqInt("the ancestor gains .open: the label is styled now" (EVGStyleStandardTest.w(label)) 7)
+    }
+
+    sfn testSpecificity:void (c:StdCheck) {
+        print "--- the stronger selector wins over a later weaker one ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode standard; .card .title { width: 50px; } .a.b { width: 60px; } .title { width: 10px; } .b { width: 11px; }"))
+        def card:EVGElement (EVGStyleStandardTest.div("card" "card"))
+        def title:EVGElement (EVGStyleStandardTest.div("t" "title"))
+        def ab:EVGElement (EVGStyleStandardTest.div("ab" "a b"))
+        card.addChild(title)
+        card.addChild(ab)
+        s.applyTree(card "")
+        c.eqInt(".card .title beats a later .title" (EVGStyleStandardTest.w(title)) 50)
+        c.eqInt(".a.b beats a later .b" (EVGStyleStandardTest.w(ab)) 60)
+        def legacy:EVGStyleSheet (EVGStyleStandardTest.sheetOf(".x { width: 1px; } .y { width: 2px; }"))
+        def xy:EVGElement (EVGStyleStandardTest.div("xy" "y x"))
+        legacy.applyTree(xy "")
+        c.eqInt("one-class rules still go by source order" (EVGStyleStandardTest.w(xy)) 2)
+    }
+
+    sfn testFlexDefaults:void (c:StdCheck) {
+        print "--- display: flex is a row that does not wrap ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode standard; .row { display: flex; } .col { display: flex; flex-direction: column; } .wrap { display: flex; flex-wrap: wrap; } .cell { width: 300px; height: 20px; }"))
+        def root:EVGElement (EVGStyleStandardTest.div("root" ""))
+        def row:EVGElement (EVGStyleStandardTest.div("row" "row"))
+        def col:EVGElement (EVGStyleStandardTest.div("col" "col"))
+        def wrap:EVGElement (EVGStyleStandardTest.div("wrap" "wrap"))
+        def inl:EVGElement (EVGStyleStandardTest.div("inl" ""))
+        inl.setAttribute("display" "flex")
+        inl.markInline("display")
+        root.addChild(row)
+        root.addChild(col)
+        root.addChild(wrap)
+        root.addChild(inl)
+        s.applyTree(root "")
+        c.eqStr(".row is a row" row.flexDirection "row")
+        c.eqStr("that does not wrap" row.flexWrap "nowrap")
+        c.eqStr(".col keeps its column" col.flexDirection "column")
+        c.eqStr(".wrap is a row" wrap.flexDirection "row")
+        c.eqStr("that keeps its wrap" wrap.flexWrap "wrap")
+        c.eqStr("an inline flex box with no class is a row too" inl.flexDirection "row")
+
+        ; and the layout agrees: three 300px cells in a 400px row stay on one
+        ; line (nowrap shrinks or overflows, it does not wrap)
+        def line:EVGElement (EVGStyleStandardTest.div("line" "row"))
+        line.setAttribute("width" "400px")
+        line.markInline("width")
+        def a:EVGElement (EVGStyleStandardTest.div("a" "cell"))
+        def b:EVGElement (EVGStyleStandardTest.div("b" "cell"))
+        def d:EVGElement (EVGStyleStandardTest.div("d" "cell"))
+        line.addChild(a)
+        line.addChild(b)
+        line.addChild(d)
+        s.applyTree(line "")
+        def lay (new EVGLayout())
+        lay.setPageSize(800.0 600.0)
+        lay.layout(line)
+        c.ok("the cells sit side by side" ((b.calculatedX > a.calculatedX) && (d.calculatedX > b.calculatedX)))
+        c.ok("on one line" (((b.calculatedY - a.calculatedY) < 1.0) && ((d.calculatedY - a.calculatedY) < 1.0)))
+    }
+
+    sfn testCacheAgreesWithDirect:void (c:StdCheck) {
+        print "--- the plan cache agrees with the direct path ---"
+        def css:string "@evg mode standard; .list .item { width: 40px; } .item.big { height: 9px; } .row { display: flex; }"
+        def s1:EVGStyleSheet (EVGStyleStandardTest.sheetOf(css))
+        def s2:EVGStyleSheet (EVGStyleStandardTest.sheetOf(css))
+        def r1:EVGElement (EVGStyleStandardTest.div("r" "list row"))
+        def r2:EVGElement (EVGStyleStandardTest.div("r" "list row"))
+        def i1:EVGElement (EVGStyleStandardTest.div("i" "item big"))
+        def i2:EVGElement (EVGStyleStandardTest.div("i" "item big"))
+        r1.addChild(i1)
+        r2.addChild(i2)
+        s1.applyTree(r1 "")
+        s2.applyTreeDirect(r2 "")
+        c.eqInt("width" (EVGStyleStandardTest.w(i1)) (EVGStyleStandardTest.w(i2)))
+        c.ok("height" (i1.height.isSet == i2.height.isSet))
+        c.eqStr("direction" r1.flexDirection r2.flexDirection)
+        c.eqStr("wrap" r1.flexWrap r2.flexWrap)
+    }
+
+    sfn testArtifact:void (c:StdCheck) {
+        print "--- the written-down sheet keeps the mode ---"
+        def s:EVGStyleSheet (EVGStyleStandardTest.sheetOf("@evg mode standard; .list .item.big { width: 40px; } .row { display: flex; }"))
+        def back (new EVGStyleSheet())
+        c.ok("reads back" (back.loadText((s.toText()))))
+        back.setViewport(800.0 600.0 false)
+        c.ok("standard" back.standard)
+        def r:EVGElement (EVGStyleStandardTest.div("r" "list row"))
+        def i:EVGElement (EVGStyleStandardTest.div("i" "item big"))
+        def j:EVGElement (EVGStyleStandardTest.div("j" "item"))
+        r.addChild(i)
+        r.addChild(j)
+        back.applyTree(r "")
+        c.eqInt("the descendant compound rule survives" (EVGStyleStandardTest.w(i)) 40)
+        c.eqInt("and still needs both classes" (EVGStyleStandardTest.w(j)) (0 - 1))
+        c.eqStr("and the flex default" r.flexDirection "row")
+    }
+
+    sfn main:void () {
+        def c (new StdCheck())
+        print "=== EVG stylesheet: @evg mode standard ==="
+        EVGStyleStandardTest.testOffByDefault(c)
+        EVGStyleStandardTest.testDirective(c)
+        EVGStyleStandardTest.testCompound(c)
+        EVGStyleStandardTest.testDescendant(c)
+        EVGStyleStandardTest.testSpecificity(c)
+        EVGStyleStandardTest.testFlexDefaults(c)
+        EVGStyleStandardTest.testCacheAgreesWithDirect(c)
+        EVGStyleStandardTest.testArtifact(c)
+        print ""
+        print ((("passed=" + (to_string c.passed)) + " failed=") + (to_string c.failed))
+        if (c.failed == 0) {
+            print "ALL PASS"
+        } {
+            print "SOME FAILED"
+        }
+    }
+}
