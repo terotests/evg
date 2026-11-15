@@ -3586,10 +3586,103 @@ class EVGLayoutFull {
         return out
     }
 
+    ; The first line of a placement written with numbers alone, "3",
+    ; "3 / 5", "3 / span 2" or "3 / span": what rawFirstLine answers for it
+    ; when the template has no auto repetition, and countsFromEnd is false
+    ; for. 0 when the placement is anything else. A table's cells are
+    ; placed so, and a grid asks each of its items several times a layout:
+    ; reading the characters here took the place of four parsed sides and
+    ; their strings (7 in 10 of the layout of a 1 000-row table with one
+    ; cell changed).
+    sfn plainFirstLine:int (spec:string) {
+        def n:int (strlen spec)
+        if ((n == 0) || (n > 24)) {
+            return 0
+        }
+        def i:int 0
+        def a:int 0
+        def nd:int 0
+        while (i < n) {
+            def c:int (charAt spec i)
+            if ((c < 48) || (c > 57)) {
+                break
+            }
+            a = ((a * 10) + (c - 48))
+            nd = (nd + 1)
+            i = (i + 1)
+        }
+        if (((nd == 0) || (nd > 7)) || (a == 0)) {
+            return 0
+        }
+        if (i == n) {
+            return a
+        }
+        while ((i < n) && ((charAt spec i) == 32)) {
+            i = (i + 1)
+        }
+        if ((i >= n) || ((charAt spec i) != 47)) {
+            return 0
+        }
+        i = (i + 1)
+        while ((i < n) && ((charAt spec i) == 32)) {
+            i = (i + 1)
+        }
+        if (i >= n) {
+            return 0
+        }
+        ; ("span", then a count or nothing)
+        if (((i + 4) <= n) && ((substring spec i (i + 4)) == "span")) {
+            i = (i + 4)
+            if (i == n) {
+                return a
+            }
+            if ((charAt spec i) != 32) {
+                return 0
+            }
+            while ((i < n) && ((charAt spec i) == 32)) {
+                i = (i + 1)
+            }
+            def sd:int 0
+            while (i < n) {
+                def c2:int (charAt spec i)
+                if ((c2 < 48) || (c2 > 57)) {
+                    break
+                }
+                sd = (sd + 1)
+                i = (i + 1)
+            }
+            if (((sd == 0) || (sd > 7)) || (i != n)) {
+                return 0
+            }
+            return a
+        }
+        def b:int 0
+        def bd:int 0
+        while (i < n) {
+            def c3:int (charAt spec i)
+            if ((c3 < 48) || (c3 > 57)) {
+                break
+            }
+            b = ((b * 10) + (c3 - 48))
+            bd = (bd + 1)
+            i = (i + 1)
+        }
+        if ((((bd == 0) || (bd > 7)) || (b == 0)) || (i != n)) {
+            return 0
+        }
+        if (b < a) {
+            return b
+        }
+        return a
+    }
+
     ; a negative line or a name in the placement, which the core resolves
     ; against the grid with its implicit tracks, not the explicit one
     sfn countsFromEnd:boolean (spec:string) {
         if ((strlen spec) == 0) {
+            return false
+        }
+        if ((EVGLayoutFull.plainFirstLine(spec)) > 0) {
             return false
         }
         def s:string (trim spec)
@@ -3613,6 +3706,13 @@ class EVGLayoutFull {
 
     ; the first line of rawLines, 9999 when there is none
     sfn rawFirstLine:int (spec:string tplSpec:string areas:string isRow:boolean) {
+        def pf:int (EVGLayoutFull.plainFirstLine(spec))
+        if (pf > 0) {
+            if (((indexOf tplSpec "auto-fill") >= 0) || ((indexOf tplSpec "auto-fit") >= 0)) {
+                return 9999
+            }
+            return pf
+        }
         def r:[int] (EVGLayoutFull.rawLines(spec tplSpec areas isRow))
         if ((array_length r) == 0) {
             return 9999
