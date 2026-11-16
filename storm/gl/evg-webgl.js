@@ -161,7 +161,8 @@ void main() {
   vec2 ndc = vec2((p.x / uPage.x) * 2.0 - 1.0, 1.0 - (p.y / uPage.y) * 2.0);
   gl_Position = vec4(ndc, 0.0, 1.0);
   vColor = aColor;
-  vColor2 = aColor2;
+  // (a shadow's offset, in its far stop, is in page pixels like vLocal)
+  vColor2 = aShape.z == 4.0 ? vec4(aColor2.xy * uView.xy, aColor2.zw) : aColor2;
   vGrad = aGrad;
   vT = aCorner;
   // These four are what the fragment shader measures in PAGE pixels, so the
@@ -297,6 +298,14 @@ void main() {
     // zero-wide band is undefined; one pixel of antialiasing stands in.
     float soft = max(b * 0.5, clamp(fwidth(sd), 0.35, 1.5));
     float sa = smoothstep(soft, -soft, sd);
+    // (not under the box itself: the box sits the offset back from here,
+    // vColor2.xy, and an outer shadow is only drawn outside it, CSS
+    // Backgrounds 3, 7.1)
+    if (vColor2.z > 0.5) {
+      vec2 hbox = max(vHalf - vec2(b), vec2(0.01));
+      float inBox = sdRoundedBox(vLocal + vColor2.xy, hbox, rr);
+      sa *= smoothstep(-0.5, 0.5, inBox);
+    }
     if (sa <= 0.002) discard;
     outColor = vec4(vColor.rgb, vColor.a * sa);
     return;
@@ -5007,7 +5016,10 @@ function buildFrame(gl, doc, opts = {}) {
         rots.push(((c.rot || 0) * Math.PI) / 180);
         origins.push(c.rox || 0, c.roy || 0, c.rox === undefined ? 0 : 1);
         colors.push(sc[0] / 255, sc[1] / 255, sc[2] / 255, sc[3]);
-        colors2.push(sc[0] / 255, sc[1] / 255, sc[2] / 255, sc[3]);
+        // (the shadow's offset, for the shader to leave the box's own area
+        // out: CSS clips an outer box-shadow to outside the border box, and
+        // under a transparent box a field showed grey)
+        colors2.push(c.sh.x || 0, c.sh.y || 0, 1, 0);
         grads.push(0);
       }
       rects.push(c.x, c.y, c.w, c.h);
