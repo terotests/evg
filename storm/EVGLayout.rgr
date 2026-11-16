@@ -5294,7 +5294,9 @@ class EVGLayout {
                 def i:int 0
                 while (i < n) {
                     def kid:EVGElement (element.getChild(i))
-                    kid.moveSubtree(dx dy)
+                    if ((kid.isFixedPosition()) == false) {
+                        kid.moveSubtreeKeepFixed(dx dy)
+                    }
                     i = (i + 1)
                 }
                 element.paintLeft = (element.paintLeft + dx)
