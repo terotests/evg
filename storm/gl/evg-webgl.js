@@ -397,12 +397,25 @@ uniform vec4 uColor;
 uniform vec4 uColor2;
 uniform float uGrad;
 uniform vec4 uBox;
+uniform vec4 uRBox;
+uniform float uRRad;
 in vec2 vPage;
 out vec4 outColor;
 void main() {
-  if (uGrad < 0.5) { outColor = uColor; return; }
+  // (a picture in a box with rounded corners: cut to the box, the corner's
+  // distance as the rectangles' own; CSS clips replaced content by its radius)
+  float keep = 1.0;
+  if (uRRad > 0.0) {
+    vec2 hb = uRBox.zw * 0.5;
+    vec2 q = abs(vPage - uRBox.xy - hb) - hb + vec2(uRRad);
+    float d = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - uRRad;
+    keep = clamp(0.5 - d, 0.0, 1.0);
+    if (keep <= 0.0) discard;
+  }
+  if (uGrad < 0.5) { outColor = vec4(uColor.rgb, uColor.a * keep); return; }
   vec2 t = (vPage - uBox.xy) / max(uBox.zw, vec2(0.001));
-  outColor = mix(uColor, uColor2, clamp(uGrad > 1.5 ? t.x : t.y, 0.0, 1.0));
+  vec4 c = mix(uColor, uColor2, clamp(uGrad > 1.5 ? t.x : t.y, 0.0, 1.0));
+  outColor = vec4(c.rgb, c.a * keep);
 }`;
 
 /** The rings of a path command, as flat [x,y,…] arrays. */
@@ -4573,6 +4586,8 @@ function programsFor(gl) {
     pathColor2Loc: gl.getUniformLocation(pathProg, "uColor2"),
     pathGradLoc: gl.getUniformLocation(pathProg, "uGrad"),
     pathBoxLoc: gl.getUniformLocation(pathProg, "uBox"),
+    pathRBoxLoc: gl.getUniformLocation(pathProg, "uRBox"),
+    pathRRadLoc: gl.getUniformLocation(pathProg, "uRRad"),
     blurProg,
     blurCornerLoc: gl.getAttribLocation(blurProg, "aCorner"),
     blurSrc: gl.getUniformLocation(blurProg, "uSrc"),
@@ -4880,6 +4895,8 @@ function buildFrame(gl, doc, opts = {}) {
       if (!rings.length) continue;
       const col = c.c || [0, 0, 0, 1];
       const rgba = [col[0] / 255, col[1] / 255, col[2] / 255, col[3]];
+      // (`r` on a vector: the rounded box its picture is cut to, x/y/w/h)
+      const rr = c.r > 0 ? [c.x, c.y, c.w, c.h, c.r] : null;
       if (c.k === KIND.STROKE) {
         // Dashes are geometry, not a paint mode: the pattern cuts the
         // rings and what is left is stroked exactly as a solid line is,
@@ -4887,7 +4904,7 @@ function buildFrame(gl, doc, opts = {}) {
         const pat = parseDash(c.dash);
         const dashed = pat.length ? dashRings(rings, pat, c.dashoff || 0) : rings;
         const tris = strokeTriangles(dashed, c.t || 1, c.cap | 0, c.join | 0, viewScaleOfFrame);
-        if (tris.length) pushPath({ kind: "tris", verts: new Float32Array(tris), color: rgba });
+        if (tris.length) pushPath({ kind: "tris", verts: new Float32Array(tris), color: rgba, rr });
       } else {
         // A vector filled with a gradient keeps BOTH now: the rings say what
         // shape it is, `c2` and `gd` how it is shaded. Flattened to one
@@ -4899,7 +4916,7 @@ function buildFrame(gl, doc, opts = {}) {
         // slice is not its ink, and a label on the slice is not on the slide.
         if (guard) painted.push({ t: "shape", x: bounds[0], y: bounds[1], w: bounds[2] - bounds[0], h: bounds[3] - bounds[1] });
         pushPath({ kind: "fill", rings: rings.map((r) => new Float32Array(r)),
-                   bounds, evenOdd: !!c.eo, color: rgba,
+                   bounds, evenOdd: !!c.eo, color: rgba, rr,
                    grad: c.c2 ? (c.gd === 1 ? 2 : 1) : 0,
                    color2: [far[0] / 255, far[1] / 255, far[2] / 255, far[3]] });
       }
@@ -5324,6 +5341,9 @@ function buildFrame(gl, doc, opts = {}) {
   // flat path after a shaded one would otherwise keep the ramp.
   const setPathPaint = (op, color) => {
     gl.uniform4f(pathColorLoc, color[0], color[1], color[2], color[3]);
+    const rr = op && op.rr;
+    gl.uniform1f(built.pathRRadLoc, rr ? rr[4] : 0);
+    if (rr) gl.uniform4f(built.pathRBoxLoc, rr[0], rr[1], rr[2], rr[3]);
     if (op && op.grad) {
       const c2 = op.color2 || color;
       const [x0, y0, x1, y1] = op.bounds || [0, 0, 1, 1];

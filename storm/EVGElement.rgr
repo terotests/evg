@@ -1538,6 +1538,24 @@ class EVGElement {
         }
     }
 
+    ; The same walk, except that a FIXED box under this one and everything
+    ; under it stay where they are: a fixed box is placed against the
+    ; viewport, so a kept subtree moved in the flow, or a scrolled one paying
+    ; its owed shift, does not move it (a toast in a page scrolled by 418 px
+    ; was drawn 418 px below the viewport from the second frame on).
+    fn moveSubtreeKeepFixed:void (dx:double dy:double) {
+        this.moveSelf(dx dy)
+        def i:int 0
+        def n:int (array_length children)
+        while (i < n) {
+            def kid:EVGElement (itemAt children i)
+            if ((kid.isFixedPosition()) == false) {
+                kid.moveSubtreeKeepFixed(dx dy)
+            }
+            i = (i + 1)
+        }
+    }
+
     ; Pay the scroll this subtree is owed — see `shiftDx`. Cheap to ask on
     ; a node that owes nothing, which is every node but the far rows.
     fn settleShift:void () {
@@ -1552,7 +1570,9 @@ class EVGElement {
         def n:int (array_length children)
         while (i < n) {
             def kid:EVGElement (itemAt children i)
-            kid.moveSubtree(dx dy)
+            if ((kid.isFixedPosition()) == false) {
+                kid.moveSubtreeKeepFixed(dx dy)
+            }
             i = (i + 1)
         }
     }

@@ -2062,7 +2062,38 @@ class EVGDisplayList {
             if cut {
                 this.addClip(x y w h)
             }
+            def svgFrom:int (array_length cmds)
             this.walkSvgDocument(el x y w h)
+            ; A replaced element's content is clipped by its border-radius
+            ; (CSS Backgrounds 5.3): clips are rectangles, so the picture's
+            ; fills and strokes carry the box's corner as `r` on a command
+            ; whose x/y/w/h is the box, and a backend cuts them to it (an
+            ; avatar's round picture). One radius only: per-corner is not cut.
+            def svgRad:double (EVGDisplayList.radiusPx((el.box.borderRadius.isSet && (el.box.borderRadius.isPercent())) el.box.borderRadius.value el.box.borderRadiusPx w))
+            if (el.box.hasPerCornerRadius()) {
+                svgRad = 0.0
+            }
+            def svgHalf:double (w / 2.0)
+            if ((h / 2.0) < svgHalf) {
+                svgHalf = (h / 2.0)
+            }
+            if (svgRad > svgHalf) {
+                svgRad = svgHalf
+            }
+            if (svgRad > 0.0) {
+                def si:int svgFrom
+                while (si < (array_length cmds)) {
+                    def sc:EVGDrawCmd (itemAt cmds si)
+                    if (((sc.kind == 6) || (sc.kind == 7)) && (sc.radius == 0.0)) {
+                        sc.x = x
+                        sc.y = y
+                        sc.w = w
+                        sc.h = h
+                        sc.radius = svgRad
+                    }
+                    si = (si + 1)
+                }
+            }
             if cut {
                 this.addClipEnd()
             }
