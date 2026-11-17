@@ -101,6 +101,7 @@ const RGR_SUITES = [
   "EVGStyleCacheTest.rgr",
   "EVGComponentTest.rgr",
   "EVGViewportUnitTest.rgr",
+  "EVGColorModernTest.rgr",
   "EVGFlexRulesTest.rgr",
   "EVGFlexWrapTest.rgr",
   "EVGMultiColTest.rgr",
