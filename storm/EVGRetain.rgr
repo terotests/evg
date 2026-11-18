@@ -1,0 +1,159 @@
+; SPDX-License-Identifier: MIT
+; ==============================================================================
+; EVGRetain — the fast path of a host that keeps its tree from frame to frame
+; ==============================================================================
+;
+; A frame of a game or a page mostly changes little: a sprite moves, a tile
+; turns another colour, a counter fades. A host that builds its tree again
+; for that, cascades it and lays it out pays for the whole page to move one
+; box. This is the shared rule two hosts use to pay only for what changed:
+; RangerGames (the game's JSX tree, `rg_engine/src/ui.rs`) and RangerDOM
+; (the page's render tree, `view/src/dom_view.rs`).
+;
+; --- THE TIERS ------------------------------------------------------------------
+;
+;   0  nothing changed: the last frame's commands stand
+;   1  only PAINT changed: properties that move no box (`paintOnly`). They
+;      are written on the element that is already laid out (`patch`), the
+;      layout is not run, and the display list is built again from the boxes
+;      it has (`paintFrame`)
+;   2  anything else: the host's full path (a new tree, cascade, layout)
+;
+; A host decides the tier from what it knows of its own description of an
+; element (`tierOf` compares two lists of inline properties) and keeps the
+; full path for everything it cannot prove to be tier 0 or 1. A special
+; feature (a filter, a transition, an animation the sheet runs) is simply
+; not on the paint list, so it takes the full path where it is used and
+; nowhere else.
+;
+; --- WHY THESE PROPERTIES -----------------------------------------------------
+;
+; Each is read by the display list and the paint bounds only, never by the
+; layout: `transform` and its parts (where a box is DRAWN, not where it is
+; laid out — the bounds pass reads `hasTransform` for culling, and
+; `paintFrame` runs that pass), `opacity` and `background-color`. `color` is
+; not: an element hands its colour down to its text in the layout pass.
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGLayout.rgr"
+
+class EVGRetain {
+
+    ; Whether writing `name` (kebab or camel case) can change only what is
+    ; drawn, never a box.
+    sfn paintOnly:boolean (name:string) {
+        if ((name == "transform") || (name == "opacity")) {
+            return true
+        }
+        if ((name == "background-color") || (name == "backgroundColor")) {
+            return true
+        }
+        if ((name == "transform-origin") || (name == "transformOrigin")) {
+            return true
+        }
+        if ((name == "translate-x") || (name == "translateX")) {
+            return true
+        }
+        if ((name == "translate-y") || (name == "translateY")) {
+            return true
+        }
+        if ((name == "rotate") || (name == "scale")) {
+            return true
+        }
+        return false
+    }
+
+    ; The tier of an element whose inline properties were `oldNames` =
+    ; `oldVals` and are now `newNames` = `newVals` (in any order): 0 the
+    ; same, 1 only paint properties differ (one set, changed or gone), 2 a
+    ; property that can move a box differs.
+    sfn tierOf:int (oldNames:[string] oldVals:[string] newNames:[string] newVals:[string]) {
+        def tier:int 0
+        def i:int 0
+        while (i < (array_length newNames)) {
+            def n:string (itemAt newNames i)
+            def v:string (itemAt newVals i)
+            def at:int (indexOf oldNames n)
+            def same:boolean false
+            if (at >= 0) {
+                if ((itemAt oldVals at) == v) {
+                    same = true
+                }
+            }
+            if (same == false) {
+                if (EVGRetain.paintOnly(n)) {
+                    tier = 1
+                } {
+                    return 2
+                }
+            }
+            i = (i + 1)
+        }
+        def j:int 0
+        while (j < (array_length oldNames)) {
+            def on:string (itemAt oldNames j)
+            if ((indexOf newNames on) < 0) {
+                if (EVGRetain.paintOnly(on)) {
+                    tier = 1
+                } {
+                    return 2
+                }
+            }
+            j = (j + 1)
+        }
+        return tier
+    }
+
+    ; A paint property written on a laid-out element, as an inline one: the
+    ; boxes stand. Its `paintStamp` moves on, so commands a display list kept
+    ; for it are drawn afresh; a host that keeps a subtree around it
+    ; (`keepLayout`) moves on the stamp of that subtree's root too.
+    sfn patch:void (el:EVGElement name:string value:string) {
+        el.setAttribute(name value)
+        el.markInline(name)
+        el.paintStamp = (el.paintStamp + 1)
+    }
+
+    ; …and taken away again: the value an element has with nothing set
+    ; (what a fresh element of the host's would have).
+    sfn unpatch:void (el:EVGElement name:string) {
+        if ((name == "transform") || ((name == "transform-origin") || (name == "transformOrigin"))) {
+            el.setAttribute(name "none")
+        }
+        if (name == "opacity") {
+            el.setAttribute(name "1")
+        }
+        if ((name == "background-color") || (name == "backgroundColor")) {
+            el.setAttribute(name "transparent")
+        }
+        if (((name == "translate-x") || (name == "translateX")) || ((name == "translate-y") || (name == "translateY"))) {
+            el.setAttribute(name "0")
+        }
+        if (name == "rotate") {
+            el.setAttribute(name "0")
+        }
+        if (name == "scale") {
+            el.setAttribute(name "1")
+        }
+        el.paintStamp = (el.paintStamp + 1)
+    }
+
+    ; After tier-1 patches: the paint bounds measured again (a transform
+    ; changes where a subtree draws, and whether it can be culled), the
+    ; boxes left as the last layout put them. Then build the display list as
+    ; after a layout.
+    sfn paintFrame:void (lay:EVGLayout root:EVGElement) {
+        EVGRetain.staleBounds(root)
+        lay.measurePaintBounds(root)
+    }
+
+    sfn staleBounds:void (el:EVGElement) {
+        el.boundsFresh = false
+        def i:int 0
+        while (i < (array_length el.children)) {
+            EVGRetain.staleBounds((itemAt el.children i))
+            i = (i + 1)
+        }
+    }
+}
