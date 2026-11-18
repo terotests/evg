@@ -189,6 +189,13 @@ class EVGRetain {
             }
             j = (j + 1)
         }
+        ; (what is under a changed element is laid out again with it: a box
+        ; that got narrower hands its children new inputs, and a flex
+        ; child's are not all ones a kept subtree compares)
+        if d {
+            EVGRetain.notKept(el)
+            return true
+        }
         def i:int 0
         while (i < (array_length el.children)) {
             if (EVGRetain.keepBeside((itemAt el.children i) dirty)) {
@@ -196,9 +203,25 @@ class EVGRetain {
             }
             i = (i + 1)
         }
-        el.keepLayout = true
+        ; (an absolute or fixed box is placed by its own pass, which a kept
+        ; layout skips: laid out every time, as RangerDOM's DomMemo does)
+        if (el.isAbsolute || ((el.position == "absolute") || ((el.position == "fixed") || (el.position == "sticky")))) {
+            el.keepLayout = false
+        } {
+            el.keepLayout = true
+        }
         el.layoutClean = (d == false)
         return d
+    }
+
+    sfn notKept:void (el:EVGElement) {
+        el.keepLayout = false
+        el.layoutClean = false
+        def i:int 0
+        while (i < (array_length el.children)) {
+            EVGRetain.notKept((itemAt el.children i))
+            i = (i + 1)
+        }
     }
 
     sfn staleBounds:void (el:EVGElement) {
