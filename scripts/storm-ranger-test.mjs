@@ -125,6 +125,7 @@ const RGR_SUITES = [
   "EvgBitmapTracerTest.rgr",
   "EVGEffectTest.rgr",
   "EVGRelayoutTest.rgr",
+  "EVGRetainTest.rgr",
   "EVGTextOverflowTest.rgr",
   "EVGTextDecorationTest.rgr",
 ];

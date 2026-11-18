@@ -1,0 +1,200 @@
+; SPDX-License-Identifier: MIT
+; ==============================================================================
+; EVGRetainTest — a paint-only change on a kept tree draws what a fresh tree draws
+; ==============================================================================
+;
+; A board of tiles and a sprite, cascaded and laid out once. Then, frame by
+; frame, the sprite's transform, a tile's background and another's opacity
+; change through `EVGRetain.patch` and `paintFrame`, with no layout. Each
+; frame's display list must be the one a FRESH tree with those values,
+; cascaded and laid out from nothing, gives: the same commands, kinds,
+; boxes and colours, in the same order.
+;
+; Also asserted: `tierOf` (same, paint-only, layout; added and removed
+; properties) and that a patch moves no box.
+; ==============================================================================
+
+Import "EVGElement.rgr"
+Import "EVGLayout.rgr"
+Import "EVGStyleSheet.rgr"
+Import "EVGDisplayList.rgr"
+Import "EVGRetain.rgr"
+
+class RetainCheck {
+    def passed:int 0
+    def failed:int 0
+
+    Constructor () {
+    }
+
+    fn ok:void (name:string cond:boolean) {
+        if cond {
+            passed = (passed + 1)
+            print ("  PASS " + name)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + name)
+        }
+    }
+
+    fn css:string () {
+        def s:string ""
+        s = (s + ".game { display: flex; flex-direction: column; width: 100%; height: 100%; background-color: #112233; }\n")
+        s = (s + ".bar { display: flex; flex-direction: row; justify-content: space-between; padding: 8px 16px; background-color: #224466; }\n")
+        s = (s + ".board { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; padding: 16px; position: relative; flex-grow: 1; }\n")
+        s = (s + ".tile { width: 120px; height: 80px; background-color: #44aa88; border-radius: 12px; }\n")
+        s = (s + ".sprite { position: absolute; left: 0px; top: 0px; width: 48px; height: 48px; border-radius: 24px; background-color: #ffdd33; }\n")
+        return s
+    }
+
+    fn div:EVGElement (cls:string) {
+        def d (EVGElement.createDiv())
+        d.className = cls
+        return d
+    }
+
+    ; the scene with the frame's values written as inline properties
+    fn scene:EVGElement (tx:int bg:string op:string) {
+        def g (this.div("game"))
+        def bar (this.div("bar"))
+        bar.addChild((this.div("tile")))
+        g.addChild(bar)
+        def board (this.div("board"))
+        def i:int 0
+        while (i < 12) {
+            def t (this.div("tile"))
+            if ((i == 3) && ((strlen bg) > 0)) {
+                t.setAttribute("background-color" bg)
+                t.markInline("background-color")
+            }
+            if ((i == 5) && ((strlen op) > 0)) {
+                t.setAttribute("opacity" op)
+                t.markInline("opacity")
+            }
+            board.addChild(t)
+            i = (i + 1)
+        }
+        def sp (this.div("sprite"))
+        if (tx > 0) {
+            def tr:string (("translate(" + (to_string tx)) + "px, 10px)")
+            sp.setAttribute("transform" tr)
+            sp.markInline("transform")
+        }
+        board.addChild(sp)
+        g.addChild(board)
+        return g
+    }
+
+    fn sheet:EVGStyleSheet () {
+        def s (new EVGStyleSheet())
+        s.parse((this.css()))
+        return s
+    }
+
+    fn laid:EVGLayout (root:EVGElement) {
+        def sh (this.sheet())
+        sh.setViewport(800.0 600.0 false)
+        sh.applyTree(root "")
+        def lay (new EVGLayout())
+        lay.setPageSize(800.0 600.0)
+        lay.layout(root)
+        return lay
+    }
+
+    fn listOf:string (lay:EVGLayout root:EVGElement) {
+        def dl (new EVGDisplayList())
+        dl.setTextEngine((lay.getTextEngine()))
+        dl.build(root)
+        return dl.toJson()
+    }
+
+    sfn words:[string] (s:string) {
+        def out:[string]
+        def start:int 0
+        def i:int 0
+        while (i < (strlen s)) {
+            if ((charAt s i) == 32) {
+                push out (substring s start i)
+                start = (i + 1)
+            }
+            i = (i + 1)
+        }
+        push out (substring s start (strlen s))
+        return out
+    }
+
+    fn run:void () {
+        print "EVGRetain: paint-only frames on a kept tree"
+        def live (this.scene(0 "" ""))
+        def lay (this.laid(live))
+        def board:EVGElement (itemAt live.children 1)
+        def sprite:EVGElement (itemAt board.children 12)
+        def tile3:EVGElement (itemAt board.children 3)
+        def tile5:EVGElement (itemAt board.children 5)
+        def first:string (this.listOf(lay live))
+        def x0:double tile3.calculatedX
+        def y0:double tile3.calculatedY
+        def f:int 1
+        while (f <= 3) {
+            def tx:int (f * 40)
+            def tr:string (("translate(" + (to_string tx)) + "px, 10px)")
+            EVGRetain.patch(sprite "transform" tr)
+            def bg:string ""
+            def op:string ""
+            if (f >= 2) {
+                bg = "#ee8844"
+                EVGRetain.patch(tile3 "background-color" bg)
+            }
+            if (f == 3) {
+                op = "0.5"
+                EVGRetain.patch(tile5 "opacity" op)
+            }
+            EVGRetain.paintFrame(lay live)
+            def got:string (this.listOf(lay live))
+            def fresh (this.scene(tx bg op))
+            def flay (this.laid(fresh))
+            def want:string (this.listOf(flay fresh))
+            this.ok((("frame " + (to_string f)) + ": the kept tree draws what a fresh one draws") (got == want))
+            this.ok((("frame " + (to_string f)) + ": and that is not what the first frame drew") (got != first))
+            if (got != want) {
+                print "--- kept"
+                print got
+                print "--- fresh"
+                print want
+            }
+            f = (f + 1)
+        }
+        this.ok("no box moved" ((tile3.calculatedX == x0) && (tile3.calculatedY == y0)))
+        this.ok("the transform reached the bounds (the subtree is unbounded)" board.paintUnbounded)
+
+        def n0:[string] (RetainCheck.words("transform width"))
+        def v0:[string] (RetainCheck.words("a 10px"))
+        def n1:[string] (RetainCheck.words("width transform"))
+        def v1:[string] (RetainCheck.words("10px a"))
+        def v2:[string] (RetainCheck.words("10px b"))
+        def v3:[string] (RetainCheck.words("12px a"))
+        def n4:[string] (RetainCheck.words("width"))
+        def v4:[string] (RetainCheck.words("10px"))
+        def n5:[string] (RetainCheck.words("width opacity"))
+        def v5:[string] (RetainCheck.words("10px 0.5"))
+        def n6:[string] (RetainCheck.words("transform"))
+        def v6:[string] (RetainCheck.words("a"))
+        this.ok("tierOf: the same in another order is 0" ((EVGRetain.tierOf(n0 v0 n1 v1)) == 0))
+        this.ok("tierOf: a transform changed is 1" ((EVGRetain.tierOf(n0 v0 n1 v2)) == 1))
+        this.ok("tierOf: a width changed is 2" ((EVGRetain.tierOf(n0 v0 n1 v3)) == 2))
+        this.ok("tierOf: a transform gone is 1" ((EVGRetain.tierOf(n0 v0 n4 v4)) == 1))
+        this.ok("tierOf: an opacity added is 1" ((EVGRetain.tierOf(n4 v4 n5 v5)) == 1))
+        this.ok("tierOf: a width gone is 2" ((EVGRetain.tierOf(n0 v0 n6 v6)) == 2))
+        print ((("EVGRetain: " + (to_string passed)) + " passed, ") + ((to_string failed) + " failed"))
+        if (failed > 0) {
+            print "FAILURES"
+        } {
+            print "ALL PASS"
+        }
+    }
+
+    sfn m@(main):void () {
+        def c (new RetainCheck())
+        c.run()
+    }
+}
