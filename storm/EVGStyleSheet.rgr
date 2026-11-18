@@ -1852,13 +1852,64 @@ class EVGStyleSheet {
             ; for and this filter runs per element, which is cheap because
             ; `hasInline` answers immediately when nothing is inline.
             if ((el.hasInline(name)) == false) {
-                el.setAttribute(name (itemAt planValues (from + i)))
+                if ((this.sidesAroundInline(el name (itemAt planValues (from + i)))) == false) {
+                    el.setAttribute(name (itemAt planValues (from + i)))
+                }
             }
             i = (i + 1)
         }
         if standard {
             this.standardDefaults(el slot)
         }
+    }
+
+    ; A rule's `margin` or `padding` on an element with one of its sides
+    ; inline (`marginTop`): the shorthand written side by side, each side
+    ; the element has inline left as it is. Written whole, the shorthand
+    ; would overwrite the inline side, which outranks every rule. False,
+    ; and nothing written, when no side is inline (the caller writes it).
+    fn sidesAroundInline:boolean (el:EVGElement name:string value:string) {
+        if ((name != "margin") && (name != "padding")) {
+            return false
+        }
+        def t:string (name + "-top")
+        def r:string (name + "-right")
+        def b:string (name + "-bottom")
+        def l:string (name + "-left")
+        if ((((el.hasInline(t)) == false) && ((el.hasInline(r)) == false)) && (((el.hasInline(b)) == false) && ((el.hasInline(l)) == false))) {
+            return false
+        }
+        def w:[string] (EVGElement.splitWords(value))
+        def n:int (array_length w)
+        if ((n < 1) || (n > 4)) {
+            return false
+        }
+        def wt:string (itemAt w 0)
+        def wr:string wt
+        if (n >= 2) {
+            wr = (itemAt w 1)
+        }
+        def wb:string wt
+        if (n >= 3) {
+            wb = (itemAt w 2)
+        }
+        def wl:string wr
+        if (n >= 4) {
+            wl = (itemAt w 3)
+        }
+        if ((el.hasInline(t)) == false) {
+            el.setAttribute(t wt)
+        }
+        if ((el.hasInline(r)) == false) {
+            el.setAttribute(r wr)
+        }
+        if ((el.hasInline(b)) == false) {
+            el.setAttribute(b wb)
+        }
+        if ((el.hasInline(l)) == false) {
+            el.setAttribute(l wl)
+        }
+        return true
     }
 
     ; Standard mode: a flex container nobody gave a direction or a wrap gets

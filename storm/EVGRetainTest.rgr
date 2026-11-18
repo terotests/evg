@@ -250,6 +250,23 @@ class RetainCheck {
         }
         this.ok("tier 2: the wider tile moved the tiles after it" ((tile9.calculatedX != x9) || (tile9.calculatedY != y9)))
 
+        ; an inline side outranks a rule's shorthand (what a patched side
+        ; relies on too: the fresh tree's cascade keeps it)
+        def ms (new EVGStyleSheet())
+        ms.parse(".wrap { display: flex; flex-direction: column; width: 200px; height: 200px; }\n.m { width: 50px; height: 20px; margin: 4px; }\n")
+        ms.setViewport(200.0 200.0 false)
+        def mw (this.div("wrap"))
+        def mm (this.div("m"))
+        mm.setAttribute("marginTop" "10px")
+        mm.markInline("marginTop")
+        mw.addChild(mm)
+        ms.applyTree(mw "")
+        def ml (new EVGLayout())
+        ml.setPageSize(200.0 200.0)
+        ml.layout(mw)
+        this.ok("cascade: an inline marginTop is kept under a rule's margin" (mm.calculatedY == 10.0))
+        this.ok("cascade: the rule's other sides still apply" (mm.calculatedX == 4.0))
+
         def n0:[string] (RetainCheck.words("transform width"))
         def v0:[string] (RetainCheck.words("a 10px"))
         def n1:[string] (RetainCheck.words("width transform"))
