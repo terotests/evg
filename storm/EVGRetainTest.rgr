@@ -10,6 +10,10 @@
 ; cascaded and laid out from nothing, gives: the same commands, kinds,
 ; boxes and colours, in the same order.
 ;
+; Then tier 2 on the same kind of board: a score text that grows and a
+; tile that gets wider (`patchText`, `patchLayout`, `layoutFrame`), each
+; frame again the display list of a fresh tree.
+;
 ; Also asserted: `tierOf` (same, paint-only, layout; added and removed
 ; properties) and that a patch moves no box.
 ; ==============================================================================
@@ -81,6 +85,31 @@ class RetainCheck {
             sp.markInline("transform")
         }
         board.addChild(sp)
+        g.addChild(board)
+        return g
+    }
+
+    ; the board with a score text in its bar and the frame's width of tile 2
+    fn sceneB:EVGElement (score:string w2:string) {
+        def g (this.div("game"))
+        def bar (this.div("bar"))
+        def sc (EVGElement.createSpan())
+        sc.className = "score"
+        sc.textContent = score
+        bar.addChild(sc)
+        bar.addChild((this.div("tile")))
+        g.addChild(bar)
+        def board (this.div("board"))
+        def i:int 0
+        while (i < 12) {
+            def t (this.div("tile"))
+            if ((i == 2) && ((strlen w2) > 0)) {
+                t.setAttribute("width" w2)
+                t.markInline("width")
+            }
+            board.addChild(t)
+            i = (i + 1)
+        }
         g.addChild(board)
         return g
     }
@@ -166,6 +195,60 @@ class RetainCheck {
         }
         this.ok("no box moved" ((tile3.calculatedX == x0) && (tile3.calculatedY == y0)))
         this.ok("the transform reached the bounds (the subtree is unbounded)" board.paintUnbounded)
+
+        print "EVGRetain: tier 2, text and width on a kept tree"
+        def liveB (this.sceneB("Score: 1" ""))
+        def layB (this.laid(liveB))
+        def barB:EVGElement (itemAt liveB.children 0)
+        def scoreB:EVGElement (itemAt barB.children 0)
+        def boardB:EVGElement (itemAt liveB.children 1)
+        def tile2:EVGElement (itemAt boardB.children 2)
+        def tile9:EVGElement (itemAt boardB.children 9)
+        def x9:double tile9.calculatedX
+        def y9:double tile9.calculatedY
+        def firstB:string (this.listOf(layB liveB))
+        def g:int 1
+        while (g <= 3) {
+            def score:string "Score: 1"
+            def w2:string ""
+            def dirty:[EVGElement]
+            if (g == 1) {
+                score = "Score: 12345"
+            }
+            if (g >= 2) {
+                score = "Score: 7"
+                w2 = "400px"
+            }
+            if (g == 3) {
+                w2 = "250px"
+            }
+            if (scoreB.textContent != score) {
+                EVGRetain.patchText(scoreB score)
+                push dirty scoreB
+            }
+            if ((strlen w2) > 0) {
+                EVGRetain.patchLayout(tile2 "width" w2)
+                push dirty tile2
+            }
+            EVGRetain.layoutFrame(layB liveB dirty)
+            if (g == 1) {
+                this.ok("tier 2: a score text changed, the board is not laid out again" boardB.layoutSkipped)
+            }
+            def gotB:string (this.listOf(layB liveB))
+            def freshB (this.sceneB(score w2))
+            def flayB (this.laid(freshB))
+            def wantB:string (this.listOf(flayB freshB))
+            this.ok((("tier 2 frame " + (to_string g)) + ": the kept tree draws what a fresh one draws") (gotB == wantB))
+            this.ok((("tier 2 frame " + (to_string g)) + ": and that is not what the first frame drew") (gotB != firstB))
+            if (gotB != wantB) {
+                print "--- kept"
+                print gotB
+                print "--- fresh"
+                print wantB
+            }
+            g = (g + 1)
+        }
+        this.ok("tier 2: the wider tile moved the tiles after it" ((tile9.calculatedX != x9) || (tile9.calculatedY != y9)))
 
         def n0:[string] (RetainCheck.words("transform width"))
         def v0:[string] (RetainCheck.words("a 10px"))

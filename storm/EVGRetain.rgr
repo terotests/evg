@@ -17,11 +17,18 @@
 ;      are written on the element that is already laid out (`patch`), the
 ;      layout is not run, and the display list is built again from the boxes
 ;      it has (`paintFrame`)
-;   2  anything else: the host's full path (a new tree, cascade, layout)
+;   2  a text, or a property that moves boxes, changed on elements that
+;      are already there (no element added, removed or given another
+;      class): written on them (`patchText`, `patchLayout`), and the layout
+;      runs with every subtree that holds none of them kept as it is
+;      (`layoutFrame`, EVGElement.keepLayout): only the path from the root
+;      to what changed is laid out again, and the subtrees beside it move
+;      with the flow
+;   3  anything else: the host's full path (a new tree, cascade, layout)
 ;
 ; A host decides the tier from what it knows of its own description of an
 ; element (`tierOf` compares two lists of inline properties) and keeps the
-; full path for everything it cannot prove to be tier 0 or 1. A special
+; full path for everything it cannot prove to be tier 0, 1 or 2. A special
 ; feature (a filter, a transition, an animation the sheet runs) is simply
 ; not on the paint list, so it takes the full path where it is used and
 ; nowhere else.
@@ -146,6 +153,52 @@ class EVGRetain {
     sfn paintFrame:void (lay:EVGLayout root:EVGElement) {
         EVGRetain.staleBounds(root)
         lay.measurePaintBounds(root)
+    }
+
+    ; Tier 2: a text written on a laid-out element. Its box may grow or
+    ; shrink, so `layoutFrame` lays the path to it out again.
+    sfn patchText:void (el:EVGElement text:string) {
+        el.textContent = text
+        el.paintStamp = (el.paintStamp + 1)
+    }
+
+    ; Tier 2: a property that can move boxes, written as an inline one.
+    sfn patchLayout:void (el:EVGElement name:string value:string) {
+        el.setAttribute(name value)
+        el.markInline(name)
+        el.paintStamp = (el.paintStamp + 1)
+    }
+
+    ; After tier-2 patches on the elements `dirty`: the layout run with
+    ; every subtree that holds none of them kept (laid out again only where
+    ; what the flow hands it changed), the path from the root to each of
+    ; them laid out anew. Then build the display list as after a layout.
+    sfn layoutFrame:void (lay:EVGLayout root:EVGElement dirty:[EVGElement]) {
+        EVGRetain.keepBeside(root dirty)
+        lay.layout(root)
+    }
+
+    ; Marks the subtree of `el`: kept, and clean where no element of
+    ; `dirty` is in it. Whether one is.
+    sfn keepBeside:boolean (el:EVGElement dirty:[EVGElement]) {
+        def d:boolean false
+        def j:int 0
+        while (j < (array_length dirty)) {
+            if ((itemAt dirty j) == el) {
+                d = true
+            }
+            j = (j + 1)
+        }
+        def i:int 0
+        while (i < (array_length el.children)) {
+            if (EVGRetain.keepBeside((itemAt el.children i) dirty)) {
+                d = true
+            }
+            i = (i + 1)
+        }
+        el.keepLayout = true
+        el.layoutClean = (d == false)
+        return d
     }
 
     sfn staleBounds:void (el:EVGElement) {
