@@ -1,7 +1,8 @@
 ; SPDX-License-Identifier: MIT
 
 ; EVGColor.rgr - Color parsing and manipulation for EVG layout
-; Supports: hex (#RGB, #RRGGBB, #RRGGBBAA), rgb(), rgba(), hsl(), named colors
+; Supports: hex (#RGB, #RRGGBB, #RRGGBBAA), rgb(), rgba(), hsl(), named colors,
+; and CSS Color 4/5 lab(), lch(), oklab(), oklch(), hwb() and color-mix()
 
 ; The two colours every element starts with, shared the way the unset unit
 ; is (see EVGUnitDefaults). An EVGColor has no in-place mutator at all — every
@@ -288,6 +289,12 @@ class EVGColor {
             return (EVGColor.parseHex(trimmed))
         }
         
+        ; CSS Color 4/5 functions (Tailwind v4 themes are written in them)
+        def modern:EVGColor (EVGColor.parseModern(trimmed))
+        if modern.isSet {
+            return modern
+        }
+
         ; Check for rgb()/rgba()
         if (len >= 4) {
             def prefix:string (substring trimmed 0 4)
@@ -307,6 +314,441 @@ class EVGColor {
         return (EVGColor.parseNamed(trimmed))
     }
     
+    ; --- CSS Color 4 and 5 --------------------------------------------------
+    ;
+    ; `lab()`, `lch()`, `oklab()`, `oklch()`, `hwb()` and `color-mix()`, the
+    ; colours Tailwind v4 writes its whole palette in (`--border: lab(90.952%
+    ; 0 0)`, `bg-primary/80` as `color-mix(in oklab, var(--primary) 80%,
+    ; transparent)`). Each resolves to sRGB here, clamped as every other
+    ; colour is when it is drawn. A function this does not know, or a colour
+    ; in it that does not resolve (`currentcolor`), is no colour.
+    sfn lowerAscii:string (s:string) {
+        def out:string ""
+        def n:int (strlen s)
+        def i:int 0
+        while (i < n) {
+            def ch:int (charAt s i)
+            if ((ch >= 65) && (ch <= 90)) {
+                out = (out + (strfromcode (ch + 32)))
+            } {
+                out = (out + (strfromcode ch))
+            }
+            i = (i + 1)
+        }
+        return out
+    }
+
+    sfn parseModern:EVGColor (str:string) {
+        def open:int (indexOf str "(")
+        if ((open <= 0) || ((charAt str ((strlen str) - 1)) != 41)) {
+            return (EVGColor.noColor())
+        }
+        def name:string (EVGColor.lowerAscii((trim (substring str 0 open))))
+        def body:string (substring str (open + 1) ((strlen str) - 1))
+        if (name == "color-mix") {
+            return (EVGColor.colorMix(body))
+        }
+        if ((name != "lab") && ((name != "lch") && ((name != "oklab") && ((name != "oklch") && (name != "hwb"))))) {
+            return (EVGColor.noColor())
+        }
+        def toks:[string] (EVGColor.channelTokens(body))
+        if ((array_length toks) < 3) {
+            return (EVGColor.noColor())
+        }
+        def alpha:double 1.0
+        if ((array_length toks) >= 5) {
+            if ((itemAt toks 3) == "/") {
+                alpha = (EVGColor.channel((itemAt toks 4) 1.0))
+            }
+        }
+        def t0:string (itemAt toks 0)
+        def t1:string (itemAt toks 1)
+        def t2:string (itemAt toks 2)
+        if (name == "lab") {
+            return (EVGColor.fromLab((EVGColor.channel(t0 100.0)) (EVGColor.channel(t1 125.0)) (EVGColor.channel(t2 125.0)) alpha))
+        }
+        if (name == "lch") {
+            def lc:double (EVGColor.channel(t1 150.0))
+            def lh:double ((EVGColor.hueOf(t2)) * 0.017453292519943295)
+            return (EVGColor.fromLab((EVGColor.channel(t0 100.0)) (lc * (cos lh)) (lc * (sin lh)) alpha))
+        }
+        if (name == "oklab") {
+            return (EVGColor.fromOklab((EVGColor.channel(t0 1.0)) (EVGColor.channel(t1 0.4)) (EVGColor.channel(t2 0.4)) alpha))
+        }
+        if (name == "oklch") {
+            def oc:double (EVGColor.channel(t1 0.4))
+            def oh:double ((EVGColor.hueOf(t2)) * 0.017453292519943295)
+            return (EVGColor.fromOklab((EVGColor.channel(t0 1.0)) (oc * (cos oh)) (oc * (sin oh)) alpha))
+        }
+        ; hwb(h w b): the hue at full saturation, mixed with white and black
+        def wh:double ((EVGColor.channel(t1 100.0)) / 100.0)
+        def bl:double ((EVGColor.channel(t2 100.0)) / 100.0)
+        if ((wh + bl) >= 1.0) {
+            def grey:double ((wh / (wh + bl)) * 255.0)
+            return (EVGColor.create(grey grey grey alpha))
+        }
+        def pure:EVGColor (EVGColor.hslToRgb((EVGColor.hueOf(t0)) 100.0 50.0))
+        def k:double ((1.0 - wh) - bl)
+        return (EVGColor.create(((pure.r * k) + (wh * 255.0)) ((pure.g * k) + (wh * 255.0)) ((pure.b * k) + (wh * 255.0)) alpha))
+    }
+
+    ; The channels of `lab(52% 40 -20 / 50%)`: words split at spaces and
+    ; commas, `/` a token of its own.
+    sfn channelTokens:[string] (body:string) {
+        def out:[string]
+        def cur:string ""
+        def n:int (strlen body)
+        def i:int 0
+        while (i < n) {
+            def ch:int (charAt body i)
+            if ((ch == 32) || ((ch == 44) || ((ch == 9) || ((ch == 10) || (ch == 47))))) {
+                if ((strlen cur) > 0) {
+                    push out cur
+                }
+                cur = ""
+                if (ch == 47) {
+                    push out "/"
+                }
+            } {
+                cur = (cur + (strfromcode ch))
+            }
+            i = (i + 1)
+        }
+        if ((strlen cur) > 0) {
+            push out cur
+        }
+        return out
+    }
+
+    ; A channel: a number, a percentage of `full`, or `none` (zero).
+    sfn channel:double (t:string full:double) {
+        def s:string (EVGColor.lowerAscii((trim t)))
+        if (s == "none") {
+            return 0.0
+        }
+        if (endsWith s "%") {
+            return (((EVGColor.parseNumber((substring s 0 ((strlen s) - 1)))) * full) / 100.0)
+        }
+        return (EVGColor.parseNumber(s))
+    }
+
+    ; A hue in degrees, from `120`, `120deg`, `0.5turn`, `2rad` or `none`.
+    sfn hueOf:double (t:string) {
+        def s:string (EVGColor.lowerAscii((trim t)))
+        if (s == "none") {
+            return 0.0
+        }
+        if (endsWith s "deg") {
+            return (EVGColor.parseNumber((substring s 0 ((strlen s) - 3))))
+        }
+        if (endsWith s "turn") {
+            return ((EVGColor.parseNumber((substring s 0 ((strlen s) - 4)))) * 360.0)
+        }
+        if (endsWith s "grad") {
+            return ((EVGColor.parseNumber((substring s 0 ((strlen s) - 4)))) * 0.9)
+        }
+        if (endsWith s "rad") {
+            return ((EVGColor.parseNumber((substring s 0 ((strlen s) - 3)))) * 57.29577951308232)
+        }
+        return (EVGColor.parseNumber(s))
+    }
+
+    ; v^(1/n) for v >= 0, by bisection: the targets have no pow() of their
+    ; own in common, and 60 halvings are below a double's precision here.
+    sfn root:double (v:double n:int) {
+        if (v <= 0.0) {
+            return 0.0
+        }
+        def lo:double 0.0
+        def hi:double 1.0
+        if (v > 1.0) {
+            hi = v
+        }
+        def it:int 0
+        while (it < 60) {
+            def mid:double ((lo + hi) * 0.5)
+            def p:double 1.0
+            def k:int 0
+            while (k < n) {
+                p = (p * mid)
+                k = (k + 1)
+            }
+            if (p > v) {
+                hi = mid
+            } {
+                lo = mid
+            }
+            it = (it + 1)
+        }
+        return ((lo + hi) * 0.5)
+    }
+
+    sfn cbrtSigned:double (v:double) {
+        if (v < 0.0) {
+            return (0.0 - (EVGColor.root((0.0 - v) 3)))
+        }
+        return (EVGColor.root(v 3))
+    }
+
+    ; linear light (0..1) to an sRGB byte value; x^(1/2.4) = (x^5)^(1/12)
+    sfn gammaOut:double (x:double) {
+        if (x <= 0.0031308) {
+            return ((12.92 * x) * 255.0)
+        }
+        def x5:double ((((x * x) * x) * x) * x)
+        return (((1.055 * (EVGColor.root(x5 12))) - 0.055) * 255.0)
+    }
+
+    ; an sRGB byte value to linear light; y^2.4 = y^2 * (y^2)^(1/5)
+    sfn gammaIn:double (c:double) {
+        def x:double (c / 255.0)
+        if (x <= 0.04045) {
+            return (x / 12.92)
+        }
+        def y:double ((x + 0.055) / 1.055)
+        def y2:double (y * y)
+        return (y2 * (EVGColor.root(y2 5)))
+    }
+
+    sfn fromOklab:EVGColor (L:double a:double b:double alpha:double) {
+        def l1:double ((L + (0.3963377774 * a)) + (0.2158037573 * b))
+        def m1:double ((L - (0.1055613458 * a)) - (0.0638541728 * b))
+        def s1:double ((L - (0.0894841775 * a)) - (1.291485548 * b))
+        def l3:double ((l1 * l1) * l1)
+        def m3:double ((m1 * m1) * m1)
+        def s3:double ((s1 * s1) * s1)
+        def r:double (((4.0767416621 * l3) - (3.3077115913 * m3)) + (0.2309699292 * s3))
+        def g:double (((-1.2684380046 * l3) + (2.6097574011 * m3)) - (0.3413193965 * s3))
+        def bb:double (((-0.0041960863 * l3) - (0.7034186147 * m3)) + (1.707614701 * s3))
+        return (EVGColor.create((EVGColor.gammaOut(r)) (EVGColor.gammaOut(g)) (EVGColor.gammaOut(bb)) alpha))
+    }
+
+    ; CIE Lab (D50) through XYZ, Bradford-adapted to D65, to sRGB
+    sfn fromLab:EVGColor (L:double a:double b:double alpha:double) {
+        def eps:double 0.008856451679035631
+        def kappa:double 903.2962962962963
+        def fy:double ((L + 16.0) / 116.0)
+        def fx:double (fy + (a / 500.0))
+        def fz:double (fy - (b / 200.0))
+        def fx3:double ((fx * fx) * fx)
+        def fz3:double ((fz * fz) * fz)
+        def xr:double (((116.0 * fx) - 16.0) / kappa)
+        if (fx3 > eps) {
+            xr = fx3
+        }
+        def yr:double (L / kappa)
+        if (L > (kappa * eps)) {
+            yr = ((fy * fy) * fy)
+        }
+        def zr:double (((116.0 * fz) - 16.0) / kappa)
+        if (fz3 > eps) {
+            zr = fz3
+        }
+        def x:double (xr * 0.9642956764295677)
+        def y:double yr
+        def z:double (zr * 0.8251046025104602)
+        def x6:double (((0.955473421488075 * x) - (0.02309845494876471 * y)) + (0.06325924320057072 * z))
+        def y6:double (((-0.0283697093338637 * x) + (1.0099953980813041 * y)) + (0.021041441191917323 * z))
+        def z6:double (((0.012314014864481998 * x) - (0.020507649298898964 * y)) + (1.330365926242124 * z))
+        def r:double (((3.2409699419045226 * x6) - (1.537383177570094 * y6)) - (0.4986107602930034 * z6))
+        def g:double (((-0.9692436362808796 * x6) + (1.8759675015077202 * y6)) + (0.04155505740717559 * z6))
+        def bb:double (((0.05563007969699366 * x6) - (0.20397695888897652 * y6)) + (1.0569715142428786 * z6))
+        return (EVGColor.create((EVGColor.gammaOut(r)) (EVGColor.gammaOut(g)) (EVGColor.gammaOut(bb)) alpha))
+    }
+
+    ; this colour in Oklab: [L, a, b]
+    fn toOklab:[double] () {
+        def lr:double (EVGColor.gammaIn(r))
+        def lg:double (EVGColor.gammaIn(g))
+        def lb:double (EVGColor.gammaIn(b))
+        def l:double (EVGColor.cbrtSigned((((0.4122214708 * lr) + (0.5363325363 * lg)) + (0.0514459929 * lb))))
+        def m:double (EVGColor.cbrtSigned((((0.2119034982 * lr) + (0.6806995451 * lg)) + (0.1073969566 * lb))))
+        def s:double (EVGColor.cbrtSigned((((0.0883024619 * lr) + (0.2817188376 * lg)) + (0.6299787005 * lb))))
+        def out:[double]
+        push out (((0.2104542553 * l) + (0.793617785 * m)) - (0.0040720468 * s))
+        push out (((1.9779984951 * l) - (2.428592205 * m)) + (0.4505937099 * s))
+        push out (((0.0259040371 * l) + (0.7827717662 * m)) - (0.808675766 * s))
+        return out
+    }
+
+    ; Splits at top-level commas (not inside parentheses).
+    sfn splitTopCommas:[string] (s:string) {
+        def out:[string]
+        def depth:int 0
+        def start:int 0
+        def n:int (strlen s)
+        def i:int 0
+        while (i < n) {
+            def ch:int (charAt s i)
+            if (ch == 40) {
+                depth = (depth + 1)
+            }
+            if (ch == 41) {
+                depth = (depth - 1)
+            }
+            if ((ch == 44) && (depth == 0)) {
+                push out (trim (substring s start i))
+                start = (i + 1)
+            }
+            i = (i + 1)
+        }
+        push out (trim (substring s start n))
+        return out
+    }
+
+    ; `red 30%` or `30% red`: the percentage (or -1 for none) and the colour
+    sfn mixPercent:double (part:string) {
+        def t:string (trim part)
+        def n:int (strlen t)
+        if ((n > 0) && ((charAt t (n - 1)) == 37)) {
+            def sp:int (lastIndexOf t " ")
+            if (sp > 0) {
+                def tail:string (substring t (sp + 1) (n - 1))
+                if ((indexOf tail ")") < 0) {
+                    return (EVGColor.parseNumber(tail))
+                }
+            }
+        }
+        def sp0:int (indexOf t " ")
+        if ((sp0 > 0) && ((charAt t (sp0 - 1)) == 37)) {
+            return (EVGColor.parseNumber((substring t 0 (sp0 - 1))))
+        }
+        return -1.0
+    }
+
+    sfn mixColor:string (part:string) {
+        def t:string (trim part)
+        def n:int (strlen t)
+        if ((n > 0) && ((charAt t (n - 1)) == 37)) {
+            def sp:int (lastIndexOf t " ")
+            if (sp > 0) {
+                def tail:string (substring t (sp + 1) (n - 1))
+                if ((indexOf tail ")") < 0) {
+                    return (trim (substring t 0 sp))
+                }
+            }
+        }
+        def sp0:int (indexOf t " ")
+        if ((sp0 > 0) && ((charAt t (sp0 - 1)) == 37)) {
+            return (trim (substring t (sp0 + 1) n))
+        }
+        return t
+    }
+
+    ; color-mix(in <space>, a [p], b [p]) (CSS Color 5): premultiplied by
+    ; alpha, in srgb (also for hsl and hwb), srgb-linear, oklab, oklch, or
+    ; lab and lch (as Oklab and Oklch); percentages normalised, a sum under
+    ; 100 % thins the alpha
+    sfn colorMix:EVGColor (body:string) {
+        def parts:[string] (EVGColor.splitTopCommas(body))
+        if ((array_length parts) != 3) {
+            return (EVGColor.noColor())
+        }
+        def head:string (EVGColor.lowerAscii((trim (itemAt parts 0))))
+        if ((startsWith head "in ") == false) {
+            return (EVGColor.noColor())
+        }
+        def space:string (trim (substring head 3 (strlen head)))
+        def hsp:int (indexOf space " ")
+        if (hsp > 0) {
+            space = (substring space 0 hsp)
+        }
+        def c1:EVGColor (EVGColor.parse((EVGColor.mixColor((itemAt parts 1)))))
+        def c2:EVGColor (EVGColor.parse((EVGColor.mixColor((itemAt parts 2)))))
+        if ((c1.isSet == false) || (c2.isSet == false)) {
+            return (EVGColor.noColor())
+        }
+        def p1:double (EVGColor.mixPercent((itemAt parts 1)))
+        def p2:double (EVGColor.mixPercent((itemAt parts 2)))
+        if ((p1 < 0.0) && (p2 < 0.0)) {
+            p1 = 50.0
+            p2 = 50.0
+        }
+        if (p1 < 0.0) {
+            p1 = (100.0 - p2)
+        }
+        if (p2 < 0.0) {
+            p2 = (100.0 - p1)
+        }
+        def sum:double (p1 + p2)
+        if (sum <= 0.0) {
+            return (EVGColor.noColor())
+        }
+        def mult:double (sum / 100.0)
+        if (mult > 1.0) {
+            mult = 1.0
+        }
+        def w2:double (p2 / sum)
+        def w1:double (1.0 - w2)
+        def a1:double (c1.alpha())
+        def a2:double (c2.alpha())
+        def alpha:double ((a1 * w1) + (a2 * w2))
+        if (alpha <= 0.0) {
+            return (EVGColor.create(0.0 0.0 0.0 0.0))
+        }
+        def f1:double (a1 * w1)
+        def f2:double (a2 * w2)
+        def A:[double]
+        def B:[double]
+        def polar:boolean ((space == "oklch") || (space == "lch"))
+        def linear:boolean (space == "srgb-linear")
+        def lab:boolean ((space == "oklab") || ((space == "lab") || polar))
+        if lab {
+            A = (c1.toOklab())
+            B = (c2.toOklab())
+        } {
+            if linear {
+                push A (EVGColor.gammaIn(c1.r))
+                push A (EVGColor.gammaIn(c1.g))
+                push A (EVGColor.gammaIn(c1.b))
+                push B (EVGColor.gammaIn(c2.r))
+                push B (EVGColor.gammaIn(c2.g))
+                push B (EVGColor.gammaIn(c2.b))
+            } {
+                push A c1.r
+                push A c1.g
+                push A c1.b
+                push B c2.r
+                push B c2.g
+                push B c2.b
+            }
+        }
+        if polar {
+            ; to L, C, H; a colour with no chroma takes the other's hue,
+            ; the hue goes the shorter way round; hue is not premultiplied
+            def ca:double (sqrt (((itemAt A 1) * (itemAt A 1)) + ((itemAt A 2) * (itemAt A 2))))
+            def cb:double (sqrt (((itemAt B 1) * (itemAt B 1)) + ((itemAt B 2) * (itemAt B 2))))
+            def ha:double ((atan2 (itemAt A 2) (itemAt A 1)) * 57.29577951308232)
+            def hb:double ((atan2 (itemAt B 2) (itemAt B 1)) * 57.29577951308232)
+            if (ca < 0.000001) {
+                ha = hb
+            }
+            if (cb < 0.000001) {
+                hb = ha
+            }
+            if ((hb - ha) > 180.0) {
+                ha = (ha + 360.0)
+            }
+            if ((hb - ha) < -180.0) {
+                hb = (hb + 360.0)
+            }
+            def lm:double ((((itemAt A 0) * f1) + ((itemAt B 0) * f2)) / alpha)
+            def cm:double (((ca * f1) + (cb * f2)) / alpha)
+            def hm:double (((ha * w1) + (hb * w2)) * 0.017453292519943295)
+            return (EVGColor.fromOklab(lm (cm * (cos hm)) (cm * (sin hm)) (alpha * mult)))
+        }
+        def o0:double ((((itemAt A 0) * f1) + ((itemAt B 0) * f2)) / alpha)
+        def o1:double ((((itemAt A 1) * f1) + ((itemAt B 1) * f2)) / alpha)
+        def o2:double ((((itemAt A 2) * f1) + ((itemAt B 2) * f2)) / alpha)
+        if lab {
+            return (EVGColor.fromOklab(o0 o1 o2 (alpha * mult)))
+        }
+        if linear {
+            return (EVGColor.create((EVGColor.gammaOut(o0)) (EVGColor.gammaOut(o1)) (EVGColor.gammaOut(o2)) (alpha * mult)))
+        }
+        return (EVGColor.create(o0 o1 o2 (alpha * mult)))
+    }
+
     sfn parseRgb:EVGColor (str:string) {
         ; Parse rgb(r, g, b) or rgb(r g b)
         def c (new EVGColor())

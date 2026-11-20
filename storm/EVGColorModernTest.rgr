@@ -1,0 +1,76 @@
+; SPDX-License-Identifier: MIT
+
+; ==============================================================================
+; EVGColorModernTest — lab(), lch(), oklab(), oklch(), hwb(), color-mix()
+; ==============================================================================
+;
+; Tailwind v4 writes its palette in these (`--border: lab(90.952% 0 0)`,
+; `bg-primary/80` as a color-mix() in Oklab). Before they parsed, every such
+; colour was no colour: borders fell back to black and backgrounds went
+; missing. The expected bytes are what Chromium paints for each colour on a
+; canvas; one step either way is rounding.
+; ==============================================================================
+
+Import "EVGColor.rgr"
+
+class ColorModernCheck {
+    def passed:int 0
+    def failed:int 0
+
+    fn near:boolean (got:int want:int) {
+        def d:int (got - want)
+        return ((d <= 2) && (d >= -2))
+    }
+
+    fn rgba:void (css:string r:int g:int b:int a:int) {
+        def c:EVGColor (EVGColor.parse(css))
+        def ga:int (to_int ((c.alpha() * 255.0) + 0.5))
+        def good:boolean (c.isSet && ((this.near(c.red() r)) && ((this.near(c.green() g)) && ((this.near(c.blue() b)) && (this.near(ga a))))))
+        if good {
+            passed = (passed + 1)
+            print ("  PASS " + css)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + css + " got " + (c.toCSSString()) + " want " + (to_string r) + "," + (to_string g) + "," + (to_string b) + "," + (to_string a))
+        }
+    }
+
+    fn unset:void (css:string) {
+        def c:EVGColor (EVGColor.parse(css))
+        if (c.isSet == false) {
+            passed = (passed + 1)
+            print ("  PASS no colour: " + css)
+        } {
+            failed = (failed + 1)
+            print ("  FAIL " + css + " should be no colour, got " + (c.toCSSString()))
+        }
+    }
+}
+
+class EVGColorModernTest {
+    sfn main:void () {
+        def t (new ColorModernCheck())
+        print "--- CSS Color 4 / 5 ---"
+        t.rgba("lab(90.952% 0 -.0000119209)" 229 229 229 255)
+        t.rgba("lab(48.4493% 77.4328 61.5452)" 231 0 11 255)
+        t.rgba("lab(0% 0 0)" 0 0 0 255)
+        t.rgba("oklch(0.205 0 0)" 23 23 23 255)
+        t.rgba("oklch(0.623 0.214 259.815)" 43 127 255 255)
+        t.rgba("oklab(0.5 0.1 -0.1)" 129 69 154 255)
+        t.rgba("lch(52% 60 30)" 208 79 76 255)
+        t.rgba("hwb(200 20% 30%)" 51 136 179 255)
+        t.rgba("oklch(70% 0.1 120deg / 50%)" 149 167 94 128)
+        t.rgba("color-mix(in oklab, #1447e6 80%, transparent)" 20 71 230 204)
+        t.rgba("color-mix(in srgb, red 30%, blue)" 77 0 179 255)
+        t.rgba("color-mix(in oklch, red, blue)" 186 0 194 255)
+        t.rgba("color-mix(in oklab, lab(90.952% 0 0) 50%, transparent)" 229 229 229 128)
+        t.unset("color-mix(in oklab, currentcolor 50%, transparent)")
+        t.unset("oklch(0.5)")
+        print ("passed=" + (to_string t.passed) + " failed=" + (to_string t.failed))
+        if (t.failed > 0) {
+            print "[FAIL]"
+        } {
+            print "ALL PASS"
+        }
+    }
+}
