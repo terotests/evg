@@ -14,11 +14,12 @@ description: "The layout modes EVG implements: flow, flex, grid, absolute, fixed
 | **Grid** | `display: grid` | Tracks, areas, spans, row `subgrid`. See [Grid](/evg/layout/grid/) |
 | **Absolute** | `position: absolute` (or `left`/`top`/`right`/`bottom` on the XML path) | Out of flow, against the nearest positioned ancestor |
 | **Fixed** | `position: fixed` | Out of flow, against the **viewport**. A scroll does not move it |
+| **Floats, sticky** | EVGFull only, from a CSS front end | See [CSS conformance](/evg/css/conformance/) |
 | **Overlay / popover** | `overlay: true`, `popover` tag, or `position-anchor` | Out of flow **and** out of the clip stack. Drawn after the whole tree |
 
 ## Box model
 
-`padding` and `border` sit inside the declared width, as in CSS `box-sizing: border-box`. `EVGBox` holds the resolved pixels after `resolveUnits`.
+`padding` and `border` sit inside the declared width, as in CSS `box-sizing: border-box`. `box-sizing: content-box` puts them outside. `EVGBox` holds the resolved pixels after `resolveUnits`.
 
 The root with no stated size becomes the page: `pageWidth` × `pageHeight`. That is right for paper. A window host that wants the document's own height measures the children's lowest edge.
 
@@ -74,4 +75,4 @@ A `connector` is a line between two `anchor-name`s. The layout writes `d`. `from
 
 ## Warnings
 
-Layout warnings are collected, not printed: `warningCount()` / `warningAt(i)`. A declaration the engine cannot use is one of them (`calc()`, `repeat(auto-fit, …)`, a reversed flex direction). `EVGReject` de-duplicates, so one bad rule on 20 000 elements is one warning.
+Layout warnings are collected, not printed: `warningCount()` / `warningAt(i)`. A declaration the engine cannot use is one of them (`calc()` with `em` terms, `10ch`, a reversed flex direction). `EVGReject` de-duplicates, so one bad rule on 20 000 elements is one warning.

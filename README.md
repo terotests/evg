@@ -15,6 +15,27 @@ the Ranger repo: flex, grid, a CSS subset, a display list, and hosts for
 PDF / GL / SVG / native. See [`STORM.md`](STORM.md) for the dual-package
 layout and [`storm/README.md`](storm/README.md) for the engine itself.
 
+### CSS support
+
+The layout has two tiers. Both write the same display list.
+
+- **EVGLite** (`storm/EVGLayout.rgr`) is the core every native port
+  carries: flow, flex, grid (`repeat(auto-fill|auto-fit)`, `minmax()`,
+  `fit-content()`, named lines and areas, `dense`, subgrid), absolute and
+  fixed boxes, overlays, `calc()` of `px` and `%`, `min-content` /
+  `max-content` / `fit-content`, `aspect-ratio`, `box-sizing`, auto margins.
+- **EVGFull** (`storm/EVGLayoutFull.rgr`, `EVGLayoutFull.install()`) is the
+  CSS conformance layer for front ends that lay out browser CSS: containing
+  blocks, static positions, baselines, floats, sticky, spanning grid items,
+  complex grid line rules.
+
+On the W3C WPT CSS layout tests (css-grid, css-flexbox, css-sizing, CSS2,
+css-position) EVGFull passes **727 of 901 (81 %)**. Writing modes, most of
+subgrid, `stretch` sizes, tables and some baseline cases are the main
+gaps. See [CSS conformance](https://terotests.github.io/evg/css/conformance/).
+Every PR runs the Storm perf gate (`npm run storm:perf`): layout and
+display-list cost may not grow more than 5 % over the base.
+
 ```
 npm i -g evg
 evg hello.xml hello.pdf
