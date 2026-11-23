@@ -5633,6 +5633,10 @@ class EVGLayout {
             def kid:EVGElement (el.getChild(i))
             if ((kid.isAbsolute || (kid.isHidden())) == false) {
                 def wasResolved:boolean kid.unitsResolved
+                ; (what it inherits first: see intrinsicOfChildren)
+                if (wasResolved == false) {
+                    kid.inheritProperties(el)
+                }
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
                 def col:int (at % nc)
                 ; (an item placed on a line: its column, one past the
@@ -5980,6 +5984,23 @@ class EVGLayout {
                 ; the width it actually got. A kid that was already resolved
                 ; keeps what it had — the flow resolved it, not this.
                 def wasResolved:boolean kid.unitsResolved
+                ; AND WHAT IT INHERITS, before it is measured. The flow hands a
+                ; child its parent's font family, font-size base and
+                ; white-space just before laying it out, so a GRANDCHILD has
+                ; not been given them yet when this pass measures it: it was
+                ; measured in the element default "Noto Sans", a bold run as
+                ; "Noto Sans-Bold". A measurer whose faces are named otherwise
+                ; (the M-Files window loads Open Sans as "Arial") has no such
+                ; face and answers with its default regular one, so a bold
+                ; word one level down came out a regular word's width. The
+                ; "Add filters" chips (bold name inside a row inside the chip)
+                ; were sized that much too narrow and clipped their last word.
+                ; Inheriting is idempotent: the flow does the same again later.
+                ; A kid already resolved was laid out by the flow, which
+                ; inherited first, so only an unresolved one needs it.
+                if (wasResolved == false) {
+                    kid.inheritProperties(el)
+                }
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
                 def w:double (this.intrinsicWidth(kid wantMin))
                 if ((wasResolved || kid.unitsFixed) == false) {
