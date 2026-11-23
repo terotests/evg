@@ -432,6 +432,16 @@ export async function loadImages(doc, opts = {}) {
  */
 export function renderDisplayList(target, doc, opts = {}) {
   const images = opts.images || new Map();
+  // One picture: an <image> with `attrs` (its place and href) and `extra`
+  // (transform, opacity). A picture the host gave a `maskColor` is a
+  // rectangle of that colour masked by the picture's alpha, the way CSS
+  // draws `mask-image: url(logo.svg)` over a background colour.
+  const paintPicture = (img, attrs, x, y, w, h, extra) => {
+    if (!img.maskColor) return `<image ${attrs}${extra}/>`;
+    const id = `evgmask${uid++}`;
+    defs.push(`<mask id="${id}" maskUnits="userSpaceOnUse" x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" style="mask-type:alpha"><image ${attrs}/></mask>`);
+    return `<g${extra}><rect x="${n(x)}" y="${n(y)}" width="${n(w)}" height="${n(h)}" fill="${esc(img.maskColor)}" mask="url(#${id})"/></g>`;
+  };
   const cmds = doc.list.cmds;
   const svg = svgFor(target);
 
@@ -539,11 +549,27 @@ export function renderDisplayList(target, doc, opts = {}) {
         // already keeps it the shape of the frame, so nothing is distorted.
         // A tiled picture (a CSS background): a pattern of tiles, the one
         // at tile[0..1] tile[2] by tile[3], over the command's rectangle.
+        // A picture with a `maskColor` (the host's: a CSS `mask-image` over a
+        // background colour, see paintPicture) is that colour wherever the
+        // picture is opaque.
         if (c.tile) {
           const [tx, ty, tw, th] = c.tile;
           const id = `evgtile${uid++}`;
+          // (one tile over the whole rectangle: the picture itself, clipped
+          // to the rectangle; a pattern bleeds a hairline of the next tile
+          // in at its edges)
+          if (tx <= c.x + 0.01 && ty <= c.y + 0.01 && tx + tw >= c.x + c.w - 0.01 && ty + th >= c.y + c.h - 0.01) {
+            const one = `x="${n(tx)}" y="${n(ty)}" width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"`;
+            const cid = `evgtileclip${uid++}`;
+            defs.push(`<clipPath id="${cid}"><rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}"/></clipPath>`);
+            body.push(`<g clip-path="url(#${cid})"${op}>${paintPicture(img, one, tx, ty, tw, th, "")}</g>`);
+            drawnImages += 1;
+            drawn += 1;
+            break;
+          }
+          const tileImg = `width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"`;
           defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" x="${n(tx)}" y="${n(ty)}" width="${n(tw)}" height="${n(th)}">` +
-            `<image width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"/></pattern>`);
+            paintPicture(img, tileImg, 0, 0, tw, th, "") + `</pattern>`);
           body.push(`<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}" fill="url(#${id})"${op}/>`);
           drawnImages += 1;
           drawn += 1;
@@ -553,8 +579,9 @@ export function renderDisplayList(target, doc, opts = {}) {
         const cw = cu ? cu[2] - cu[0] : 1, chh = cu ? cu[3] - cu[1] : 1;
         const dw = cu ? c.w / cw : c.w, dh = cu ? c.h / chh : c.h;
         const dx = cu ? c.x - cu[0] * dw : c.x, dy = cu ? c.y - cu[1] * dh : c.y;
-        let attrs = `x="${n(dx)}" y="${n(dy)}" width="${n(dw)}" height="${n(dh)}"` +
-                    ` preserveAspectRatio="${cu ? "none" : "xMidYMid slice"}" href="${esc(img.src)}"` + op;
+        const picAttrs = `x="${n(dx)}" y="${n(dy)}" width="${n(dw)}" height="${n(dh)}"` +
+                    ` preserveAspectRatio="${cu ? "none" : "xMidYMid slice"}" href="${esc(img.src)}"`;
+        let attrs = "";
         const transforms = [];
         if (c.rot) {
           const cx = c.rox === undefined ? c.x + c.w / 2 : c.rox;
@@ -568,6 +595,7 @@ export function renderDisplayList(target, doc, opts = {}) {
           transforms.push(`translate(${n(cx)} ${n(cy)}) scale(${c.fx ? -1 : 1} ${c.fy ? -1 : 1}) translate(${n(-cx)} ${n(-cy)})`);
         }
         if (transforms.length) attrs += ` transform="${transforms.join(" ")}"`;
+        const picture = paintPicture(img, picAttrs, dx, dy, dw, dh, attrs + op);
         const r = radiiOf(c);
         if (r.some((v) => v > 0) || cu) {
           // A photo in a rounded box is clipped by the same shape the box is
@@ -577,9 +605,9 @@ export function renderDisplayList(target, doc, opts = {}) {
           // on purpose and the rest of it must not show.
           const id = `evgimgclip${uid++}`;
           defs.push(`<clipPath id="${id}"><path d="${roundedPath(c.x, c.y, c.w, c.h, r)}"/></clipPath>`);
-          body.push(`<g clip-path="url(#${id})"><image ${attrs}/></g>`);
+          body.push(`<g clip-path="url(#${id})">${picture}</g>`);
         } else {
-          body.push(`<image ${attrs}/>`);
+          body.push(picture);
         }
         drawnImages += 1;
         drawn += 1;
