@@ -555,6 +555,18 @@ export function renderDisplayList(target, doc, opts = {}) {
         if (c.tile) {
           const [tx, ty, tw, th] = c.tile;
           const id = `evgtile${uid++}`;
+          // (one tile over the whole rectangle: the picture itself, clipped
+          // to the rectangle; a pattern bleeds a hairline of the next tile
+          // in at its edges)
+          if (tx <= c.x + 0.01 && ty <= c.y + 0.01 && tx + tw >= c.x + c.w - 0.01 && ty + th >= c.y + c.h - 0.01) {
+            const one = `x="${n(tx)}" y="${n(ty)}" width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"`;
+            const cid = `evgtileclip${uid++}`;
+            defs.push(`<clipPath id="${cid}"><rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}"/></clipPath>`);
+            body.push(`<g clip-path="url(#${cid})"${op}>${paintPicture(img, one, tx, ty, tw, th, "")}</g>`);
+            drawnImages += 1;
+            drawn += 1;
+            break;
+          }
           const tileImg = `width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"`;
           defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" x="${n(tx)}" y="${n(ty)}" width="${n(tw)}" height="${n(th)}">` +
             paintPicture(img, tileImg, 0, 0, tw, th, "") + `</pattern>`);
