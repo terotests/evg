@@ -2222,6 +2222,12 @@ class EVGLayout {
                             ; This IS the row flex pass, so along a row by
                             ; construction.
                             def estW:double (this.estimateChildWidth(c avail true))
+                            ; (its max-width holds the estimate too: a float
+                            ; column `max-width: 50%` round a 180px picture
+                            ; was counted the whole row wide, and the growing
+                            ; text column beside it got 0 px, every word of it
+                            ; drawn on the same spot, CSS Flexbox 9.7 2)
+                            estW = (this.clampMain(c estW))
                             fixedWidth = fixedWidth + estW + c.box.marginLeftPx + c.box.marginRightPx
                         }
                     }
