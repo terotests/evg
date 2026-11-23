@@ -2459,6 +2459,7 @@ class EVGDisplayList {
             if ((dx != 0.0) || (dy != 0.0)) {
                 c.x = (c.x + dx)
                 c.y = (c.y + dy)
+                EVGDisplayList.shiftTile(c dx dy)
                 if c.hasRotOrigin {
                     c.rotOriginX = (c.rotOriginX + dx)
                     c.rotOriginY = (c.rotOriginY + dy)
@@ -2903,6 +2904,7 @@ class EVGDisplayList {
             def c:EVGDrawCmd (itemAt cmds i)
             c.x = (c.x + dx)
             c.y = (c.y + dy)
+            EVGDisplayList.shiftTile(c dx dy)
             if c.hasRotOrigin {
                 c.rotOriginX = (c.rotOriginX + dx)
                 c.rotOriginY = (c.rotOriginY + dy)
@@ -3305,6 +3307,7 @@ class EVGDisplayList {
                 if shifts {
                     c.x = (c.x + tx)
                     c.y = (c.y + ty)
+                    EVGDisplayList.shiftTile(c tx ty)
                     if c.hasRotOrigin {
                         c.rotOriginX = (c.rotOriginX + tx)
                         c.rotOriginY = (c.rotOriginY + ty)
@@ -5477,6 +5480,17 @@ class EVGDisplayList {
 
     ; A backend-shaped summary: how many quads, how many text runs, how deep
     ; the clip stack goes. Useful for sizing a vertex buffer up front.
+    ; A background picture's tile moves with its command: the pattern is
+    ; placed by the tile, so a tile left behind tiles the picture from
+    ; the wrong origin (a page list offset under a browser's toolbar).
+    sfn shiftTile:void (c:EVGDrawCmd dx:double dy:double) {
+        if (!null? c.tile) {
+            def t:EVGDrawTile (unwrap c.tile)
+            t.x = (t.x + dx)
+            t.y = (t.y + dy)
+        }
+    }
+
     ; Move every command by (dx, dy). A host builds a page's list in the page's
     ; own coordinates and then places it in the window; doing that by walking
     ; the list is what lets the page renderer stay ignorant of where on the
@@ -5488,6 +5502,7 @@ class EVGDisplayList {
             if (c.kind != 5) {
                 c.x = (c.x + dx)
                 c.y = (c.y + dy)
+                EVGDisplayList.shiftTile(c dx dy)
                 def pi:int 0
                 while (pi < (array_length c.pts)) {
                     def even:boolean ((pi % 2) == 0)
