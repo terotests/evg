@@ -451,6 +451,27 @@ class FlexRulesCheck {
         def l15 (this.lay(r15))
         this.ok("and a document it understands says nothing" ((l15.warningCount()) == 0))
 
+        ; --- 9. a content-sized item's max-width holds its estimate ----------
+        print ""
+        print "-- max-width holds a content-sized item before the free space is shared"
+        def fr (EVGElement.createDiv())
+        fr.setAttribute("display" "flex")
+        fr.setAttribute("flex-direction" "row")
+        fr.setAttribute("flex-wrap" "nowrap")
+        fr.setAttribute("width" "460px")
+        def col (EVGElement.createDiv())
+        this.applyDecls(col "flex-grow:1;flex-shrink:1;flex-basis:0px;min-width:0px;height:40px")
+        fr.addChild(col)
+        def fl (EVGElement.createDiv())
+        this.applyDecls(fl "flex-shrink:0;max-width:50%")
+        def pic (EVGElement.createDiv())
+        this.applyDecls(pic "width:180px;height:40px")
+        fl.addChild(pic)
+        fr.addChild(fl)
+        def l16 (this.lay(fr))
+        this.near("the column beside a max-width: 50% box gets the other half" (this.widthOf(fr 0)) 230.0)
+        this.near("the box stops at its max" (this.widthOf(fr 1)) 230.0)
+
         print ""
         print ((("Passed: " + (to_string passed)) + "  Failed: ") + (to_string failed))
         if (failed > 0) {
