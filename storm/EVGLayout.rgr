@@ -5640,7 +5640,7 @@ class EVGLayout {
             if ((kid.isAbsolute || (kid.isHidden())) == false) {
                 def wasResolved:boolean kid.unitsResolved
                 ; (what it inherits first: see intrinsicOfChildren)
-                if (wasResolved == false) {
+                if (this.needsInherit(kid el)) {
                     kid.inheritProperties(el)
                 }
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)
@@ -5911,6 +5911,23 @@ class EVGLayout {
         return (this.intrinsicOfChildren(el true))
     }
 
+    ; Has this kid not yet been given what it inherits from `el` that a
+    ; measurement reads: the font family (still the element default), the
+    ; font-size base, or an undeclared white-space? A cheap test in front of
+    ; `inheritProperties`, which also settles direction and the viewport.
+    fn needsInherit:boolean (kid:EVGElement el:EVGElement) {
+        if (kid.fontSizeBase != el.inheritedFontSize) {
+            return true
+        }
+        if ((kid.fontFamily == "Noto Sans") && (el.fontFamily != "Noto Sans")) {
+            return true
+        }
+        if ((kid.whiteSpaceSet == false) && (kid.whiteSpace != el.whiteSpace)) {
+            return true
+        }
+        return false
+    }
+
     fn intrinsicOfChildren:double (el:EVGElement wantMin:boolean) {
         def n:int (el.getChildCount())
         ; (an empty box is as wide as its padding and border)
@@ -6002,9 +6019,10 @@ class EVGLayout {
                 ; "Add filters" chips (bold name inside a row inside the chip)
                 ; were sized that much too narrow and clipped their last word.
                 ; Inheriting is idempotent: the flow does the same again later.
-                ; A kid already resolved was laid out by the flow, which
-                ; inherited first, so only an unresolved one needs it.
-                if (wasResolved == false) {
+                ; Being resolved does not mean having inherited (other passes
+                ; resolve without inheriting), so what is asked is whether
+                ; the kid still differs from what it would inherit.
+                if (this.needsInherit(kid el)) {
                     kid.inheritProperties(el)
                 }
                 kid.resolveUnits(el.calculatedInnerWidth el.calculatedInnerHeight)

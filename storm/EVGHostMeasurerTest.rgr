@@ -336,6 +336,39 @@ class EVGHostMeasurerTest {
         ; 4 bold glyphs of 9px and 10px of padding each side
         this.near("the bold word one level down is measured bold in Arial" word.calculatedWidth 36.0)
         this.near("the box around it is that wide and its padding" chip.calculatedWidth 56.0)
+        ; Resolved is not inherited: a pass that resolved the word (a
+        ; re-layout, a column's max-height pre-pass) without handing it the
+        ; family must not make the measure skip the inheritance.
+        def page2 (EVGElement.createDiv())
+        page2.setAttribute("width" "300px")
+        page2.setAttribute("display" "flex")
+        page2.setAttribute("flex-direction" "column")
+        page2.setAttribute("font-family" "Arial")
+        def chip2 (EVGElement.createDiv())
+        chip2.setAttribute("display" "flex")
+        chip2.setAttribute("flex-direction" "row")
+        chip2.setAttribute("flex-wrap" "nowrap")
+        chip2.setAttribute("align-self" "flex-start")
+        chip2.setAttribute("padding" "0 10px")
+        chip2.setAttribute("height" "20px")
+        def name2 (EVGElement.createDiv())
+        name2.setAttribute("display" "flex")
+        name2.setAttribute("flex-direction" "row")
+        name2.setAttribute("flex-wrap" "nowrap")
+        def word2 (EVGElement.createSpan())
+        word2.setAttribute("font-size" "10px")
+        word2.setAttribute("font-weight" "bold")
+        word2.setAttribute("height" "14px")
+        word2.textContent = "abcd"
+        name2.addChild(word2)
+        chip2.addChild(name2)
+        page2.addChild(chip2)
+        word2.resolveUnits(0.0 0.0)
+        name2.resolveUnits(0.0 0.0)
+        def lay2 (new EVGLayout())
+        lay2.setPageSize(300.0 200.0)
+        lay2.layout(page2)
+        this.near("a word resolved before is still measured in Arial" chip2.calculatedWidth 56.0)
         EVGDefaultMeasurer.uninstall()
     }
 
