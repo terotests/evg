@@ -100,6 +100,7 @@ class EVGHostMeasurerTest {
         this.testTableEmojiIsOneGlyph()
         this.testWrapInRealLayout()
         this.testHasFace()
+        this.testGrandchildInheritsBeforeMeasure()
         EVGDefaultMeasurer.uninstall()
         print ""
         print ("passed = " + (to_string passed) + "  failed = " + (to_string failed))
@@ -278,6 +279,64 @@ class EVGHostMeasurerTest {
         lay2.setPageSize(60.0 200.0)
         lay2.layout(root2)
         this.ok("the table makes fewer" (span2.calculatedHeight < 45.0))
+    }
+
+    ; A shrink-wrapped box sized from a GRANDCHILD's text: the grandchild has
+    ; not been handed its family by the flow yet when the box is measured.
+    ; The host here knows only "Arial" (as the M-Files window, which loads
+    ; Open Sans under that name): any other family answers in its regular
+    ; face, so a bold word measured as "Noto Sans-Bold" comes out narrow.
+    fn testGrandchildInheritsBeforeMeasure:void () {
+        print "-- a grandchild is measured in the family it inherits"
+        def hm (new EVGHostTextMeasurer())
+        hm.attach((fn:double (kind:int text:string family:string size:double bold:boolean italic:boolean) {
+            if (kind == 0) {
+                def per:double 0.7
+                if (bold && (family == "Arial")) {
+                    per = 0.9
+                }
+                return ((to_double (strlen text)) * size * per)
+            }
+            if (kind == 1) {
+                return (size * 1.0)
+            }
+            if (kind == 2) {
+                return (size * 0.3)
+            }
+            return (size * 0.2)
+        }) "arial-only")
+        EVGDefaultMeasurer.install(hm)
+        def page (EVGElement.createDiv())
+        page.setAttribute("width" "300px")
+        page.setAttribute("display" "flex")
+        page.setAttribute("flex-direction" "column")
+        page.setAttribute("font-family" "Arial")
+        def chip (EVGElement.createDiv())
+        chip.setAttribute("display" "flex")
+        chip.setAttribute("flex-direction" "row")
+        chip.setAttribute("flex-wrap" "nowrap")
+        chip.setAttribute("align-self" "flex-start")
+        chip.setAttribute("padding" "0 10px")
+        chip.setAttribute("height" "20px")
+        def name (EVGElement.createDiv())
+        name.setAttribute("display" "flex")
+        name.setAttribute("flex-direction" "row")
+        name.setAttribute("flex-wrap" "nowrap")
+        def word (EVGElement.createSpan())
+        word.setAttribute("font-size" "10px")
+        word.setAttribute("font-weight" "bold")
+        word.setAttribute("height" "14px")
+        word.textContent = "abcd"
+        name.addChild(word)
+        chip.addChild(name)
+        page.addChild(chip)
+        def lay (new EVGLayout())
+        lay.setPageSize(300.0 200.0)
+        lay.layout(page)
+        ; 4 bold glyphs of 9px and 10px of padding each side
+        this.near("the bold word one level down is measured bold in Arial" word.calculatedWidth 36.0)
+        this.near("the box around it is that wide and its padding" chip.calculatedWidth 56.0)
+        EVGDefaultMeasurer.uninstall()
     }
 
     fn testHasFace:void () {
