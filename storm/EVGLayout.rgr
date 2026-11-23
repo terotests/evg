@@ -5361,8 +5361,21 @@ class EVGLayout {
             definite = false
         }
         if definite {
-            ; A definite width is both the min- and the max-content size.
+            ; A definite width is both the min- and the max-content size,
+            ; held by its max-width and min-width as the laid-out width is:
+            ; yle.fi's sidebar, `width` 394px with `max-width` 328px in a
+            ; block, counted 394 and wrapped under the main column.
             outer = el.width.pixels
+            if (el.maxWidth.isSet && ((el.maxWidth.isPercent()) == false)) {
+                if (outer > el.maxWidth.pixels) {
+                    outer = el.maxWidth.pixels
+                }
+            }
+            if (el.minWidth.isSet && ((el.minWidth.isPercent()) == false)) {
+                if (outer < el.minWidth.pixels) {
+                    outer = el.minWidth.pixels
+                }
+            }
         } {
             def textContent:string el.textContent
             if ((strlen textContent) > 0) {
