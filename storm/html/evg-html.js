@@ -523,6 +523,11 @@ export function renderDisplayList(target, doc, opts = {}) {
       case KIND.IMAGE: {
         const img = c.src ? images.get(c.src) : null;
         if (!img) { missingImages += 1; break; }
+        // The command's alpha is the opacity of the boxes around it (fadeFrom
+        // scales it): a picture inside an `opacity: 0` menu is not drawn.
+        const ia = c.c ? c.c[3] : 1;
+        if (ia <= 0.001) break;
+        const op = ia < 1 ? ` opacity="${n4(ia)}"` : "";
         // `preserveAspectRatio="…slice"` IS object-fit: cover — fill the box and
         // crop the overflow, centred, rather than distort the picture. The GL
         // backend computes the same crop as a UV rectangle because a quad has
@@ -539,7 +544,7 @@ export function renderDisplayList(target, doc, opts = {}) {
           const id = `evgtile${uid++}`;
           defs.push(`<pattern id="${id}" patternUnits="userSpaceOnUse" x="${n(tx)}" y="${n(ty)}" width="${n(tw)}" height="${n(th)}">` +
             `<image width="${n(tw)}" height="${n(th)}" preserveAspectRatio="none" href="${esc(img.src)}"/></pattern>`);
-          body.push(`<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}" fill="url(#${id})"/>`);
+          body.push(`<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.w)}" height="${n(c.h)}" fill="url(#${id})"${op}/>`);
           drawnImages += 1;
           drawn += 1;
           break;
@@ -549,7 +554,7 @@ export function renderDisplayList(target, doc, opts = {}) {
         const dw = cu ? c.w / cw : c.w, dh = cu ? c.h / chh : c.h;
         const dx = cu ? c.x - cu[0] * dw : c.x, dy = cu ? c.y - cu[1] * dh : c.y;
         let attrs = `x="${n(dx)}" y="${n(dy)}" width="${n(dw)}" height="${n(dh)}"` +
-                    ` preserveAspectRatio="${cu ? "none" : "xMidYMid slice"}" href="${esc(img.src)}"`;
+                    ` preserveAspectRatio="${cu ? "none" : "xMidYMid slice"}" href="${esc(img.src)}"` + op;
         const transforms = [];
         if (c.rot) {
           const cx = c.rox === undefined ? c.x + c.w / 2 : c.rox;

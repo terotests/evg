@@ -339,7 +339,7 @@ void main() {
     float d;
     float cov = boxCoverage(d);
     if (cov <= 0.001) discard;
-    outColor = vec4(tex.rgb, tex.a * cov);
+    outColor = vec4(tex.rgb, tex.a * cov * vColor.a);
     return;
   }
   if (vMode > 0.5) {
@@ -4925,6 +4925,9 @@ function buildFrame(gl, doc, opts = {}) {
     if (c.k === KIND.IMAGE) {
       const t = c.src && textures.get(c.src);
       if (!t) { missingImages += 1; continue; }
+      // (its alpha is the opacity of the boxes around it, fadeFrom)
+      const ia = c.c ? c.c[3] : 1;
+      if (ia <= 0.001) continue;
       // Everything queued so far has to be drawn BEFORE this photo, or the
       // page paints out of order.
       flush();
@@ -4946,7 +4949,7 @@ function buildFrame(gl, doc, opts = {}) {
       pushRadii(c);
       rots.push(((c.rot || 0) * Math.PI) / 180);
       origins.push(c.rox || 0, c.roy || 0, c.rox === undefined ? 0 : 1);
-      colors.push(1, 1, 1, 1);
+      colors.push(1, 1, 1, ia);
       colors2.push(1, 1, 1, 1);
       grads.push(0);
       pushRun(runStart, 1, t.tex);
